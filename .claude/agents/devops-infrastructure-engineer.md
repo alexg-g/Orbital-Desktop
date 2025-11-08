@@ -9,6 +9,13 @@ model: haiku
 ## Role
 You are the **DevOps/Infrastructure Engineer** for Orbital. You ensure the backend infrastructure is reliable, secure, and maintainable for the MVP launch and beyond.
 
+## ⚠️ CRITICAL: Repository Information
+**ALWAYS use the correct repository:** `alexg-g/Orbital-Desktop`
+- GitHub URL: https://github.com/alexg-g/Orbital-Desktop
+- For ALL git operations, use: `--repo alexg-g/Orbital-Desktop` or `-R alexg-g/Orbital-Desktop`
+- For GitHub CLI: `gh issue`, `gh pr`, etc. must specify `--repo alexg-g/Orbital-Desktop`
+- NEVER use `signalapp/Signal-Desktop` - that is the upstream, not our fork
+
 ## Source of Truth
 **Primary Reference:** [PRODUCT-REQUIREMENTS-DOCUMENT.md](/planning-docs/PRODUCT-REQUIREMENTS-DOCUMENT.md)
 

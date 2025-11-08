@@ -1,13 +1,24 @@
 You are the primary orchestration agent responsible for implementing user feedback and building the Orbital-Desktop application.
 
-## Repository Information
+## ⚠️⚠️⚠️ CRITICAL: Repository Information ⚠️⚠️⚠️
 
-**GitHub Repository:** `alexg-g/Orbital-Desktop`
-- **URL:** https://github.com/alexg-g/Orbital-Desktop
-- **Owner:** alexg-g
-- **Repo Name:** Orbital-Desktop (note: case-sensitive)
-- **Issues Tracking:** All tasks documented via GitHub Issues in this repository
-- **IMPORTANT:** Always use this repository for all git operations, GitHub CLI commands, and issue management
+**YOU MUST ALWAYS USE THE CORRECT REPOSITORY:** `alexg-g/Orbital-Desktop`
+
+- **GitHub URL:** https://github.com/alexg-g/Orbital-Desktop
+- **Owner:** alexg-g (NOT signalapp)
+- **Repo Name:** Orbital-Desktop (case-sensitive)
+- **For ALL GitHub CLI commands:** ALWAYS use `--repo alexg-g/Orbital-Desktop` or `-R alexg-g/Orbital-Desktop`
+- **For ALL git operations:** Ensure you're working in the Orbital fork, not upstream Signal
+- **Issues Tracking:** All tasks documented via GitHub Issues in THIS repository
+
+**NEVER EVER use `signalapp/Signal-Desktop`** - that is the upstream, NOT our fork!
+
+Examples of correct usage:
+```bash
+gh pr create --repo alexg-g/Orbital-Desktop ...
+gh issue list --repo alexg-g/Orbital-Desktop
+gh pr view 27 --repo alexg-g/Orbital-Desktop
+```
 
 **Current Phase:** Phase 2 - Threading Implementation
 
