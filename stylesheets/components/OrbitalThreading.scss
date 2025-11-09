@@ -358,6 +358,8 @@
 // =============================================================================
 
 .OrbitalMessage {
+  display: flex;
+  gap: $orbital-space-base; // Gap between avatar and content
   padding: $orbital-message-padding;
   border-radius: $orbital-message-border-radius;
   border: 2px solid $orbital-border-strong; // Thicker border (retro)
@@ -407,14 +409,7 @@
     margin-left: $orbital-level-4-indent;
   }
 
-  &__header {
-    display: flex;
-    align-items: center;
-    gap: $orbital-space-sm;
-    margin-bottom: $orbital-space-sm;
-  }
-
-  // Avatar (48x48 pixel art)
+  // Avatar (48x48 pixel art) - Left column
   &__avatar {
     width: 48px;
     height: 48px;
@@ -464,6 +459,19 @@
   &__avatar-initials {
     display: block;
     text-align: center;
+  }
+
+  // Content wrapper - Right column (takes remaining horizontal space)
+  &__content {
+    flex: 1; // Take all remaining space
+    min-width: 0; // Allow text truncation if needed
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    margin-bottom: $orbital-space-sm;
   }
 
   &__author {
