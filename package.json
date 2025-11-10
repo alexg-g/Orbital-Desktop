@@ -71,6 +71,7 @@
     "transpile": "run-p check:types build:esbuild",
     "check:types": "tsc --noEmit",
     "clean-transpile": "node ./scripts/clean-transpile.js",
+    "clean-stale-js": "node ./scripts/clean-stale-js.js",
     "ready": "npm-run-all --print-label clean-transpile generate --parallel lint lint-deps lint-intl test-node test-electron",
     "dev": "pnpm run build-protobuf && cross-env SIGNAL_ENV=storybook storybook dev --port 6006",
     "dev:transpile": "run-p \"check:types --watch\" dev:esbuild dev:icu-types dev:protobuf",

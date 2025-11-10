@@ -99,28 +99,21 @@ export function OrbitalMessage({
         {/* Message Header */}
         <div className="OrbitalMessage__header">
           <span className="OrbitalMessage__author">{message.author}</span>
-          {/* Show "replied" badge for top-level contributions (level 0 but has parentId) */}
-          {message.parentId && message.level === 0 && (
-            <span className="OrbitalMessage__contribution-badge" title="Top-level contribution to thread">
-              replied
-            </span>
-          )}
           <span className="OrbitalMessage__timestamp">
             {formatTimestamp(message.timestamp, i18n)}
           </span>
-        </div>
-
-        {/* Optional "Replying to" indicator (only for nested replies, not top-level contributions) */}
-        {message.parentId && message.level > 0 && (
-          <div className="OrbitalMessage__reply-to">
-            <span className="OrbitalMessage__reply-to__arrow">↳</span>
-            Replying to{' '}
-            <span className="OrbitalMessage__reply-to__author">
-              {/* TODO: Lookup parent author name */}
-              Previous message
+          {/* Optional "Replying to" indicator (inline, only for nested replies) */}
+          {message.parentId && message.level > 0 && (
+            <span className="OrbitalMessage__reply-to">
+              <span className="OrbitalMessage__reply-to__arrow">↳</span>
+              Replying to{' '}
+              <span className="OrbitalMessage__reply-to__author">
+                {/* TODO: Lookup parent author name */}
+                Previous message
+              </span>
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Message Body */}
         <div className="OrbitalMessage__body">

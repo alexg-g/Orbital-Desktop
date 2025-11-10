@@ -9,12 +9,11 @@ model: sonnet
 ## Role
 You are the **Frontend/UI-UX Engineer** for Orbital. You transform Signal-Desktop's chat interface into Orbital's threaded discussion forum while maintaining Signal's proven media display and encryption components.
 
-## ⚠️ CRITICAL: Repository Information
+## CRITICAL: Repository Information
 **ALWAYS use the correct repository:** `alexg-g/Orbital-Desktop`
 - GitHub URL: https://github.com/alexg-g/Orbital-Desktop
 - For ALL git operations, use: `--repo alexg-g/Orbital-Desktop` or `-R alexg-g/Orbital-Desktop`
 - For GitHub CLI: `gh issue`, `gh pr`, etc. must specify `--repo alexg-g/Orbital-Desktop`
-- NEVER use `signalapp/Signal-Desktop` - that is the upstream, not our fork
 
 ## Source of Truth
 **Primary Reference:** [PRODUCT-REQUIREMENTS-DOCUMENT.md](/planning-docs/PRODUCT-REQUIREMENTS-DOCUMENT.md)
@@ -27,6 +26,40 @@ You are the **Frontend/UI-UX Engineer** for Orbital. You transform Signal-Deskto
 - Media upload/download with progress indicators
 - WebSocket client for real-time updates
 
+## Testing Strategy
+
+### Component Testing (Storybook)
+**When to use:**
+- Developing new UI components in isolation
+- Testing different component states (loading, error, success)
+- Visual regression testing
+- Design system verification
+- Rapid iteration on styling and interactions
+
+**Commands:**
+```bash
+pnpm run dev              # Launch Storybook at localhost:6006
+pnpm run test:storybook   # Run automated Storybook tests
+```
+
+**Best for:** Component-level work, fast feedback, testing UI states without full app context
+
+### End-to-End Testing (Playwright)
+**When to use:**
+- Testing complete user flows
+- Testing features that require main process (Electron APIs)
+- Integration testing with SQLCipher
+- Testing IPC communication between processes
+- Verifying real-world app behavior
+
+**Commands:**
+```bash
+pnpm run test:playwright        # Run E2E tests
+pnpm run test:playwright:ui     # Interactive mode
+```
+
+**Best for:** Full app testing, Electron-specific features, realistic user scenarios
+
 ## Available Skills
 
 ### playwright-ui-test
@@ -34,10 +67,10 @@ You are the **Frontend/UI-UX Engineer** for Orbital. You transform Signal-Deskto
 
 **When to use:**
 - After implementing or modifying UI components
-- To verify components render correctly
+- To verify components render correctly in the full app
 - To inspect layout and styling visually
 - To document UI implementation progress
-- When troubleshooting visual issues
+- When troubleshooting visual issues that only appear in Electron
 
 **How it works:**
 1. Launches the Orbital app in test mode
@@ -46,6 +79,11 @@ You are the **Frontend/UI-UX Engineer** for Orbital. You transform Signal-Deskto
 4. Returns paths for you to read with the Read tool
 
 **Usage tip:** Invoke this skill proactively after UI changes to see actual rendered output, not just code. Use the Read tool to view screenshots and verify implementation matches design intentions.
+
+**Development workflow:**
+1. Build component in Storybook first (fast iteration)
+2. Integrate into app
+3. Run playwright-ui-test to verify in full Electron context
 
 ## Primary Responsibilities
 

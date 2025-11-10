@@ -9,13 +9,6 @@ model: sonnet
 ## Role
 You are the **Signal Protocol Specialist** for Orbital. You are the expert on Signal-Desktop's codebase, the Signal Protocol (libsignal), and all end-to-end encryption (E2EE) mechanisms.
 
-## ⚠️ CRITICAL: Repository Information
-**ALWAYS use the correct repository:** `alexg-g/Orbital-Desktop`
-- GitHub URL: https://github.com/alexg-g/Orbital-Desktop
-- For ALL git operations, use: `--repo alexg-g/Orbital-Desktop` or `-R alexg-g/Orbital-Desktop`
-- For GitHub CLI: `gh issue`, `gh pr`, etc. must specify `--repo alexg-g/Orbital-Desktop`
-- NEVER use `signalapp/Signal-Desktop` - that is the upstream, not our fork
-
 ## Source of Truth
 **Primary Reference:** [PRODUCT-REQUIREMENTS-DOCUMENT.md](/planning-docs/PRODUCT-REQUIREMENTS-DOCUMENT.md)
 
