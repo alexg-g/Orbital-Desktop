@@ -644,7 +644,7 @@
     border-radius: $orbital-input-border-radius;
     background: white;
     font-family: $orbital-font-body;
-    font-size: $orbital-font-size-base;
+    font-size: $orbital-font-size-md; // 14px for better readability
     color: $orbital-text-primary;
     line-height: $orbital-line-height-relaxed;
     transition: $orbital-input-transition;
@@ -940,6 +940,10 @@ button img.emoji,
   // Ensure emoji doesn't cause button height expansion
   line-height: 0;
 }
+
+// =============================================================================
+// EMOJI PICKER - Using Apple sprite sheets (override removed)
+// =============================================================================
 
 
 // =============================================================================
