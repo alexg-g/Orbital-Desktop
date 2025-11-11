@@ -9,6 +9,10 @@ import {
   FUN_INLINE_EMOJI_CLASS,
   FUN_STATIC_EMOJI_CLASS,
 } from '../../components/fun/FunEmoji.dom.js';
+import {
+  getEmojiVariantByKey,
+  type EmojiVariantKey,
+} from '../../components/fun/data/emojis.std.js';
 
 export const matchEmojiImage: Matcher = (
   node,
@@ -35,9 +39,23 @@ export const matchEmojiBlot: Matcher = (
 ): Delta => {
   if (
     node.classList.contains(FUN_STATIC_EMOJI_CLASS) &&
-    node.dataset.emoji != null
+    (node.dataset.emojiKey != null || node.dataset.emoji != null)
   ) {
-    const { emoji: value, source } = node.dataset;
+    const { emojiKey, emoji, source } = node.dataset;
+
+    // Prefer emojiKey (new format) to avoid Unicode corruption with complex emojis
+    let value: string;
+    if (emojiKey) {
+      const variant = getEmojiVariantByKey(emojiKey as EmojiVariantKey);
+      value = variant.value;
+    } else if (emoji) {
+      // Backward compatibility
+      value = emoji;
+    } else {
+      // This shouldn't happen due to the check above, but TypeScript needs it
+      return delta;
+    }
+
     return new Delta().insert({ emoji: { value, source } }, attributes);
   }
   return delta;

@@ -57,7 +57,10 @@ export function OrbitalComposer({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadFileName, setUploadFileName] = useState<string>('');
   const [uploadFileSize, setUploadFileSize] = useState<string>('');
-  const editorApiRef = useRef<{ insertText: (text: string) => void } | null>(null);
+  const editorApiRef = useRef<{
+    insertText: (text: string) => void;
+    insertEmoji: (emoji: string) => void;
+  } | null>(null);
 
   // Character limits
   const TITLE_MAX_LENGTH = 200;
@@ -110,9 +113,9 @@ export function OrbitalComposer({
         length: emojiChar.length,
       });
 
-      // Insert at cursor position in Quill editor
+      // Insert at cursor position in Quill editor using specialized emoji insertion
       if (editorApiRef.current) {
-        editorApiRef.current.insertText(emojiChar);
+        editorApiRef.current.insertEmoji(emojiChar);
       }
     },
     []

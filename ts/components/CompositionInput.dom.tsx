@@ -291,6 +291,15 @@ export function CompositionInput(props: Props): React.ReactElement {
 
     const emojiVariant = getEmojiVariantByKey(emojiSelection.variantKey);
 
+    // Debug logging for complex emoji
+    log.info('insertEmoji:', {
+      variantKey: emojiSelection.variantKey,
+      value: emojiVariant.value,
+      valueLength: emojiVariant.value.length,
+      codePoints: [...emojiVariant.value].map(c => c.codePointAt(0)?.toString(16)),
+      insertionIndex: insertionRange.index,
+    });
+
     const delta = new Delta()
       .retain(insertionRange.index)
       .delete(insertionRange.length)

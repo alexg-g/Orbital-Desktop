@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Quill, { Delta } from '@signalapp/quill-cjs';
+import { EmojiBlot } from '../../quill/emoji/blot.dom';
 
 export type OrbitalQuillEditorProps = {
   placeholder?: string;
@@ -12,7 +13,10 @@ export type OrbitalQuillEditorProps = {
   maxLength?: number;
   className?: string;
   readOnly?: boolean;
-  onReady?: (editor: { insertText: (text: string) => void }) => void;
+  onReady?: (editor: {
+    insertText: (text: string) => void;
+    insertEmoji: (emoji: string) => void;
+  }) => void;
 };
 
 /**
@@ -68,6 +72,10 @@ export function OrbitalQuillEditor({
     }
 
     const element = editorRef.current;
+
+    // Register the EmojiBlot for proper emoji handling
+    Quill.register(EmojiBlot, true);
+
     const quill = new Quill(element, {
       theme: 'snow',
       readOnly,
@@ -82,7 +90,7 @@ export function OrbitalQuillEditor({
           matchVisual: false,
         },
       },
-      formats: ['bold', 'italic', 'underline', 'list', 'blockquote'],
+      formats: ['bold', 'italic', 'underline', 'list', 'blockquote', 'emoji'],
     });
 
     quillRef.current = quill;
@@ -101,6 +109,22 @@ export function OrbitalQuillEditor({
           const index = selection ? selection.index : quill.getLength() - 1;
           quill.insertText(index, text);
           quill.setSelection(index + text.length);
+        },
+        insertEmoji: (emoji: string) => {
+          // Insert emoji using EmojiBlot to preserve complex emojis with ZWJ sequences
+          const selection = quill.getSelection();
+          const index = selection ? selection.index : quill.getLength() - 1;
+
+          // Use EmojiBlot format (same as CompositionInput) to properly handle complex emojis
+          const delta = new Delta()
+            .retain(index)
+            .insert({ emoji: { value: emoji } });
+
+          quill.updateContents(delta, 'user');
+
+          // Move cursor to after the emoji
+          // EmojiBlot is treated as a single character position in Quill
+          quill.setSelection(index + 1, 0, 'user');
         },
       });
     }

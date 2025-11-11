@@ -21,14 +21,16 @@ export default {
  * Thread Mode - Create new threads
  */
 export function ThreadMode(): JSX.Element {
+  const [skinTone, setSkinTone] = React.useState(EmojiSkinTone.None);
+
   return (
     <FunProvider
       i18n={i18n}
       recentEmojis={MOCK_RECENT_EMOJIS}
       recentStickers={recentStickers}
       recentGifs={[]}
-      emojiSkinToneDefault={EmojiSkinTone.None}
-      onEmojiSkinToneDefaultChange={() => null}
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
       onOpenCustomizePreferredReactionsModal={() => null}
       onSelectEmoji={action('onSelectEmoji')}
       installedStickerPacks={packs}
@@ -55,14 +57,16 @@ export function ThreadMode(): JSX.Element {
  * Reply Mode - Reply to posts
  */
 export function ReplyMode(): JSX.Element {
+  const [skinTone, setSkinTone] = React.useState(EmojiSkinTone.None);
+
   return (
     <FunProvider
       i18n={i18n}
       recentEmojis={MOCK_RECENT_EMOJIS}
       recentStickers={recentStickers}
       recentGifs={[]}
-      emojiSkinToneDefault={EmojiSkinTone.None}
-      onEmojiSkinToneDefaultChange={() => null}
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
       onOpenCustomizePreferredReactionsModal={() => null}
       onSelectEmoji={action('onSelectEmoji')}
       installedStickerPacks={packs}
