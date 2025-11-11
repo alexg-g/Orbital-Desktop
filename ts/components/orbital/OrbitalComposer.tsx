@@ -1,8 +1,15 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
+import { Button } from 'react-aria-components';
 import type { LocalizerType } from '../../types/Util.std';
+import { FunPicker } from '../fun/FunPicker.dom';
+import type { FunEmojiSelection } from '../fun/panels/FunPanelEmojis.dom';
+import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom';
+import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom';
+import { getEmojiVariantByKey } from '../fun/data/emojis.std';
+import { OrbitalQuillEditor } from './OrbitalQuillEditor';
 
 export type OrbitalComposerMode = 'thread' | 'reply';
 
@@ -14,6 +21,8 @@ export type OrbitalComposerProps = {
   };
   onSubmit: (title: string, body: string) => void | ((body: string) => void);
   onCancel?: () => void;
+  onSelectGif?: (gif: FunGifSelection) => void;
+  onSelectSticker?: (sticker: FunStickerSelection) => void;
   i18n: LocalizerType;
 };
 
@@ -37,22 +46,31 @@ export function OrbitalComposer({
   replyContext,
   onSubmit,
   onCancel,
-  i18n}: OrbitalComposerProps): JSX.Element {
+  onSelectGif,
+  onSelectSticker}: OrbitalComposerProps): JSX.Element {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedGif, setSelectedGif] = useState<FunGifSelection | null>(null);
+  const [selectedSticker, setSelectedSticker] = useState<FunStickerSelection | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
+  const [uploadFileSize, setUploadFileSize] = useState<string>('');
+  const editorApiRef = useRef<{ insertText: (text: string) => void } | null>(null);
+
+  // Character limits
+  const TITLE_MAX_LENGTH = 200;
+  const BODY_MAX_LENGTH = 5000;
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
-      setTitle(event.target.value);
+      const newValue = event.target.value;
+      // Enforce character limit
+      if (newValue.length <= TITLE_MAX_LENGTH) {
+        setTitle(newValue);
+      }
     },
-    []
-  );
-
-  const handleBodyChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setBody(event.target.value);
-    },
-    []
+    [TITLE_MAX_LENGTH]
   );
 
   const handleSubmit = useCallback(() => {
@@ -72,27 +90,105 @@ export function OrbitalComposer({
       (onSubmit as (body: string) => void)(body);
       setBody('');
     }
+    // Clear attachments after submit
+    setSelectedGif(null);
+    setSelectedSticker(null);
   }, [mode, title, body, onSubmit]);
 
-  const handleCancel = useCallback(() => {
-    setTitle('');
-    setBody('');
-    onCancel?.();
-  }, [onCancel]);
+  const handleSelectEmoji = useCallback(
+    (emojiSelection: FunEmojiSelection) => {
+      // Get emoji character from selection
+      const emojiData = getEmojiVariantByKey(emojiSelection.variantKey);
+      const emojiChar = emojiData.value;
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Cmd/Ctrl+Enter to submit
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault();
-        handleSubmit();
+      // Insert at cursor position in Quill editor
+      if (editorApiRef.current) {
+        editorApiRef.current.insertText(emojiChar);
       }
     },
-    [handleSubmit]
+    []
   );
 
+  const handleSelectGif = useCallback(
+    (gif: FunGifSelection) => {
+      // GIFs are typically sent as attachments, not inline text
+      setSelectedGif(gif);
+      setPickerOpen(false);
+      // Pass to parent component to handle attachment
+      if (onSelectGif) {
+        onSelectGif(gif);
+      }
+    },
+    [onSelectGif]
+  );
+
+  const handleSelectSticker = useCallback(
+    (sticker: FunStickerSelection) => {
+      // Stickers are typically sent as attachments, not inline text
+      setSelectedSticker(sticker);
+      setPickerOpen(false);
+      // Pass to parent component to handle attachment
+      if (onSelectSticker) {
+        onSelectSticker(sticker);
+      }
+    },
+    [onSelectSticker]
+  );
+
+  const handleRemoveGif = useCallback(() => {
+    setSelectedGif(null);
+  }, []);
+
+  const handleRemoveSticker = useCallback(() => {
+    setSelectedSticker(null);
+  }, []);
+
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Set file info
+    setUploadFileName(file.name);
+    setUploadFileSize(formatFileSize(file.size));
+
+    // Simulate upload progress
+    setUploadProgress(0);
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev === null) return null;
+        if (prev >= 100) {
+          clearInterval(interval);
+          // Clear progress after completion
+          setTimeout(() => {
+            setUploadProgress(null);
+            setUploadFileName('');
+            setUploadFileSize('');
+          }, 1000);
+          return 100;
+        }
+        // Increment by random amount (5-15%)
+        return Math.min(100, prev + Math.random() * 10 + 5);
+      });
+    }, 200);
+  }, []);
+
+  const handleCancelUpload = useCallback(() => {
+    setUploadProgress(null);
+    setUploadFileName('');
+    setUploadFileSize('');
+  }, []);
+
+  // Check if there's any content to submit
+  const hasContent =
+    body.trim().length > 0 ||
+    selectedGif !== null ||
+    selectedSticker !== null ||
+    uploadFileName.length > 0;
+
   const isSubmitDisabled =
-    mode === 'thread' ? !title.trim() : !body.trim();
+    mode === 'thread'
+      ? !title.trim() || !hasContent  // Thread mode: require title AND content
+      : !hasContent;                   // Reply mode: just require content
 
   return (
     <div className="OrbitalComposer">
@@ -113,42 +209,151 @@ export function OrbitalComposer({
 
       {/* Thread Title Input (only in thread mode) */}
       {mode === 'thread' && (
-        <input
-          type="text"
-          className="OrbitalComposer__title-input"
-          placeholder="Thread title (required, max 200 characters)"
-          value={title}
-          onChange={handleTitleChange}
-          maxLength={200}
-          aria-label="Thread title"
-        />
+        <div className="OrbitalComposer__field">
+          <input
+            type="text"
+            className="OrbitalComposer__title-input"
+            placeholder="Thread title (required)"
+            value={title}
+            onChange={handleTitleChange}
+            maxLength={TITLE_MAX_LENGTH}
+            aria-label="Thread title"
+            aria-describedby="title-char-count"
+          />
+          <div
+            id="title-char-count"
+            className={`OrbitalComposer__char-count ${
+              title.length > 180 ? 'OrbitalComposer__char-count--warning' : ''
+            }`}
+            aria-live="polite"
+          >
+            {title.length} / {TITLE_MAX_LENGTH}
+          </div>
+        </div>
       )}
 
-      {/* Body Textarea */}
-      <textarea
-        className="OrbitalComposer__body-input"
-        placeholder={
-          mode === 'thread'
-            ? 'Share your thoughts... (markdown supported)'
-            : 'Add a reply...'
-        }
-        value={body}
-        onChange={handleBodyChange}
-        onKeyDown={handleKeyDown}
-        aria-label={mode === 'thread' ? 'Thread body' : 'Reply body'}
-      />
+      {/* Body Rich Text Editor */}
+      <div className="OrbitalComposer__field">
+        <OrbitalQuillEditor
+          placeholder={
+            mode === 'thread'
+              ? 'Share your thoughts... (use toolbar for formatting)'
+              : 'Add a reply...'
+          }
+          initialMarkdown={body}
+          onChange={(markdown) => setBody(markdown)}
+          onReady={(api) => {
+            editorApiRef.current = api;
+          }}
+          maxLength={BODY_MAX_LENGTH}
+          className="OrbitalComposer__quill-editor"
+        />
+      </div>
+
+      {/* Upload Progress Indicator */}
+      {uploadProgress !== null && (
+        <div className="OrbitalComposer__upload-progress">
+          <div className="OrbitalComposer__upload-progress__header">
+            <div className="OrbitalComposer__upload-progress__info">
+              <span className="OrbitalComposer__upload-progress__filename">
+                {uploadFileName}
+              </span>
+              <span className="OrbitalComposer__upload-progress__filesize">
+                {uploadFileSize}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="OrbitalComposer__upload-progress__cancel"
+              onClick={handleCancelUpload}
+              aria-label="Cancel upload"
+              title="Cancel upload"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="OrbitalComposer__upload-progress__bar-container">
+            <div
+              className="OrbitalComposer__upload-progress__bar"
+              style={{ width: `${uploadProgress}%` }}
+              role="progressbar"
+              aria-valuenow={uploadProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
+          </div>
+          <div className="OrbitalComposer__upload-progress__percent">
+            {Math.round(uploadProgress)}%
+          </div>
+        </div>
+      )}
+
+      {/* Attachment Preview */}
+      {(selectedGif || selectedSticker) && (
+        <div className="OrbitalComposer__attachments">
+          {selectedGif && (
+            <div className="OrbitalComposer__attachment">
+              <video
+                src={selectedGif.gif.previewMedia.url}
+                loop
+                autoPlay
+                muted
+                playsInline
+              />
+              <button
+                type="button"
+                className="OrbitalComposer__attachment-remove"
+                onClick={handleRemoveGif}
+                aria-label="Remove GIF"
+                title="Remove GIF"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {selectedSticker && (
+            <div className="OrbitalComposer__attachment">
+              <img
+                src={selectedSticker.sticker.url}
+                alt="Selected sticker"
+              />
+              <button
+                type="button"
+                className="OrbitalComposer__attachment-remove"
+                onClick={handleRemoveSticker}
+                aria-label="Remove sticker"
+                title="Remove sticker"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="OrbitalComposer__actions">
         <div className="OrbitalComposer__tools">
-          <button
-            type="button"
-            className="OrbitalComposer__icon-btn"
-            aria-label="Attach file"
-            title="Attach file"
-          >
-            📎
-          </button>
+          <input
+            type="file"
+            id="file-upload"
+            className="OrbitalComposer__file-input"
+            accept="image/*,video/*,.gif"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+            aria-label="Select file to upload"
+          />
+          <label htmlFor="file-upload">
+            <button
+              type="button"
+              className="OrbitalComposer__icon-btn"
+              aria-label="Attach file"
+              title="Attach file"
+              onClick={() => document.getElementById('file-upload')?.click()}
+            >
+              📎
+            </button>
+          </label>
           <button
             type="button"
             className="OrbitalComposer__icon-btn"
@@ -165,14 +370,24 @@ export function OrbitalComposer({
           >
             📷
           </button>
-          <button
-            type="button"
-            className="OrbitalComposer__icon-btn"
-            aria-label="Add emoji"
-            title="Add emoji"
+
+          {/* Fun Picker: Emojis, GIFs, and Stickers */}
+          <FunPicker
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            placement="top"
+            onSelectEmoji={handleSelectEmoji}
+            onSelectGif={handleSelectGif}
+            onSelectSticker={handleSelectSticker}
+            onAddStickerPack={null}
           >
-            😊
-          </button>
+            <Button
+              className="OrbitalComposer__icon-btn"
+              aria-label="Add emoji, GIF, or sticker"
+            >
+              😊
+            </Button>
+          </FunPicker>
         </div>
 
         <button
@@ -200,8 +415,14 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 /**
- * Check if running on macOS
+ * Format file size in human-readable format
  */
-function isMac(): boolean {
-  return navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

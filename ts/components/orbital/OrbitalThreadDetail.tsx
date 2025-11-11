@@ -1,8 +1,9 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
+import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews.std';
 import { OrbitalMessage } from './OrbitalMessage';
 import { OrbitalComposer } from './OrbitalComposer';
 
@@ -16,8 +17,10 @@ export type OrbitalMessageType = {
   parentId?: string; // ID of the message this is replying to
   hasMedia: boolean;
   mediaType?: 'image' | 'video';
-  mediaUrl?: string;
+  mediaUrl?: string; // Single media URL (for backward compatibility)
+  mediaUrls?: string[]; // Multiple media URLs (for photo galleries)
   avatarUrl?: string; // Optional avatar URL (48x48 pixel art)
+  linkPreviews?: ReadonlyArray<LinkPreviewForUIType>; // Link previews (YouTube, etc.)
 };
 
 export type OrbitalThreadDetailProps = {
@@ -53,12 +56,18 @@ export function OrbitalThreadDetail({
   i18n,
   onReply,
   onSendMessage}: OrbitalThreadDetailProps): JSX.Element {
+  const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
+
   const handleSubmitReply = useCallback(
     (body: string) => {
       onSendMessage(body);
     },
     [onSendMessage]
   );
+
+  const handleToggleComposer = useCallback(() => {
+    setIsComposerCollapsed(prev => !prev);
+  }, []);
 
   return (
     <div className="OrbitalThreadDetail">
@@ -94,19 +103,27 @@ export function OrbitalThreadDetail({
         )}
       </div>
 
-      {/* ASCII Separator before composer */}
-      <div className="OrbitalASCII OrbitalASCII--separator" aria-hidden="true">
-        ·  ·  ·  ✦  ·  ·  ·
-      </div>
+      {/* ASCII Separator / Toggle Button */}
+      <button
+        type="button"
+        className="OrbitalASCII OrbitalASCII--separator OrbitalASCII--toggle"
+        onClick={handleToggleComposer}
+        aria-label={isComposerCollapsed ? 'Expand composer' : 'Collapse composer'}
+        aria-expanded={!isComposerCollapsed}
+      >
+        {isComposerCollapsed ? '▲  ▲  ▲   EXPAND   ▲  ▲  ▲' : '▼  ▼  ▼  COLLAPSE  ▼  ▼  ▼'}
+      </button>
 
-      {/* Reply Composer - Always visible */}
-      <div className="OrbitalThreadDetail__composer-area">
-        <OrbitalComposer
-          mode="reply"
-          onSubmit={handleSubmitReply}
-          i18n={i18n}
-        />
-      </div>
+      {/* Reply Composer - Conditionally visible */}
+      {!isComposerCollapsed && (
+        <div className="OrbitalThreadDetail__composer-area">
+          <OrbitalComposer
+            mode="reply"
+            onSubmit={handleSubmitReply}
+            i18n={i18n}
+          />
+        </div>
+      )}
     </div>
   );
 }

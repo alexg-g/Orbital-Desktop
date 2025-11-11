@@ -592,12 +592,40 @@
     transition: color $orbital-duration-fast;
     background: none;
     border: none;
-    padding: 0;
+    padding: $orbital-space-xs $orbital-space-sm;
     font-family: $orbital-font-body;
+    border-radius: $orbital-radius-sm;
 
     &:hover {
       color: $orbital-blue;
-      text-decoration: underline;
+      background: $orbital-blue-tint-light;
+    }
+
+    &:focus {
+      outline: 2px solid $orbital-blue;
+      outline-offset: 2px;
+    }
+
+    &:active {
+      color: $orbital-blue-dark;
+      background: $orbital-blue-tint;
+    }
+  }
+
+  // Media (images, videos) in posted messages
+  &__media {
+    max-width: 400px;
+    margin-top: $orbital-space-sm;
+
+    img,
+    video {
+      max-width: 100%;
+      max-height: 400px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 4px;
+      display: block;
     }
   }
 }
@@ -613,6 +641,12 @@
   background: $orbital-surface-elevated;
   font-family: $orbital-font-body;
 
+  // Field wrapper (input/textarea + character counter)
+  &__field {
+    position: relative;
+    margin-bottom: $orbital-space-md;
+  }
+
   &__title-input {
     width: 100%;
     padding: $orbital-input-padding-y $orbital-input-padding-x;
@@ -624,7 +658,7 @@
     font-weight: bold;
     color: $orbital-text-primary;
     transition: $orbital-input-transition;
-    margin-bottom: $orbital-space-md;
+    margin-bottom: 0; // Remove margin (controlled by field wrapper)
 
     &:focus {
       outline: none;
@@ -651,7 +685,7 @@
     line-height: $orbital-line-height-relaxed;
     transition: $orbital-input-transition;
     resize: vertical;
-    margin-bottom: $orbital-space-md;
+    margin-bottom: 0; // Remove margin (controlled by field wrapper)
 
     &:focus {
       outline: none;
@@ -660,6 +694,21 @@
 
     &::placeholder {
       color: $orbital-text-tertiary;
+    }
+  }
+
+  // Character counter
+  &__char-count {
+    margin-top: $orbital-space-xs;
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+    text-align: right;
+    letter-spacing: $orbital-letter-spacing-tight;
+
+    &--warning {
+      color: $orbital-purple; // Purple warning (retro style)
+      font-weight: bold;
     }
   }
 
@@ -782,6 +831,156 @@
       font-size: $orbital-font-size-sm;
       line-height: $orbital-line-height-normal;
       margin-top: $orbital-space-xs;
+    }
+  }
+
+  // Upload Progress Indicator (Retro 2000s style)
+  &__upload-progress {
+    padding: $orbital-space-md;
+    background: $orbital-surface;
+    border: 2px solid $orbital-border-strong;
+    border-radius: $orbital-radius-base;
+    margin-bottom: $orbital-space-md;
+
+    &__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: $orbital-space-sm;
+    }
+
+    &__info {
+      display: flex;
+      flex-direction: column;
+      gap: $orbital-space-xs;
+      flex: 1;
+      min-width: 0; // Allow text truncation
+    }
+
+    &__filename {
+      font-family: $orbital-font-body;
+      font-size: $orbital-font-size-sm;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &__filesize {
+      font-family: $orbital-font-mono;
+      font-size: $orbital-font-size-xs;
+      color: $orbital-text-secondary;
+      letter-spacing: $orbital-letter-spacing-tight;
+    }
+
+    &__cancel {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      background: $orbital-text-tertiary;
+      color: white;
+      border: 2px solid $orbital-border-strong;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background $orbital-duration-fast;
+      flex-shrink: 0;
+
+      &:hover {
+        background: $orbital-purple;
+        border-color: $orbital-purple-dark;
+      }
+
+      &:active {
+        background: $orbital-purple-dark;
+      }
+    }
+
+    &__bar-container {
+      width: 100%;
+      height: 20px;
+      background: white;
+      border: 2px inset $orbital-border-strong; // Retro inset border
+      border-radius: $orbital-radius-sm;
+      overflow: hidden;
+      margin-bottom: $orbital-space-xs;
+    }
+
+    &__bar {
+      height: 100%;
+      background: linear-gradient(90deg, $orbital-blue 0%, $orbital-purple 100%); // Gradient progress bar (retro)
+      transition: width $orbital-duration-base ease-out;
+      border-right: 2px solid rgba(0, 0, 0, 0.1); // Subtle edge for progress bar
+    }
+
+    &__percent {
+      font-family: $orbital-font-mono;
+      font-size: $orbital-font-size-sm;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      text-align: center;
+      letter-spacing: $orbital-letter-spacing-tight;
+    }
+  }
+
+  // Attachments preview (GIFs, stickers)
+  &__attachments {
+    display: flex;
+    gap: $orbital-space-sm;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__attachment {
+    position: relative;
+    display: inline-block;
+    max-width: 400px; // Cap container at 400px
+
+    // Video and image sizing
+    video,
+    img {
+      max-width: 100%; // Fill container width (capped by parent)
+      max-height: 200px; // Cap height at 200px
+      width: auto;
+      height: auto;
+      object-fit: contain; // Show entire video/image without cropping
+      border-radius: 4px;
+      display: block;
+    }
+
+    &-remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      background: $orbital-purple;
+      color: white;
+      border: 2px solid $orbital-purple-dark;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: bold;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background $orbital-duration-fast;
+      z-index: 1; // Ensure button stays on top
+
+      &:hover {
+        background: $orbital-purple-hover;
+      }
+
+      &:active {
+        background: $orbital-purple-dark;
+      }
     }
   }
 }
@@ -984,6 +1183,261 @@ button img.emoji,
 // EMOJI PICKER - Using Apple sprite sheets (override removed)
 // =============================================================================
 
+
+// =============================================================================
+// ORBITAL QUILL EDITOR - Retro WYSIWYG with Markdown Output
+// =============================================================================
+
+.OrbitalQuillEditor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-family: $orbital-font-body;
+
+  // Quill container
+  .quill {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  // Toolbar - Retro forum style (phpBB/vBulletin)
+  .ql-toolbar {
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-strong;
+    border-bottom: none;
+    padding: 8px;
+    border-radius: 4px 4px 0 0;
+    font-family: $orbital-font-header;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-strong;
+    }
+
+    // Button groups
+    .ql-formats {
+      margin-inline-end: 12px;
+    }
+
+    // Individual toolbar buttons
+    button {
+      width: 28px !important;
+      height: 28px !important;
+      padding: 4px !important;
+      margin: 0 2px !important;
+      background: $orbital-surface-elevated;
+      border: 1px solid $orbital-border-strong;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all $orbital-duration-fast ease;
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface-elevated;
+        border-color: $orbital-dark-border-strong;
+      }
+
+      // Hover state
+      &:hover {
+        background: $orbital-blue-tint-light;
+        border-color: $orbital-blue;
+
+        @include mixins.dark-theme {
+          background: rgba($orbital-blue, 0.2);
+          border-color: $orbital-blue;
+        }
+      }
+
+      // Active state (formatting applied)
+      &.ql-active {
+        background: $orbital-blue;
+        border-color: $orbital-blue-dark;
+        color: white;
+
+        svg {
+          .ql-stroke {
+            stroke: white !important;
+          }
+          .ql-fill {
+            fill: white !important;
+          }
+        }
+
+        @include mixins.dark-theme {
+          background: $orbital-purple;
+          border-color: $orbital-purple-dark;
+        }
+      }
+
+      // Icon colors
+      svg {
+        .ql-stroke {
+          stroke: $orbital-text-secondary;
+        }
+        .ql-fill {
+          fill: $orbital-text-secondary;
+        }
+
+        @include mixins.dark-theme {
+          .ql-stroke {
+            stroke: $orbital-dark-text-secondary;
+          }
+          .ql-fill {
+            fill: $orbital-dark-text-secondary;
+          }
+        }
+      }
+    }
+  }
+
+  // Editor container
+  .ql-container {
+    border: 1px solid $orbital-border-strong;
+    border-radius: 0 0 4px 4px;
+    background: $orbital-bg;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    min-height: 120px;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-bg;
+      border-color: $orbital-dark-border-strong;
+    }
+  }
+
+  // Editor content area
+  .ql-editor {
+    padding: 12px;
+    color: $orbital-text-primary;
+    line-height: $orbital-line-height-relaxed;
+    min-height: 120px;
+    max-height: 400px;
+    overflow-y: auto;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+
+    // Placeholder text
+    &.ql-blank::before {
+      color: $orbital-text-tertiary;
+      font-style: italic;
+      font-size: $orbital-font-size-sm;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-tertiary;
+      }
+    }
+
+    // Formatting styles
+    strong {
+      font-weight: bold;
+      color: $orbital-text-primary;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+
+    em {
+      font-style: italic;
+    }
+
+    u {
+      text-decoration: underline;
+    }
+
+    // Lists
+    ol,
+    ul {
+      padding-inline-start: 24px;
+      margin: 8px 0;
+    }
+
+    // Quill creates <ol> for both ordered and bullet lists
+    // Ordered list (numbered)
+    ol {
+      list-style-type: decimal;
+    }
+
+    // Bullet list (Quill uses .ql-indent-* classes)
+    ol.ql-indent-0,
+    ol.ql-indent-1,
+    ol.ql-indent-2,
+    ol.ql-indent-3,
+    ol.ql-indent-4,
+    ol.ql-indent-5,
+    ol.ql-indent-6,
+    ol.ql-indent-7,
+    ol.ql-indent-8 {
+      // This will be overridden by li[data-list] selectors below
+    }
+
+    // Bullet list items
+    li[data-list='bullet'] {
+      list-style-type: disc;
+    }
+
+    // Ordered list items
+    li[data-list='ordered'] {
+      list-style-type: decimal;
+    }
+
+    ul {
+      list-style-type: disc;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    // Blockquotes
+    blockquote {
+      border-inline-start: 3px solid $orbital-blue;
+      padding-inline-start: 12px;
+      margin: 8px 0;
+      color: $orbital-text-secondary;
+      font-style: italic;
+      background: rgba($orbital-blue, 0.05);
+      padding: 8px 12px;
+      border-radius: 0 4px 4px 0;
+
+      @include mixins.dark-theme {
+        border-inline-start-color: $orbital-purple;
+        color: $orbital-dark-text-secondary;
+        background: rgba($orbital-purple, 0.1);
+      }
+    }
+
+    // Focus state
+    &:focus {
+      outline: none;
+    }
+  }
+
+  // Character counter
+  &__counter {
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px 8px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+
+    &--warning {
+      color: $orbital-purple;
+      font-weight: bold;
+
+      @include mixins.dark-theme {
+        color: $orbital-purple-hover;
+      }
+    }
+  }
+}
 
 // =============================================================================
 // ACCESSIBILITY
