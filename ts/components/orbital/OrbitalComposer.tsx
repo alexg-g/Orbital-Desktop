@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import React, { useCallback, useState, useRef } from 'react';
-import { Button } from 'react-aria-components';
 import type { LocalizerType } from '../../types/Util.std';
 import { FunPicker } from '../fun/FunPicker.dom';
+import { FunPickerButton } from '../fun/FunButton.dom';
 import type { FunEmojiSelection } from '../fun/panels/FunPanelEmojis.dom';
 import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom';
 import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom';
@@ -47,7 +47,8 @@ export function OrbitalComposer({
   onSubmit,
   onCancel,
   onSelectGif,
-  onSelectSticker}: OrbitalComposerProps): JSX.Element {
+  onSelectSticker,
+  i18n}: OrbitalComposerProps): JSX.Element {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -100,6 +101,14 @@ export function OrbitalComposer({
       // Get emoji character from selection
       const emojiData = getEmojiVariantByKey(emojiSelection.variantKey);
       const emojiChar = emojiData.value;
+
+      // Debug logging
+      console.log('Emoji selection:', {
+        variantKey: emojiSelection.variantKey,
+        value: emojiChar,
+        codePoints: Array.from(emojiChar).map(c => c.codePointAt(0)?.toString(16)),
+        length: emojiChar.length,
+      });
 
       // Insert at cursor position in Quill editor
       if (editorApiRef.current) {
@@ -381,12 +390,7 @@ export function OrbitalComposer({
             onSelectSticker={handleSelectSticker}
             onAddStickerPack={null}
           >
-            <Button
-              className="OrbitalComposer__icon-btn"
-              aria-label="Add emoji, GIF, or sticker"
-            >
-              😊
-            </Button>
+            <FunPickerButton i18n={i18n} />
           </FunPicker>
         </div>
 

@@ -5,6 +5,10 @@ import React, { useState, useCallback } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
+import { FunProvider } from '../fun/FunProvider.dom';
+import { packs, recentStickers } from '../stickers/mocks.std';
+import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
+import { EmojiSkinTone } from '../fun/data/emojis.std';
 
 /**
  * OrbitalThreadingDemo - Demo page showcasing the threaded UI
@@ -41,41 +45,64 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
   const activeMessages = MOCK_MESSAGES[activeThreadId] || [];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#FAF9F7' }}>
-      {/* Left Sidebar - Thread List */}
-      <div style={{ width: '320px', borderRight: '2px solid #D1D5DB' }}>
-        <OrbitalThreadList
-          threads={MOCK_THREADS}
-          activeThreadId={activeThreadId}
-          i18n={i18n}
-          onThreadClick={handleThreadClick}
-          onCreateThread={handleCreateThread}
-        />
-      </div>
-
-      {/* Main Content - Thread Detail */}
-      <div style={{ flex: 1 }}>
-        {activeThread ? (
-          <OrbitalThreadDetail
-            threadId={activeThread.id}
-            threadTitle={activeThread.title}
-            threadAuthor={activeThread.author}
-            threadTimestamp={activeThread.timestamp}
-            messages={activeMessages}
-            currentUserId="user-current"
+    <FunProvider
+      i18n={i18n}
+      // Recents
+      recentEmojis={MOCK_RECENT_EMOJIS}
+      recentStickers={recentStickers}
+      recentGifs={[]}
+      // Emojis
+      emojiSkinToneDefault={EmojiSkinTone.None}
+      onEmojiSkinToneDefaultChange={() => null}
+      onOpenCustomizePreferredReactionsModal={() => null}
+      onSelectEmoji={() => null}
+      // Stickers
+      installedStickerPacks={packs}
+      showStickerPickerHint={false}
+      onClearStickerPickerHint={() => null}
+      onSelectSticker={() => null}
+      // Gifs
+      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
+      onSelectGif={() => null}
+    >
+      <div style={{ display: 'flex', height: '100vh', background: '#FAF9F7' }}>
+        {/* Left Sidebar - Thread List */}
+        <div style={{ width: '320px', borderRight: '2px solid #D1D5DB' }}>
+          <OrbitalThreadList
+            threads={MOCK_THREADS}
+            activeThreadId={activeThreadId}
             i18n={i18n}
-            onReply={handleReply}
-            onSendMessage={handleSendMessage}
+            onThreadClick={handleThreadClick}
+            onCreateThread={handleCreateThread}
           />
-        ) : (
-          <div style={{ padding: '32px', textAlign: 'center' }}>
-            <p style={{ fontFamily: 'Verdana', fontSize: '14px', color: '#6B7280' }}>
-              Select a thread to view
-            </p>
-          </div>
-        )}
+        </div>
+
+        {/* Main Content - Thread Detail */}
+        <div style={{ flex: 1 }}>
+          {activeThread ? (
+            <OrbitalThreadDetail
+              threadId={activeThread.id}
+              threadTitle={activeThread.title}
+              threadAuthor={activeThread.author}
+              threadTimestamp={activeThread.timestamp}
+              messages={activeMessages}
+              currentUserId="user-current"
+              i18n={i18n}
+              onReply={handleReply}
+              onSendMessage={handleSendMessage}
+            />
+          ) : (
+            <div style={{ padding: '32px', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'Verdana', fontSize: '14px', color: '#6B7280' }}>
+                Select a thread to view
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </FunProvider>
   );
 }
 
@@ -173,7 +200,7 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
       level: 0,
       hasMedia: true,
       mediaType: 'video',
-      mediaUrl: 'https://via.placeholder.com/400x300/5B9FED/FFFFFF?text=Video',
+      mediaUrl: '/fixtures/ForBiggerFun.mp4',
       avatarUrl: '/images/avatars/rocket1.png',
     },
     // First-level reply (Level 1 - Light Blue)
@@ -260,6 +287,34 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
       hasMedia: false,
       avatarUrl: '/images/avatars/moon1.png',
     },
+    // Top-level contribution with YouTube link preview (Level 0)
+    {
+      id: 'msg-9',
+      author: 'Aunt Sarah',
+      authorId: 'user-aunt',
+      timestamp: Date.now() - 25 * 60 * 1000,
+      body: 'This video has some great tips about baby development milestones! Thought you might find it helpful.',
+      level: 0,
+      parentId: 'msg-1',
+      hasMedia: false,
+      avatarUrl: '/images/avatars/nebula1.png',
+      linkPreviews: [
+        {
+          url: 'https://www.youtube.com/watch?v=Gj2nOk8af-o',
+          title: 'Baby Development Milestones: Walking & First Steps',
+          description: 'Learn about the exciting milestone of your baby\'s first steps! This comprehensive guide covers everything from pre-walking signs to safety tips.',
+          domain: 'youtube.com',
+          image: {
+            url: 'https://img.youtube.com/vi/Gj2nOk8af-o/hqdefault.jpg',
+            contentType: 'image/jpeg' as const,
+            width: 480,
+            height: 360,
+            size: 0,
+          },
+          date: Date.now() - 14 * 24 * 60 * 60 * 1000, // 2 weeks ago
+        },
+      ],
+    },
   ],
   'thread-2': [
     // Original post (Level 0)
@@ -343,7 +398,7 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
     },
   ],
   'thread-3': [
-    // Original post
+    // Original post with photo gallery
     {
       id: 'msg-3-1',
       author: 'Aunt Sarah',
@@ -353,7 +408,14 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
       level: 0,
       hasMedia: true,
       mediaType: 'image',
-      mediaUrl: 'https://via.placeholder.com/400x300/9B87F5/FFFFFF?text=Beach+Photo',
+      mediaUrls: [
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Beach+Sunset',
+        'https://placehold.co/600x400/9B87F5/FFFFFF?text=Kids+Playing',
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Ocean+View',
+        'https://placehold.co/600x400/9B87F5/FFFFFF?text=Sand+Castle',
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Beach+Walk',
+        'https://placehold.co/600x400/9B87F5/FFFFFF?text=Family+Photo',
+      ],
       avatarUrl: '/images/avatars/nebula1.png',
     },
     // REDDIT-STYLE: First wave of reactions (all level 0 - top-level contributions)
@@ -384,11 +446,33 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
       author: 'Uncle',
       authorId: 'user-uncle',
       timestamp: Date.now() - 23 * 60 * 60 * 1000 + 20 * 60 * 1000,
-      body: 'The kids look like they had a blast!',
+      body: 'The kids look like they had a blast! Here are a couple of shots I took too.',
       level: 0, // CHANGED: Top-level contribution
       parentId: 'msg-3-1',
-      hasMedia: false,
+      hasMedia: true,
+      mediaType: 'image',
+      mediaUrls: [
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Kids+Surfing',
+        'https://placehold.co/600x400/9B87F5/FFFFFF?text=Beach+Volleyball',
+      ],
       avatarUrl: '/images/avatars/planet1.png',
+    },
+    {
+      id: 'msg-3-4b',
+      author: 'Cousin',
+      authorId: 'user-cousin',
+      timestamp: Date.now() - 23 * 60 * 60 * 1000 + 25 * 60 * 1000,
+      body: 'Found these gems in the camera roll!',
+      level: 0,
+      parentId: 'msg-3-1',
+      hasMedia: true,
+      mediaType: 'image',
+      mediaUrls: [
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Seashells',
+        'https://placehold.co/600x400/9B87F5/FFFFFF?text=Tide+Pools',
+        'https://placehold.co/600x400/5B9FED/FFFFFF?text=Starfish',
+      ],
+      avatarUrl: '/images/avatars/rocket2.png',
     },
     // Now Mom's comment gets a NESTED reply (level 1+)
     {

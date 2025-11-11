@@ -5,6 +5,8 @@ import React, { useCallback } from 'react';
 import classNames from 'classnames';
 import type { LocalizerType } from '../../types/Util.std';
 import type { OrbitalMessageType } from './OrbitalThreadDetail';
+import { StagedLinkPreview } from '../conversation/StagedLinkPreview.dom';
+import { OrbitalPhotoGallery } from './OrbitalPhotoGallery';
 
 export type OrbitalMessageProps = {
   message: OrbitalMessageType;
@@ -120,17 +122,51 @@ export function OrbitalMessage({
           {/* TODO: Add markdown rendering */}
           <p>{message.body}</p>
 
+          {/* Link Previews (YouTube, etc.) */}
+          {message.linkPreviews && message.linkPreviews.length > 0 && (
+            <div className="OrbitalMessage__link-previews">
+              {message.linkPreviews.map((preview, index) => (
+                <div
+                  key={index}
+                  className="OrbitalMessage__link-preview-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => window.open(preview.url, '_blank')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      window.open(preview.url, '_blank');
+                    }
+                  }}
+                >
+                  <StagedLinkPreview
+                    {...preview}
+                    i18n={i18n}
+                    moduleClassName="OrbitalMessage__link-preview"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Media */}
-          {message.hasMedia && message.mediaUrl && (
+          {message.hasMedia && (
             <div className="OrbitalMessage__media">
-              {message.mediaType === 'image' && (
+              {/* Photo gallery for multiple images */}
+              {message.mediaUrls && message.mediaUrls.length > 0 && (
+                <OrbitalPhotoGallery photos={message.mediaUrls} />
+              )}
+
+              {/* Single image */}
+              {!message.mediaUrls && message.mediaUrl && message.mediaType === 'image' && (
                 <img
                   src={message.mediaUrl}
                   alt="Attached image"
                   style={{ maxWidth: '100%', borderRadius: '3px' }}
                 />
               )}
-              {message.mediaType === 'video' && (
+
+              {/* Video */}
+              {!message.mediaUrls && message.mediaUrl && message.mediaType === 'video' && (
                 <video
                   src={message.mediaUrl}
                   controls
