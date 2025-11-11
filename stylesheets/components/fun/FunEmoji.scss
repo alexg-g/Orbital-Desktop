@@ -1,6 +1,10 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+// =============================================================================
+// ORBITAL OVERRIDE: Use native system emojis instead of Apple sprite sheets
+// =============================================================================
+
 // There are 62 rows and columns in the generated sprite sheet.
 $emoji-sprite-sheet-grid-item-count: 62;
 
@@ -9,7 +13,7 @@ $emoji-sprite-sheet-grid-item-count: 62;
   $margin-start: calc($margin * $scale);
   $margin-end: calc($margin * $scale);
   $size-outer: calc($size + $margin-start + $margin-end);
-  $image: url('../images/emoji-sheet-#{$sheet}.webp');
+  $image: url('/images/emoji-sheet-#{$sheet}.webp');
   background-image: $image;
   background-size: calc($size-outer * $emoji-sprite-sheet-grid-item-count);
   background-position-x: calc(
@@ -214,3 +218,7 @@ $inline-emoji-container-name: inline-emoji;
     @include emoji-jumbo;
   }
 }
+
+// =============================================================================
+// ORBITAL: Using openmoji sprite sheets (override removed)
+// =============================================================================

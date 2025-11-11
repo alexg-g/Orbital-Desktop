@@ -358,7 +358,16 @@
 // =============================================================================
 
 .OrbitalMessage {
-  padding: $orbital-message-padding;
+  display: grid;
+  grid-template-columns: 48px 1fr; // Avatar column (fixed) + Content column (flexible)
+  grid-template-rows: auto 1fr auto; // Header, body (+ optional reply-to), actions
+  grid-template-areas:
+    "avatar header"
+    "avatar body"
+    "avatar actions";
+  column-gap: $orbital-space-base;
+  row-gap: $orbital-space-sm;
+  padding: $orbital-space-md $orbital-space-base;
   border-radius: $orbital-message-border-radius;
   border: 2px solid $orbital-border-strong; // Thicker border (retro)
   border-left: $orbital-message-border-left-width solid transparent;
@@ -407,24 +416,20 @@
     margin-left: $orbital-level-4-indent;
   }
 
-  &__header {
-    display: flex;
-    align-items: center;
-    gap: $orbital-space-sm;
-    margin-bottom: $orbital-space-sm;
-  }
-
-  // Avatar (48x48 pixel art)
+  // Avatar (48x48 pixel art) - Left column, spans all rows
   &__avatar {
+    grid-area: avatar;
     width: 48px;
     height: 48px;
+    min-width: 48px; // Prevent shrinking
+    max-width: 48px; // Prevent growing
     border-radius: $orbital-radius-base;
     border: 2px solid transparent;
-    flex-shrink: 0;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    align-self: start; // Align to top of the grid cell
 
     // Border colors based on reply depth (match message level colors)
     &--level-0 {
@@ -466,6 +471,18 @@
     text-align: center;
   }
 
+  // Content wrapper - Uses display: contents to make children direct grid participants
+  &__content {
+    display: contents;
+  }
+
+  &__header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+  }
+
   &__author {
     font-weight: bold;
     color: $orbital-text-primary;
@@ -488,16 +505,40 @@
 
   &__timestamp {
     font-family: $orbital-font-mono;
-    font-size: $orbital-font-size-xs;
-    color: $orbital-text-tertiary;
+    font-size: $orbital-font-size-sm; // Increased from xs for readability
+    font-weight: 600; // Semi-bold for better visibility
+    color: $orbital-text-secondary; // Darker than tertiary for better contrast
     letter-spacing: $orbital-letter-spacing-tight;
   }
 
+  // Reply-to indicator - Inline with header (row 1, column 2)
+  &__reply-to {
+    display: inline-flex;
+    align-items: center;
+    gap: $orbital-space-xs;
+    font-size: $orbital-font-size-sm; // Increased from xs for readability
+    font-weight: 600; // Semi-bold for better visibility
+    font-family: $orbital-font-mono;
+    color: $orbital-text-secondary; // Darker than tertiary for better contrast
+    margin-left: $orbital-space-sm;
+
+    &__arrow {
+      color: $orbital-text-secondary;
+      font-weight: bold; // Bolder arrow for visibility
+    }
+
+    &__author {
+      color: $orbital-blue;
+      font-weight: bold;
+    }
+  }
+
+  // Body area - Row 2, Column 2
   &__body {
+    grid-area: body;
     color: $orbital-text-primary;
     font-size: $orbital-font-size-base;
     line-height: $orbital-line-height-relaxed;
-    margin-bottom: $orbital-space-sm;
 
     p {
       margin: 0 0 $orbital-space-sm 0;
@@ -535,10 +576,10 @@
   }
 
   &__actions {
+    grid-area: actions;
     display: flex;
     align-items: center;
     gap: $orbital-space-base;
-    margin-top: $orbital-space-sm;
   }
 
   &__reply-button,
@@ -556,23 +597,6 @@
     &:hover {
       color: $orbital-blue;
       text-decoration: underline;
-    }
-  }
-
-  // Reply indicator (optional)
-  &__reply-to {
-    font-size: $orbital-font-size-sm;
-    font-family: $orbital-font-mono;
-    color: $orbital-text-tertiary;
-    margin-bottom: $orbital-space-xs;
-
-    &__arrow {
-      margin-right: $orbital-space-xs;
-    }
-
-    &__author {
-      color: $orbital-blue;
-      font-weight: bold;
     }
   }
 }
@@ -620,7 +644,7 @@
     border-radius: $orbital-input-border-radius;
     background: white;
     font-family: $orbital-font-body;
-    font-size: $orbital-font-size-base;
+    font-size: $orbital-font-size-md; // 14px for better readability
     color: $orbital-text-primary;
     line-height: $orbital-line-height-relaxed;
     transition: $orbital-input-transition;
@@ -916,6 +940,10 @@ button img.emoji,
   // Ensure emoji doesn't cause button height expansion
   line-height: 0;
 }
+
+// =============================================================================
+// EMOJI PICKER - Using Apple sprite sheets (override removed)
+// =============================================================================
 
 
 // =============================================================================

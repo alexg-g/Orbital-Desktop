@@ -77,97 +77,94 @@ export function OrbitalMessage({
       data-message-id={message.id}
       data-level={message.level}
     >
-      {/* Message Header */}
-      <div className="OrbitalMessage__header">
-        {/* Avatar */}
-        {message.avatarUrl ? (
-          <div className={classNames('OrbitalMessage__avatar', `OrbitalMessage__avatar--level-${message.level}`)}>
-            <img
-              src={message.avatarUrl}
-              alt={`${message.author}'s avatar`}
-              className="OrbitalMessage__avatar-image"
-            />
-          </div>
-        ) : (
-          <div className={classNames('OrbitalMessage__avatar', 'OrbitalMessage__avatar-placeholder', `OrbitalMessage__avatar--level-${message.level}`)}>
-            <span className="OrbitalMessage__avatar-initials">
-              {getInitials(message.author)}
-            </span>
-          </div>
-        )}
-        <span className="OrbitalMessage__author">{message.author}</span>
-        {/* Show "replied" badge for top-level contributions (level 0 but has parentId) */}
-        {message.parentId && message.level === 0 && (
-          <span className="OrbitalMessage__contribution-badge" title="Top-level contribution to thread">
-            replied
-          </span>
-        )}
-        <span className="OrbitalMessage__timestamp">
-          {formatTimestamp(message.timestamp, i18n)}
-        </span>
-      </div>
-
-      {/* Optional "Replying to" indicator (only for nested replies, not top-level contributions) */}
-      {message.parentId && message.level > 0 && (
-        <div className="OrbitalMessage__reply-to">
-          <span className="OrbitalMessage__reply-to__arrow">↳</span>
-          Replying to{' '}
-          <span className="OrbitalMessage__reply-to__author">
-            {/* TODO: Lookup parent author name */}
-            Previous message
+      {/* Avatar - Left column */}
+      {message.avatarUrl ? (
+        <div className={classNames('OrbitalMessage__avatar', `OrbitalMessage__avatar--level-${message.level}`)}>
+          <img
+            src={message.avatarUrl}
+            alt={`${message.author}'s avatar`}
+            className="OrbitalMessage__avatar-image"
+          />
+        </div>
+      ) : (
+        <div className={classNames('OrbitalMessage__avatar', 'OrbitalMessage__avatar-placeholder', `OrbitalMessage__avatar--level-${message.level}`)}>
+          <span className="OrbitalMessage__avatar-initials">
+            {getInitials(message.author)}
           </span>
         </div>
       )}
 
-      {/* Message Body */}
-      <div className="OrbitalMessage__body">
-        {/* TODO: Add markdown rendering */}
-        <p>{message.body}</p>
+      {/* Content - Right column */}
+      <div className="OrbitalMessage__content">
+        {/* Message Header */}
+        <div className="OrbitalMessage__header">
+          <span className="OrbitalMessage__author">{message.author}</span>
+          <span className="OrbitalMessage__timestamp">
+            {formatTimestamp(message.timestamp, i18n)}
+          </span>
+          {/* Optional "Replying to" indicator (inline, only for nested replies) */}
+          {message.parentId && message.level > 0 && (
+            <span className="OrbitalMessage__reply-to">
+              <span className="OrbitalMessage__reply-to__arrow">↳</span>
+              Replying to{' '}
+              <span className="OrbitalMessage__reply-to__author">
+                {/* TODO: Lookup parent author name */}
+                Previous message
+              </span>
+            </span>
+          )}
+        </div>
 
-        {/* Media */}
-        {message.hasMedia && message.mediaUrl && (
-          <div className="OrbitalMessage__media">
-            {message.mediaType === 'image' && (
-              <img
-                src={message.mediaUrl}
-                alt="Attached image"
-                style={{ maxWidth: '100%', borderRadius: '3px' }}
-              />
-            )}
-            {message.mediaType === 'video' && (
-              <video
-                src={message.mediaUrl}
-                controls
-                style={{ maxWidth: '100%', borderRadius: '3px' }}
-              >
-                <track kind="captions" />
-              </video>
-            )}
-          </div>
-        )}
-      </div>
+        {/* Message Body */}
+        <div className="OrbitalMessage__body">
+          {/* TODO: Add markdown rendering */}
+          <p>{message.body}</p>
 
-      {/* Actions */}
-      <div className="OrbitalMessage__actions">
-        <button
-          type="button"
-          className="OrbitalMessage__reply-button"
-          onClick={handleReply}
-          onKeyDown={handleKeyDown}
-          aria-label="Reply to this message"
-        >
-          Reply
-        </button>
-        {onQuote && (
+          {/* Media */}
+          {message.hasMedia && message.mediaUrl && (
+            <div className="OrbitalMessage__media">
+              {message.mediaType === 'image' && (
+                <img
+                  src={message.mediaUrl}
+                  alt="Attached image"
+                  style={{ maxWidth: '100%', borderRadius: '3px' }}
+                />
+              )}
+              {message.mediaType === 'video' && (
+                <video
+                  src={message.mediaUrl}
+                  controls
+                  style={{ maxWidth: '100%', borderRadius: '3px' }}
+                >
+                  <track kind="captions" />
+                </video>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="OrbitalMessage__actions">
           <button
             type="button"
-            className="OrbitalMessage__quote-button"
-            onClick={handleQuote}
-            aria-label="Quote this message"
+            className="OrbitalMessage__reply-button"
+            onClick={handleReply}
+            onKeyDown={handleKeyDown}
+            aria-label="Reply to this message"
           >
-            Quote
+            Reply
           </button>
-        )}
+          {onQuote && (
+            <button
+              type="button"
+              className="OrbitalMessage__quote-button"
+              onClick={handleQuote}
+              aria-label="Quote this message"
+            >
+              Quote
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
