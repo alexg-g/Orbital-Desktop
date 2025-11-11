@@ -331,6 +331,7 @@
     flex: 1;
     overflow-y: auto;
     padding: $orbital-space-base;
+    padding-bottom: 15px;
   }
 
   &__composer-area {
@@ -607,6 +608,7 @@
 
 .OrbitalComposer {
   padding: $orbital-space-lg;
+  padding-top: 6px; // Reduced top padding to save space
   padding-bottom: 60px; // Large bottom padding to prevent button cutoff
   background: $orbital-surface-elevated;
   font-family: $orbital-font-body;
@@ -799,6 +801,43 @@
 
   &--separator {
     letter-spacing: $orbital-letter-spacing-wide;
+  }
+
+  &--toggle {
+    // Make it a proper button
+    width: 100%;
+    background: $orbital-surface-elevated;
+    border: 2px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    cursor: pointer;
+    padding: $orbital-space-sm;
+    margin: 0;
+    transition: all $orbital-duration-fast;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+
+    &:hover {
+      color: $orbital-blue;
+      border-color: $orbital-blue;
+      background: $orbital-surface-elevated;
+      transform: scale(1.02);
+    }
+
+    &:focus {
+      outline: 2px solid $orbital-blue;
+      outline-offset: 4px;
+      color: $orbital-blue;
+      border-color: $orbital-blue;
+      background: $orbital-surface-elevated;
+    }
+
+    &:active {
+      color: $orbital-blue-dark;
+      border-color: $orbital-blue-dark;
+      background: $orbital-surface-elevated;
+      transform: scale(0.98);
+    }
   }
 
   &--day-separator {
