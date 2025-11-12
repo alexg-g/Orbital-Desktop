@@ -5,6 +5,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Quill, { Delta } from '@signalapp/quill-cjs';
 import { EmojiBlot } from '../../quill/emoji/blot.dom';
 
+// Register EmojiBlot at module level to ensure it's available before any Quill instances are created
+// This prevents race conditions in Storybook and ensures complex emojis (ZWJ sequences) render correctly
+Quill.register('formats/emoji', EmojiBlot, true);
+
 export type OrbitalQuillEditorProps = {
   placeholder?: string;
   initialMarkdown?: string;
@@ -72,9 +76,6 @@ export function OrbitalQuillEditor({
     }
 
     const element = editorRef.current;
-
-    // Register the EmojiBlot for proper emoji handling
-    Quill.register(EmojiBlot, true);
 
     const quill = new Quill(element, {
       theme: 'snow',

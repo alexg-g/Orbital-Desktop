@@ -21,9 +21,17 @@ export type FunPickerButtonProps = Readonly<{
 
 export function FunPickerButton(props: FunPickerButtonProps): JSX.Element {
   const { i18n } = props;
+  // Use a grinning face emoji (😀) as the colored icon
+  const defaultEmoji = getEmojiVariantByKey('1F600');
+
   return (
     <Button className="FunButton">
-      <span className="FunButton__Icon FunButton__Icon--FunPicker" />
+      <FunStaticEmoji
+        role="img"
+        size={20}
+        aria-label="Emoji picker"
+        emoji={defaultEmoji}
+      />
       <VisuallyHidden>{i18n('icu:FunButton__Label--FunPicker')}</VisuallyHidden>
     </Button>
   );
@@ -46,7 +54,8 @@ export function FunEmojiPickerButton(
 
   const emojiVarant = useMemo(() => {
     if (props.selectedEmoji == null) {
-      return null;
+      // Use grinning face as default when no emoji is selected
+      return getEmojiVariantByKey('1F600');
     }
 
     const variantKey = props.selectedEmoji;
@@ -56,16 +65,12 @@ export function FunEmojiPickerButton(
 
   return (
     <Button className="FunButton">
-      {emojiVarant ? (
-        <FunStaticEmoji
-          role="img"
-          size={20}
-          aria-label={emojiLocalizer.getLocaleShortName(emojiVarant.key)}
-          emoji={emojiVarant}
-        />
-      ) : (
-        <span className="FunButton__Icon FunButton__Icon--EmojiPicker" />
-      )}
+      <FunStaticEmoji
+        role="img"
+        size={20}
+        aria-label={emojiLocalizer.getLocaleShortName(emojiVarant.key)}
+        emoji={emojiVarant}
+      />
       <VisuallyHidden>
         {i18n('icu:FunButton__Label--EmojiPicker')}
       </VisuallyHidden>

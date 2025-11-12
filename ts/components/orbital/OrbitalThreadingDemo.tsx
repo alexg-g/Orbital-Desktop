@@ -23,6 +23,7 @@ import { EmojiSkinTone } from '../fun/data/emojis.std';
  */
 export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string>('thread-1');
+  const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
 
   const handleThreadClick = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
@@ -52,8 +53,8 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
       recentStickers={recentStickers}
       recentGifs={[]}
       // Emojis
-      emojiSkinToneDefault={EmojiSkinTone.None}
-      onEmojiSkinToneDefaultChange={() => null}
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
       onOpenCustomizePreferredReactionsModal={() => null}
       onSelectEmoji={() => null}
       // Stickers
