@@ -48,6 +48,9 @@ import type {
 import type { SyncTaskType } from '../util/syncTasks.preload.js';
 import type { AttachmentBackupJobType } from '../types/AttachmentBackup.std.js';
 import type { AttachmentType } from '../types/Attachment.std.js';
+import type {
+  OrbitalMediaAttachment,
+  OrbitalMediaStorageStats} from '../types/OrbitalMedia.std.js';
 
 // STUB: BadgeType removed for Orbital
 type BadgeType = { id: string };
@@ -1366,6 +1369,11 @@ export type ServerReadableDirectInterface = ReadableInterface & {
   getKnownConversationAttachments: () => Array<string>;
 
   getAllBadgeImageFileLocalPaths: () => Set<string>;
+
+  // Orbital Media
+  getOrbitalMedia: (mediaId: string) => OrbitalMediaAttachment | null;
+  getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
+  getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
 };
 export type ServerReadableInterface =
   AddReadonlyDB<ServerReadableDirectInterface>;
@@ -1428,6 +1436,10 @@ export type ServerWritableDirectInterface = WritableInterface & {
   ) => Array<string>;
 
   runCorruptionChecks: () => boolean;
+
+  // Orbital Media
+  saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
+  updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
 };
 
 export type ServerWritableInterface =

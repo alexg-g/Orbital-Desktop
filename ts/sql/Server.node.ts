@@ -504,6 +504,11 @@ export const DataReader: ServerReadableInterface = {
   getKnownDownloads,
   getKnownConversationAttachments,
 
+  // Orbital Media
+  getOrbitalMedia,
+  getThreadMedia,
+  getStorageStats,
+
   __dangerouslyRunAbitraryReadOnlySqlQuery};
 
 export const DataWriter: ServerWritableInterface = {
@@ -721,7 +726,11 @@ export const DataWriter: ServerWritableInterface = {
 
   removeKnownStickers,
   removeKnownDraftAttachments,
-  runCorruptionChecks};
+  runCorruptionChecks,
+
+  // Orbital Media
+  saveOrbitalMedia,
+  updateMediaDownloadStatus};
 
 const MESSAGE_COLUMNS_FRAGMENTS = MESSAGE_COLUMNS.map(
   column => new QueryFragment(column, [])
@@ -8713,4 +8722,307 @@ function __dangerouslyRunAbitraryReadOnlySqlQuery(
     db.pragma('query_only = off');
   }
   return results;
+}
+
+// Orbital Media Functions
+
+import type {
+  OrbitalMediaAttachment,
+  OrbitalMediaStorageStats,
+} from '../types/OrbitalMedia.std.js';
+
+type OrbitalMediaRow = {
+  id: string;
+  media_id: string;
+  thread_id: string;
+  attachment_keys: Uint8Array;
+  plaintext_hash: string;
+  digest: string;
+  incremental_mac: string | null;
+  chunk_size: number | null;
+  size: number;
+  content_type: string;
+  file_name: string | null;
+  blur_hash: string | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  expires_at: number;
+  local_path: string | null;
+  downloaded: 0 | 1;
+  created_at: number;
+  caption: string | null;
+  uploaded_by: string | null;
+};
+
+function orbitalMediaRowToAttachment(
+  row: OrbitalMediaRow
+): OrbitalMediaAttachment {
+  return {
+    id: row.id,
+    mediaId: row.media_id,
+    threadId: row.thread_id,
+    attachmentKeys: row.attachment_keys,
+    plaintextHash: row.plaintext_hash,
+    digest: row.digest,
+    incrementalMac: row.incremental_mac ?? undefined,
+    chunkSize: row.chunk_size ?? undefined,
+    size: row.size,
+    contentType: row.content_type as any,
+    fileName: row.file_name ?? undefined,
+    blurHash: row.blur_hash ?? undefined,
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    duration: row.duration ?? undefined,
+    expiresAt: row.expires_at,
+    localPath: row.local_path,
+    downloaded: row.downloaded,
+    createdAt: row.created_at,
+    caption: row.caption ?? undefined,
+    uploadedBy: row.uploaded_by ?? undefined,
+  };
+}
+
+function getOrbitalMedia(
+  db: ReadableDB,
+  mediaId: string
+): OrbitalMediaAttachment | null {
+  const row = db
+    .prepare<{ mediaId: string }>(
+      `
+      SELECT
+        id,
+        media_id,
+        thread_id,
+        attachment_keys,
+        plaintext_hash,
+        digest,
+        incremental_mac,
+        chunk_size,
+        size,
+        content_type,
+        file_name,
+        blur_hash,
+        width,
+        height,
+        duration,
+        expires_at,
+        local_path,
+        downloaded,
+        created_at,
+        caption,
+        uploaded_by
+      FROM orbital_media
+      WHERE media_id = $mediaId
+    `
+    )
+    .get({ mediaId });
+
+  if (!row) {
+    return null;
+  }
+
+  return orbitalMediaRowToAttachment(row as OrbitalMediaRow);
+}
+
+function getThreadMedia(
+  db: ReadableDB,
+  threadId: string
+): Array<OrbitalMediaAttachment> {
+  const rows = db
+    .prepare<{ threadId: string }>(
+      `
+      SELECT
+        id,
+        media_id,
+        thread_id,
+        attachment_keys,
+        plaintext_hash,
+        digest,
+        incremental_mac,
+        chunk_size,
+        size,
+        content_type,
+        file_name,
+        blur_hash,
+        width,
+        height,
+        duration,
+        expires_at,
+        local_path,
+        downloaded,
+        created_at,
+        caption,
+        uploaded_by
+      FROM orbital_media
+      WHERE thread_id = $threadId
+      ORDER BY created_at DESC
+    `
+    )
+    .all({ threadId });
+
+  return rows.map(row => orbitalMediaRowToAttachment(row as OrbitalMediaRow));
+}
+
+function getStorageStats(
+  db: ReadableDB,
+  threadId: string
+): OrbitalMediaStorageStats {
+  // Total stats
+  const totalRow = db
+    .prepare<{ threadId: string }>(
+      `
+      SELECT
+        COUNT(*) as total_count,
+        COALESCE(SUM(size), 0) as total_size,
+        COALESCE(SUM(CASE WHEN downloaded = 1 THEN 1 ELSE 0 END), 0) as downloaded_count,
+        COALESCE(SUM(CASE WHEN downloaded = 0 THEN 1 ELSE 0 END), 0) as pending_count,
+        COALESCE(SUM(CASE WHEN downloaded = 1 THEN size ELSE 0 END), 0) as downloaded_size
+      FROM orbital_media
+      WHERE thread_id = $threadId
+    `
+    )
+    .get({ threadId }) as {
+    total_count: number;
+    total_size: number;
+    downloaded_count: number;
+    pending_count: number;
+    downloaded_size: number;
+  };
+
+  // By content type
+  const byContentType = db
+    .prepare<{ threadId: string }>(
+      `
+      SELECT
+        content_type,
+        COUNT(*) as count,
+        COALESCE(SUM(size), 0) as storage_used
+      FROM orbital_media
+      WHERE thread_id = $threadId
+      GROUP BY content_type
+    `
+    )
+    .all({ threadId }) as Array<{
+    content_type: string;
+    count: number;
+    storage_used: number;
+  }>;
+
+  return {
+    totalMediaCount: totalRow.total_count,
+    totalStorageUsed: totalRow.total_size,
+    downloadedCount: totalRow.downloaded_count,
+    pendingDownloadsCount: totalRow.pending_count,
+    downloadedStorageUsed: totalRow.downloaded_size,
+    byContentType: byContentType.map(row => ({
+      contentType: row.content_type as any,
+      count: row.count,
+      storageUsed: row.storage_used,
+    })),
+    byThread: [
+      {
+        threadId,
+        threadTitle: '', // TODO: Get thread title from orbital_threads table
+        count: totalRow.total_count,
+        storageUsed: totalRow.total_size,
+      },
+    ],
+  };
+}
+
+function saveOrbitalMedia(
+  db: WritableDB,
+  media: OrbitalMediaAttachment
+): void {
+  db.prepare(
+    `
+    INSERT OR REPLACE INTO orbital_media (
+      id,
+      media_id,
+      thread_id,
+      attachment_keys,
+      plaintext_hash,
+      digest,
+      incremental_mac,
+      chunk_size,
+      size,
+      content_type,
+      file_name,
+      blur_hash,
+      width,
+      height,
+      duration,
+      expires_at,
+      local_path,
+      downloaded,
+      created_at,
+      caption,
+      uploaded_by
+    ) VALUES (
+      $id,
+      $mediaId,
+      $threadId,
+      $attachmentKeys,
+      $plaintextHash,
+      $digest,
+      $incrementalMac,
+      $chunkSize,
+      $size,
+      $contentType,
+      $fileName,
+      $blurHash,
+      $width,
+      $height,
+      $duration,
+      $expiresAt,
+      $localPath,
+      $downloaded,
+      $createdAt,
+      $caption,
+      $uploadedBy
+    )
+  `
+  ).run({
+    id: media.id,
+    mediaId: media.mediaId,
+    threadId: media.threadId,
+    attachmentKeys: media.attachmentKeys,
+    plaintextHash: media.plaintextHash,
+    digest: media.digest,
+    incrementalMac: media.incrementalMac ?? null,
+    chunkSize: media.chunkSize ?? null,
+    size: media.size,
+    contentType: media.contentType,
+    fileName: media.fileName ?? null,
+    blurHash: media.blurHash ?? null,
+    width: media.width ?? null,
+    height: media.height ?? null,
+    duration: media.duration ?? null,
+    expiresAt: media.expiresAt,
+    localPath: media.localPath,
+    downloaded: media.downloaded,
+    createdAt: media.createdAt,
+    caption: media.caption ?? null,
+    uploadedBy: media.uploadedBy ?? null,
+  });
+}
+
+function updateMediaDownloadStatus(
+  db: WritableDB,
+  mediaId: string,
+  localPath: string
+): void {
+  db.prepare(
+    `
+    UPDATE orbital_media
+    SET
+      local_path = $localPath,
+      downloaded = 1
+    WHERE media_id = $mediaId
+  `
+  ).run({
+    mediaId,
+    localPath,
+  });
 }

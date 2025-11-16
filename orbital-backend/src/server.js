@@ -22,6 +22,9 @@ const mediaRoutes = require('./routes/media');
 // Import WebSocket server
 const { initWebSocketServer } = require('./websocket/signalWebSocket');
 
+// Import scheduled jobs
+const { scheduleMediaCleanup } = require('./jobs/mediaCleanup');
+
 /**
  * Orbital Backend Server
  *
@@ -113,6 +116,9 @@ app.use(notFoundHandler);
 // Global error handler (must be last)
 app.use(errorHandler);
 
+// Store cleanup job reference for graceful shutdown
+let mediaCleanupJob = null;
+
 /**
  * Start server
  */
@@ -127,6 +133,11 @@ async function startServer() {
     logger.info('Initializing WebSocket server...');
     initWebSocketServer(server);
     logger.info('WebSocket server initialized');
+
+    // Schedule media cleanup job
+    logger.info('Scheduling media cleanup job...');
+    mediaCleanupJob = scheduleMediaCleanup();
+    logger.info('Media cleanup job scheduled');
 
     // Start HTTP server
     server.listen(PORT, () => {
@@ -161,6 +172,13 @@ async function startServer() {
  */
 async function gracefulShutdown(signal) {
   logger.info(`Received ${signal}, starting graceful shutdown...`);
+
+  // Stop media cleanup job
+  if (mediaCleanupJob) {
+    logger.info('Stopping media cleanup job...');
+    mediaCleanupJob.stop();
+    logger.info('Media cleanup job stopped');
+  }
 
   // Stop accepting new connections
   server.close(async () => {
