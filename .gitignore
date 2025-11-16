@@ -65,3 +65,6 @@ ts/protobuf/*.d.ts
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Local environment variables
+.env.local
