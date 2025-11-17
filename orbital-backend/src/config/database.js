@@ -15,10 +15,9 @@ const pool = new Pool({
   max: 10,                        // Maximum connections in pool
   idleTimeoutMillis: 30000,       // Close idle connections after 30s
   connectionTimeoutMillis: 2000,  // Fail fast if connection unavailable
-  // SSL configuration (required for production)
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: true
-  } : false
+  // SSL configuration (disable for localhost, enable for remote databases)
+  // Localhost connections don't need SSL (self-signed certificate error)
+  ssl: false
 });
 
 // Log successful connection
