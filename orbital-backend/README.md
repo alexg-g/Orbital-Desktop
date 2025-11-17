@@ -298,14 +298,16 @@ npm run migrate down
 
 ## Deployment
 
-### Production Setup
+### Production Setup (DigitalOcean Droplet)
+
+**Deployment Path:** `/home/orbital/apps/orbital/orbital-backend`
 
 1. **Environment Configuration**
    ```bash
    NODE_ENV=production
    DATABASE_URL=postgresql://user:pass@host:5432/orbital
    JWT_SECRET=<strong-random-secret>
-   FRONTEND_URL=https://orbital.example.com
+   FRONTEND_URL=https://app.orbitl.org
    ```
 
 2. **Database SSL**
@@ -316,7 +318,7 @@ npm run migrate down
    ```nginx
    server {
        listen 443 ssl http2;
-       server_name api.orbital.example.com;
+       server_name api.orbitl.org;
 
        ssl_certificate /path/to/cert.pem;
        ssl_certificate_key /path/to/key.pem;
@@ -347,10 +349,32 @@ npm run migrate down
    pm2 save
    ```
 
-5. **Monitoring**
+5. **Updating Deployed Code**
+   ```bash
+   # SSH into droplet
+   ssh orbital@api.orbitl.org
+
+   # Navigate to backend directory
+   cd /home/orbital/apps/orbital/orbital-backend
+
+   # Pull latest changes
+   git pull origin main
+
+   # Install new dependencies (if any)
+   npm install
+
+   # Restart backend server
+   pm2 restart orbital-backend
+
+   # Check logs for errors
+   pm2 logs orbital-backend --lines 50
+   ```
+
+6. **Monitoring**
    - Check logs: `pm2 logs orbital-backend`
    - Monitor status: `pm2 status`
    - Restart: `pm2 restart orbital-backend`
+   - View detailed info: `pm2 info orbital-backend`
 
 ---
 
