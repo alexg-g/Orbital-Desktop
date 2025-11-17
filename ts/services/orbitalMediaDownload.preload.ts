@@ -27,7 +27,9 @@
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
-import { net } from 'electron';
+import * as https from 'node:https';
+import * as http from 'node:http';
+import { URL } from 'node:url';
 import { fromBase64, toBase64 } from '../Bytes.std.js';
 
 import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
@@ -287,8 +289,9 @@ async function downloadEncryptedBlob(params: {
 }): Promise<Uint8Array> {
   const { mediaId, threadId, expectedSize, onProgress, signal } = params;
 
-  // Make request using Electron net module
+  // Make request using Node.js https/http module
   const requestBody = JSON.stringify({ threadId });
+  const url = `${ORBITAL_API_URL}/api/media/${mediaId}/download`;
 
   const chunks: Buffer[] = [];
   let downloadedBytes = 0;
@@ -296,25 +299,27 @@ async function downloadEncryptedBlob(params: {
   let responseStatusText = '';
 
   await new Promise<void>((resolve, reject) => {
-    const request = net.request({
-      url: `${ORBITAL_API_URL}/api/media/${mediaId}/download`,
+    // Parse URL to determine protocol
+    const parsedUrl = new URL(url);
+    const isHttps = parsedUrl.protocol === 'https:';
+    const httpModule = isHttps ? https : http;
+
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port,
+      path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
-    });
-
-    request.setHeader('Content-Type', 'application/json');
-    // TODO: Add JWT authentication
-    // request.setHeader('Authorization', `Bearer ${getJWT()}`);
-
-    // Handle abort signal
-    const abortHandler = () => {
-      request.abort();
-      reject(new Error('Download aborted'));
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(requestBody),
+        // TODO: Add JWT authentication
+        // 'Authorization': `Bearer ${getJWT()}`,
+      },
     };
-    signal?.addEventListener('abort', abortHandler);
 
-    request.on('response', response => {
-      responseStatus = response.statusCode;
-      responseStatusText = response.statusMessage;
+    const request = httpModule.request(requestOptions, response => {
+      responseStatus = response.statusCode || 0;
+      responseStatusText = response.statusMessage || '';
 
       response.on('data', (chunk: Buffer) => {
         if (responseStatus !== 200) {
@@ -356,6 +361,13 @@ async function downloadEncryptedBlob(params: {
         reject(error);
       });
     });
+
+    // Handle abort signal
+    const abortHandler = () => {
+      request.destroy();
+      reject(new Error('Download aborted'));
+    };
+    signal?.addEventListener('abort', abortHandler);
 
     request.on('error', error => {
       signal?.removeEventListener('abort', abortHandler);

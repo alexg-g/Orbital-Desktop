@@ -26,7 +26,9 @@ import type { FileHandle } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { net } from 'electron';
+import * as https from 'node:https';
+import * as http from 'node:http';
+import { URL } from 'node:url';
 
 import type { AttachmentWithHydratedData } from '../types/Attachment.std.js';
 import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
@@ -413,8 +415,8 @@ async function uploadChunkWithRetry(params: {
 }
 
 /**
- * Helper to make HTTP requests using Electron's net module
- * (works in both app and test environments, unlike browser fetch)
+ * Helper to make HTTP/HTTPS requests using Node.js built-in modules
+ * (works in preload context, unlike Electron's net module which is main-process-only)
  */
 function makeRequest(options: {
   url: string;
@@ -426,28 +428,22 @@ function makeRequest(options: {
   return new Promise((resolve, reject) => {
     const { url, method, headers, body, signal } = options;
 
-    const request = net.request({
-      url,
+    // Parse URL to determine protocol
+    const parsedUrl = new URL(url);
+    const isHttps = parsedUrl.protocol === 'https:';
+    const httpModule = isHttps ? https : http;
+
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port,
+      path: parsedUrl.pathname + parsedUrl.search,
       method,
-    });
-
-    // Set headers
-    if (headers) {
-      Object.entries(headers).forEach(([key, value]) => {
-        request.setHeader(key, value);
-      });
-    }
-
-    // Handle abort signal
-    const abortHandler = () => {
-      request.abort();
-      reject(new Error('Request aborted'));
+      headers: headers || {},
     };
-    signal?.addEventListener('abort', abortHandler);
 
-    let responseData = '';
+    const request = httpModule.request(requestOptions, response => {
+      let responseData = '';
 
-    request.on('response', response => {
       response.on('data', chunk => {
         responseData += chunk.toString();
       });
@@ -455,8 +451,8 @@ function makeRequest(options: {
       response.on('end', () => {
         signal?.removeEventListener('abort', abortHandler);
         resolve({
-          status: response.statusCode,
-          statusText: response.statusMessage,
+          status: response.statusCode || 0,
+          statusText: response.statusMessage || '',
           data: responseData,
         });
       });
@@ -466,6 +462,13 @@ function makeRequest(options: {
         reject(error);
       });
     });
+
+    // Handle abort signal
+    const abortHandler = () => {
+      request.destroy();
+      reject(new Error('Request aborted'));
+    };
+    signal?.addEventListener('abort', abortHandler);
 
     request.on('error', error => {
       signal?.removeEventListener('abort', abortHandler);
