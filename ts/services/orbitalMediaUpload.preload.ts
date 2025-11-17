@@ -43,6 +43,11 @@ import { DataWriter } from '../sql/Client.preload.js';
 const log = createLogger('OrbitalMediaUpload');
 
 /**
+ * Orbital API base URL
+ */
+const ORBITAL_API_URL = process.env.ORBITAL_API_URL || 'https://api.orbitl.org';
+
+/**
  * Chunk size: 5MB (matches backend configuration)
  */
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
@@ -459,7 +464,7 @@ async function uploadChunk(params: {
   }
 
   // Make request
-  const response = await fetch('/api/media/upload/chunk', {
+  const response = await fetch(`${ORBITAL_API_URL}/api/media/upload/chunk`, {
     method: 'POST',
     body: formData,
     signal,
@@ -489,7 +494,7 @@ async function finalizeUpload(params: {
 }): Promise<FinalizeUploadResponse> {
   const { id, threadId, signal } = params;
 
-  const response = await fetch('/api/media/upload/complete', {
+  const response = await fetch(`${ORBITAL_API_URL}/api/media/upload/complete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

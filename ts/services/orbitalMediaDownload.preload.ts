@@ -43,6 +43,11 @@ import { DataReader, DataWriter } from '../sql/Client.preload.js';
 const log = createLogger('OrbitalMediaDownload');
 
 /**
+ * Orbital API base URL
+ */
+const ORBITAL_API_URL = process.env.ORBITAL_API_URL || 'https://api.orbitl.org';
+
+/**
  * Download progress callback
  */
 export type DownloadProgressCallback = (progress: number) => void;
@@ -282,7 +287,7 @@ async function downloadEncryptedBlob(params: {
   const { mediaId, threadId, expectedSize, onProgress, signal } = params;
 
   // Make request
-  const response = await fetch(`/api/media/${mediaId}/download`, {
+  const response = await fetch(`${ORBITAL_API_URL}/api/media/${mediaId}/download`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
