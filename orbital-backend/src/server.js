@@ -40,6 +40,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Trust first proxy (Nginx) for rate limiting behind reverse proxy
+// Using '1' instead of 'true' to prevent IP spoofing attacks
+app.set('trust proxy', 1);
+
 // Create HTTP server (for WebSocket upgrade)
 const server = http.createServer(app);
 
