@@ -14,6 +14,11 @@ import chaiAsPromised from 'chai-as-promised';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { reporters, type MochaOptions } from 'mocha';
 
+// Initialize window.Signal and dependencies before importing test modules
+import '../context.preload.js';
+import './phase1-ipc.preload.js';
+import './phase2-dependencies.preload.js';
+
 import { initMessageCleanup } from '../../services/messageStateCleanup.preload.js';
 import { initializeMessageCounter } from '../../util/incrementMessageCounter.preload.js';
 import { initializeRedux } from '../../state/initializeRedux.preload.js';

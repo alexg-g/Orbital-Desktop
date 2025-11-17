@@ -722,6 +722,8 @@ async function createWindow() {
         __dirname,
         usePreloadBundle
           ? '../preload.wrapper.js'
+          : isTestEnvironment(getEnvironment())
+          ? '../ts/windows/main/preload_test.preload.js'
           : '../ts/windows/main/preload.preload.js'
       ),
       spellcheck,

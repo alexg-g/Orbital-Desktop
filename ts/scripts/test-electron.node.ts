@@ -97,16 +97,24 @@ async function launchElectron(
         // via `test.js`
         NODE_ENV: 'test',
         TEST_QUIT_ON_COMPLETE: 'on',
+        MOCK_TEST: 'true',
         SIGNAL_CI_CONFIG: JSON.stringify({
           storagePath,
         }),
       },
       // Since we run `.cmd` file on Windows - use shell
+      // Enable stderr pipe for error visibility
+      stdio: ['inherit', 'pipe', 'pipe'],
       shell: process.platform === 'win32',
     }
   );
 
   const { resolve, reject, promise: exitPromise } = explodePromise<void>();
+
+  // Forward stderr to console for error visibility
+  proc.stderr.on('data', (data) => {
+    process.stderr.write(data);
+  });
 
   let exitSignal: string | undefined;
   proc.on('exit', (code, signal) => {
@@ -114,7 +122,12 @@ async function launchElectron(
       resolve();
     } else {
       exitSignal = signal || undefined;
-      reject(new Error(`Exit code: ${code}`));
+      reject(
+        new Error(
+          `Exit code: ${code}${signal ? `, signal: ${signal}` : ''}\n` +
+            `Tests run: ${pass}, Failures: ${failures.length}`
+        )
+      );
     }
   });
 
@@ -143,6 +156,9 @@ async function launchElectron(
                 } catch {
                   // pass
                 }
+              } else {
+                // Forward non-event lines for visibility
+                console.log(line);
               }
               return;
             }
