@@ -76,13 +76,17 @@ export type CallEventDetails = never;
 export type CallLogEventDetails = never;
 export type CallDetails = never;
 
-// Schema stubs for migrations
+// Schema stubs for migrations - support Zod method chaining
 export const callHistoryDetailsSchema = {
   parse: (_data: unknown): CallHistoryDetails => {
     throw new Error('Call history not supported');
   },
   pick: (_fields: any) => callHistoryDetailsSchema,
   omit: (_fields: any) => callHistoryDetailsSchema,
+  extend: (_fields: any) => callHistoryDetailsSchema,
+  merge: (_schema: any) => callHistoryDetailsSchema,
+  partial: (_fields?: any) => callHistoryDetailsSchema,
+  deepPartial: () => callHistoryDetailsSchema,
 };
 
 export const callHistoryGroupSchema = {
@@ -91,4 +95,8 @@ export const callHistoryGroupSchema = {
   },
   pick: (_fields: any) => callHistoryGroupSchema,
   omit: (_fields: any) => callHistoryGroupSchema,
+  extend: (_fields: any) => callHistoryGroupSchema,
+  merge: (_schema: any) => callHistoryGroupSchema,
+  partial: (_fields?: any) => callHistoryGroupSchema,
+  deepPartial: () => callHistoryGroupSchema,
 };
