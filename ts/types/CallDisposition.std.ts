@@ -81,10 +81,14 @@ export const callHistoryDetailsSchema = {
   parse: (_data: unknown): CallHistoryDetails => {
     throw new Error('Call history not supported');
   },
+  pick: (_fields: any) => callHistoryDetailsSchema,
+  omit: (_fields: any) => callHistoryDetailsSchema,
 };
 
 export const callHistoryGroupSchema = {
   parse: (_data: unknown): never => {
     throw new Error('Call history not supported');
   },
+  pick: (_fields: any) => callHistoryGroupSchema,
+  omit: (_fields: any) => callHistoryGroupSchema,
 };
