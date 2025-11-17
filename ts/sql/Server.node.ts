@@ -91,9 +91,7 @@ import type {
   CallLogEventTarget} from '../types/CallDisposition.std.js';
 import {
   CallDirection,
-  CallHistoryFilterStatus,
   CallMode,
-  CallStatusValue,
   CallType,
   DirectCallStatus,
   GroupCallStatus,
@@ -4366,9 +4364,9 @@ function getCallHistory(
 const READ_STATUS_READ = sqlConstant(ReadStatus.Read);
 const SEEN_STATUS_UNSEEN = sqlConstant(SeenStatus.Unseen);
 const SEEN_STATUS_SEEN = sqlConstant(SeenStatus.Seen);
-const CALL_STATUS_MISSED = sqlConstant(CallStatusValue.Missed);
-const CALL_STATUS_DELETED = sqlConstant(CallStatusValue.Deleted);
-const CALL_STATUS_PENDING = sqlConstant(CallStatusValue.Pending);
+const CALL_STATUS_MISSED = sqlConstant(DirectCallStatus.Missed);
+const CALL_STATUS_DELETED = sqlConstant(DirectCallStatus.Deleted);
+const CALL_STATUS_PENDING = sqlConstant(DirectCallStatus.Pending);
 const CALL_STATUS_INCOMING = sqlConstant(CallDirection.Incoming);
 const CALL_MODE_ADHOC = sqlConstant(CallMode.Adhoc);
 const FOUR_HOURS_IN_MS = sqlConstant(4 * 60 * 60 * 1000);
@@ -4695,7 +4693,7 @@ function getCallHistoryGroupData(
       : sqlFragment``;
 
     const filterClause =
-      status === CallHistoryFilterStatus.All
+      status === 'All'
         ? sqlFragment`status IS NOT ${CALL_STATUS_DELETED}`
         : sqlFragment`
             direction IS ${CALL_STATUS_INCOMING} AND
