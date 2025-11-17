@@ -13,25 +13,42 @@ let electronApp: ElectronApplication;
 let window: Page;
 
 test.beforeAll(async () => {
-  // Launch Electron app
+  // Launch Electron app in mock test mode
   electronApp = await electron.launch({
     args: ['.'],
     env: {
       ...process.env,
+      // Enable Signal's mock test mode to bypass authentication
+      MOCK_TEST: 'true',
       NODE_ENV: 'test',
     },
+    timeout: 30000,
   });
 
   // Wait for the first window to open
   window = await electronApp.firstWindow();
 
   // Wait for app to be ready
-  await window.waitForLoadState('domcontentloaded');
+  await window.waitForLoadState('load', { timeout: 30000 });
 });
 
 test.afterAll(async () => {
-  // Close the app
-  await electronApp.close();
+  // Close the app with timeout handling
+  try {
+    // Try graceful close first
+    await Promise.race([
+      electronApp.close(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Close timeout')), 10000)
+      ),
+    ]);
+  } catch (error) {
+    console.log('Graceful close failed, forcing quit:', error);
+    // Force quit if graceful close times out
+    await electronApp.evaluate(({ app }) => {
+      app.quit();
+    });
+  }
 });
 
 test.describe('Orbital UI Screenshots', () => {
