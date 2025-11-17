@@ -26,6 +26,7 @@ import type { FileHandle } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
+import { net } from 'electron';
 
 import type { AttachmentWithHydratedData } from '../types/Attachment.std.js';
 import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
@@ -412,6 +413,116 @@ async function uploadChunkWithRetry(params: {
 }
 
 /**
+ * Helper to make HTTP requests using Electron's net module
+ * (works in both app and test environments, unlike browser fetch)
+ */
+function makeRequest(options: {
+  url: string;
+  method: string;
+  headers?: Record<string, string>;
+  body?: Buffer;
+  signal?: AbortSignal;
+}): Promise<{ status: number; statusText: string; data: string }> {
+  return new Promise((resolve, reject) => {
+    const { url, method, headers, body, signal } = options;
+
+    const request = net.request({
+      url,
+      method,
+    });
+
+    // Set headers
+    if (headers) {
+      Object.entries(headers).forEach(([key, value]) => {
+        request.setHeader(key, value);
+      });
+    }
+
+    // Handle abort signal
+    const abortHandler = () => {
+      request.abort();
+      reject(new Error('Request aborted'));
+    };
+    signal?.addEventListener('abort', abortHandler);
+
+    let responseData = '';
+
+    request.on('response', response => {
+      response.on('data', chunk => {
+        responseData += chunk.toString();
+      });
+
+      response.on('end', () => {
+        signal?.removeEventListener('abort', abortHandler);
+        resolve({
+          status: response.statusCode,
+          statusText: response.statusMessage,
+          data: responseData,
+        });
+      });
+
+      response.on('error', error => {
+        signal?.removeEventListener('abort', abortHandler);
+        reject(error);
+      });
+    });
+
+    request.on('error', error => {
+      signal?.removeEventListener('abort', abortHandler);
+      reject(error);
+    });
+
+    // Write body if present
+    if (body) {
+      request.write(body);
+    }
+
+    request.end();
+  });
+}
+
+/**
+ * Build multipart/form-data body
+ */
+function buildMultipartFormData(fields: {
+  [key: string]: string | Uint8Array;
+}): { body: Buffer; boundary: string } {
+  const boundary = `----OrbitalFormBoundary${randomBytes(16).toString('hex')}`;
+  const parts: Buffer[] = [];
+
+  Object.entries(fields).forEach(([name, value]) => {
+    // Add boundary
+    parts.push(Buffer.from(`--${boundary}\r\n`));
+
+    if (typeof value === 'string') {
+      // Text field
+      parts.push(
+        Buffer.from(`Content-Disposition: form-data; name="${name}"\r\n\r\n`)
+      );
+      parts.push(Buffer.from(`${value}\r\n`));
+    } else {
+      // Binary field (chunk data)
+      parts.push(
+        Buffer.from(
+          `Content-Disposition: form-data; name="${name}"; filename="chunk"\r\n` +
+            `Content-Type: application/octet-stream\r\n\r\n`
+        )
+      );
+      parts.push(Buffer.from(value));
+      parts.push(Buffer.from('\r\n'));
+    }
+  });
+
+  // Final boundary
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+  return {
+    body: Buffer.concat(parts),
+    boundary,
+  };
+}
+
+/**
  * Upload a single chunk to the server
  */
 async function uploadChunk(params: {
@@ -447,41 +558,42 @@ async function uploadChunk(params: {
     signal,
   } = params;
 
-  // Build form data
-  const formData = new FormData();
-  formData.append('id', id);
-  formData.append('threadId', threadId);
-  formData.append('chunkIndex', chunkIndex.toString());
-  formData.append('totalChunks', totalChunks.toString());
-  formData.append(
-    'chunk',
-    new Blob([chunkData], { type: 'application/octet-stream' })
-  );
+  // Build multipart form data
+  const fields: { [key: string]: string | Uint8Array } = {
+    id,
+    threadId,
+    chunkIndex: chunkIndex.toString(),
+    totalChunks: totalChunks.toString(),
+    chunk: chunkData,
+  };
 
   // Add metadata on first chunk
   if (isFirstChunk && encryptedMetadata) {
-    formData.append('metadata', JSON.stringify(encryptedMetadata));
+    fields.metadata = JSON.stringify(encryptedMetadata);
   }
 
-  // Make request
-  const response = await fetch(`${ORBITAL_API_URL}/api/media/upload/chunk`, {
+  const { body, boundary } = buildMultipartFormData(fields);
+
+  // Make request using Electron net module
+  const response = await makeRequest({
+    url: `${ORBITAL_API_URL}/api/media/upload/chunk`,
     method: 'POST',
-    body: formData,
+    headers: {
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      // TODO: Add JWT authentication header
+      // 'Authorization': `Bearer ${getJWT()}`,
+    },
+    body,
     signal,
-    // TODO: Add JWT authentication header
-    // headers: {
-    //   'Authorization': `Bearer ${getJWT()}`,
-    // },
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  if (response.status !== 200) {
     throw new Error(
-      `Upload chunk failed: ${response.status} ${response.statusText}: ${errorText}`
+      `Upload chunk failed: ${response.status} ${response.statusText}: ${response.data}`
     );
   }
 
-  return response.json();
+  return JSON.parse(response.data);
 }
 
 /**
@@ -494,23 +606,25 @@ async function finalizeUpload(params: {
 }): Promise<FinalizeUploadResponse> {
   const { id, threadId, signal } = params;
 
-  const response = await fetch(`${ORBITAL_API_URL}/api/media/upload/complete`, {
+  const requestBody = JSON.stringify({ id, threadId });
+
+  const response = await makeRequest({
+    url: `${ORBITAL_API_URL}/api/media/upload/complete`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       // TODO: Add JWT authentication
       // 'Authorization': `Bearer ${getJWT()}`,
     },
-    body: JSON.stringify({ id, threadId }),
+    body: Buffer.from(requestBody),
     signal,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  if (response.status !== 200) {
     throw new Error(
-      `Finalize upload failed: ${response.status} ${response.statusText}: ${errorText}`
+      `Finalize upload failed: ${response.status} ${response.statusText}: ${response.data}`
     );
   }
 
-  return response.json();
+  return JSON.parse(response.data);
 }

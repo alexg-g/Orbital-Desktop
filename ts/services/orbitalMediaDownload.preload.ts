@@ -27,6 +27,7 @@
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { net } from 'electron';
 import { fromBase64, toBase64 } from '../Bytes.std.js';
 
 import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
@@ -286,59 +287,84 @@ async function downloadEncryptedBlob(params: {
 }): Promise<Uint8Array> {
   const { mediaId, threadId, expectedSize, onProgress, signal } = params;
 
-  // Make request
-  const response = await fetch(`${ORBITAL_API_URL}/api/media/${mediaId}/download`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // TODO: Add JWT authentication
-      // 'Authorization': `Bearer ${getJWT()}`,
-    },
-    body: JSON.stringify({ threadId }),
-    signal,
-  });
+  // Make request using Electron net module
+  const requestBody = JSON.stringify({ threadId });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    const error = new Error(
-      `Download failed: ${response.status} ${response.statusText}: ${errorText}`
-    ) as Error & { status: number };
-    error.status = response.status;
-    throw error;
-  }
-
-  if (!response.body) {
-    throw new Error('Response body is null');
-  }
-
-  // Stream response with progress tracking
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const chunks: Buffer[] = [];
   let downloadedBytes = 0;
+  let responseStatus = 0;
+  let responseStatusText = '';
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
+  await new Promise<void>((resolve, reject) => {
+    const request = net.request({
+      url: `${ORBITAL_API_URL}/api/media/${mediaId}/download`,
+      method: 'POST',
+    });
 
-      if (done) {
-        break;
-      }
+    request.setHeader('Content-Type', 'application/json');
+    // TODO: Add JWT authentication
+    // request.setHeader('Authorization', `Bearer ${getJWT()}`);
 
-      chunks.push(value);
-      downloadedBytes += value.byteLength;
+    // Handle abort signal
+    const abortHandler = () => {
+      request.abort();
+      reject(new Error('Download aborted'));
+    };
+    signal?.addEventListener('abort', abortHandler);
 
-      // Report progress based on expected size
-      if (expectedSize > 0) {
-        const progress = Math.min(
-          100,
-          (downloadedBytes / expectedSize) * 100
-        );
-        onProgress?.(progress);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
+    request.on('response', response => {
+      responseStatus = response.statusCode;
+      responseStatusText = response.statusMessage;
+
+      response.on('data', (chunk: Buffer) => {
+        if (responseStatus !== 200) {
+          // Collect error response
+          chunks.push(chunk);
+        } else {
+          // Collect download data
+          chunks.push(chunk);
+          downloadedBytes += chunk.byteLength;
+
+          // Report progress
+          if (expectedSize > 0) {
+            const progress = Math.min(
+              100,
+              (downloadedBytes / expectedSize) * 100
+            );
+            onProgress?.(progress);
+          }
+        }
+      });
+
+      response.on('end', () => {
+        signal?.removeEventListener('abort', abortHandler);
+
+        if (responseStatus !== 200) {
+          const errorText = Buffer.concat(chunks).toString();
+          const error = new Error(
+            `Download failed: ${responseStatus} ${responseStatusText}: ${errorText}`
+          ) as Error & { status: number };
+          error.status = responseStatus;
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+
+      response.on('error', error => {
+        signal?.removeEventListener('abort', abortHandler);
+        reject(error);
+      });
+    });
+
+    request.on('error', error => {
+      signal?.removeEventListener('abort', abortHandler);
+      reject(error);
+    });
+
+    request.write(requestBody);
+    request.end();
+  });
 
   // Concatenate chunks
   const totalLength = chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);

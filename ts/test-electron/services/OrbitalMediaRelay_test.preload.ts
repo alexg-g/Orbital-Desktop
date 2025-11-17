@@ -27,12 +27,12 @@ import { getPath } from '../../windows/main/attachments.preload.js';
 import {
   uploadMediaToOrbital,
   type UploadMediaOptions,
-} from '../../services/orbitalMediaUpload.js';
+} from '../../services/orbitalMediaUpload.preload.js';
 import {
   downloadMediaFromOrbital,
   type DownloadMediaOptions,
   getMediaDownloadStatus,
-} from '../../services/orbitalMediaDownload.js';
+} from '../../services/orbitalMediaDownload.preload.js';
 import type { AttachmentWithHydratedData } from '../../types/Attachment.std.js';
 import { DataReader, DataWriter } from '../../sql/Server.node.js';
 
