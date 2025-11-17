@@ -20,7 +20,7 @@ import {
   downloadMediaFromOrbital,
   getMediaDownloadStatus,
   createDownloadController,
-} from '../../services/orbitalMediaDownload';
+} from '../../services/orbitalMediaDownload.preload';
 
 export type OrbitalMediaViewerProps = {
   mediaId: string;

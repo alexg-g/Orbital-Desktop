@@ -958,6 +958,11 @@ type ReadableInterface = {
   __dangerouslyRunAbitraryReadOnlySqlQuery: (
     readOnlySqlQuery: string
   ) => ReadonlyArray<RowType<object>>;
+
+  // Orbital Media
+  getOrbitalMedia: (mediaId: string) => OrbitalMediaAttachment | null;
+  getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
+  getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
 };
 
 type WritableInterface = {
@@ -1302,6 +1307,10 @@ type WritableInterface = {
   cleanExpiredGroupCallRingCancellations(): void;
 
   _testOnlyRemoveMessageAttachments(timestamp: number): void;
+
+  // Orbital Media
+  saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
+  updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
 };
 
 // Adds a database argument
@@ -1369,11 +1378,6 @@ export type ServerReadableDirectInterface = ReadableInterface & {
   getKnownConversationAttachments: () => Array<string>;
 
   getAllBadgeImageFileLocalPaths: () => Set<string>;
-
-  // Orbital Media
-  getOrbitalMedia: (mediaId: string) => OrbitalMediaAttachment | null;
-  getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
-  getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
 };
 export type ServerReadableInterface =
   AddReadonlyDB<ServerReadableDirectInterface>;
@@ -1436,10 +1440,6 @@ export type ServerWritableDirectInterface = WritableInterface & {
   ) => Array<string>;
 
   runCorruptionChecks: () => boolean;
-
-  // Orbital Media
-  saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
-  updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
 };
 
 export type ServerWritableInterface =

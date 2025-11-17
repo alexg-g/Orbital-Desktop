@@ -38,7 +38,7 @@ import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import { strictAssert } from '../util/assert.std.js';
 import { toBase64, toHex } from '../Bytes.std.js';
-import { DataWriter } from '../sql/Server.node.js';
+import { DataWriter } from '../sql/Client.preload.js';
 
 const log = createLogger('OrbitalMediaUpload');
 

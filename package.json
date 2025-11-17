@@ -390,7 +390,9 @@
       "thenify-all>thenify": "3.3.1",
       "@electron/rebuild@3.7.2>@electron/node-gyp": "10.2.0-electron.2",
       "react-contextmenu>react": "18.3.1",
-      "react-contextmenu>react-dom": "18.3.1"
+      "react-contextmenu>react-dom": "18.3.1",
+      "playwright": "1.56.1",
+      "playwright-core": "1.56.1"
     },
     "patchedDependencies": {
       "casual@1.6.2": "patches/casual+1.6.2.patch",
