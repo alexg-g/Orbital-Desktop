@@ -4,10 +4,21 @@ const path = require('path');
 const envLocalPath = path.join(__dirname, '../.env.local');
 const envPath = path.join(__dirname, '../.env');
 
+// Debug: Log DATABASE_URL before loading env files
+console.log('[ENV DEBUG] DATABASE_URL before dotenv:', process.env.DATABASE_URL);
+console.log('[ENV DEBUG] Checking for .env.local at:', envLocalPath);
+console.log('[ENV DEBUG] .env.local exists:', fs.existsSync(envLocalPath));
+
 if (fs.existsSync(envLocalPath)) {
+  console.log('[ENV DEBUG] Loading .env.local with override: true');
+  // Explicitly unset DATABASE_URL to prevent shell environment conflicts
+  delete process.env.DATABASE_URL;
   require('dotenv').config({ path: envLocalPath, override: true });
+  console.log('[ENV DEBUG] DATABASE_URL after loading .env.local:', process.env.DATABASE_URL);
 } else {
+  console.log('[ENV DEBUG] Loading .env (fallback)');
   require('dotenv').config({ path: envPath });
+  console.log('[ENV DEBUG] DATABASE_URL after loading .env:', process.env.DATABASE_URL);
 }
 const express = require('express');
 const helmet = require('helmet');
