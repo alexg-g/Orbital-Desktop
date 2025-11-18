@@ -7,6 +7,7 @@ const { authenticate } = require('../middleware/auth');
 const { asyncHandler, validationError, forbiddenError, notFoundError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const quotaService = require('../services/quotaService');
 
 const router = express.Router();
 
@@ -150,21 +151,12 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
         throw validationError('First chunk must include encrypted_metadata and encryption_iv');
       }
 
-      // Check group quota before starting
-      const quotaCheck = await client.query(
-        'SELECT total_bytes, media_count, max_bytes, max_media_count FROM group_quotas WHERE group_id = $1',
-        [groupId]
-      );
+      // Check group quota before starting (estimate based on max chunk size)
+      const estimatedSize = totalChunks * 5 * 1024 * 1024; // Estimate 5MB per chunk
+      const quotaCheck = await quotaService.checkQuotaAvailable(groupId, estimatedSize, client);
 
-      if (quotaCheck.rowCount > 0) {
-        const quota = quotaCheck.rows[0];
-        const estimatedSize = totalChunks * 5 * 1024 * 1024; // Estimate 5MB per chunk
-        const newTotal = parseInt(quota.total_bytes, 10) + estimatedSize;
-        const newCount = parseInt(quota.media_count, 10) + 1;
-
-        if (newTotal > parseInt(quota.max_bytes, 10) || newCount > parseInt(quota.max_media_count, 10)) {
-          throw new Error('Group storage quota would be exceeded by this upload');
-        }
+      if (!quotaCheck.allowed) {
+        throw new Error(quotaCheck.reason);
       }
 
       // Create temp_uploads record
@@ -375,20 +367,11 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
     }
 
     // Check group quota with actual size
-    const quotaCheck = await client.query(
-      'SELECT total_bytes, media_count, max_bytes, max_media_count FROM group_quotas WHERE group_id = $1',
-      [tempUpload.group_id]
-    );
+    const quotaCheck = await quotaService.checkQuotaAvailable(tempUpload.group_id, finalSize, client);
 
-    if (quotaCheck.rowCount > 0) {
-      const quota = quotaCheck.rows[0];
-      const newTotal = parseInt(quota.total_bytes, 10) + finalSize;
-      const newCount = parseInt(quota.media_count, 10) + 1;
-
-      if (newTotal > parseInt(quota.max_bytes, 10) || newCount > parseInt(quota.max_media_count, 10)) {
-        await fs.unlink(finalPath).catch(() => {});
-        throw new Error('Group storage quota exceeded');
-      }
+    if (!quotaCheck.allowed) {
+      await fs.unlink(finalPath).catch(() => {});
+      throw new Error(quotaCheck.reason);
     }
 
     // Calculate expiration (7 days from now)
@@ -415,12 +398,7 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
     const media = mediaResult.rows[0];
 
     // Update group quota
-    await client.query(
-      `UPDATE group_quotas
-       SET total_bytes = total_bytes + $1, media_count = media_count + 1, updated_at = NOW()
-       WHERE group_id = $2`,
-      [finalSize, tempUpload.group_id]
-    );
+    await quotaService.incrementQuota(tempUpload.group_id, finalSize, client);
 
     // Delete temp_uploads record
     await client.query(
@@ -508,20 +486,14 @@ router.post('/upload', authenticate, upload.single('file'), asyncHandler(async (
   }
 
   // Check group quota
-  const quotaCheck = await db.query(
-    'SELECT total_bytes, media_count, max_bytes, max_media_count FROM group_quotas WHERE group_id = $1',
-    [groupId]
-  );
+  const quotaCheck = await quotaService.checkQuotaAvailable(groupId, req.file.size);
 
-  if (quotaCheck.rowCount > 0) {
-    const quota = quotaCheck.rows[0];
-    const newTotal = parseInt(quota.total_bytes, 10) + req.file.size;
-    const newCount = parseInt(quota.media_count, 10) + 1;
-
-    if (newTotal > parseInt(quota.max_bytes, 10) || newCount > parseInt(quota.max_media_count, 10)) {
-      await fs.unlink(req.file.path);
-      throw new Error('Group storage quota exceeded');
-    }
+  if (!quotaCheck.allowed) {
+    await fs.unlink(req.file.path);
+    const error = new Error(quotaCheck.reason);
+    error.statusCode = 413; // Payload Too Large
+    error.quotaInfo = quotaCheck.currentUsage;
+    throw error;
   }
 
   const client = await db.getClient();
@@ -544,12 +516,7 @@ router.post('/upload', authenticate, upload.single('file'), asyncHandler(async (
     const media = result.rows[0];
 
     // Update group quota
-    await client.query(
-      `UPDATE group_quotas
-       SET total_bytes = total_bytes + $1, media_count = media_count + 1, updated_at = NOW()
-       WHERE group_id = $2`,
-      [req.file.size, groupId]
-    );
+    await quotaService.incrementQuota(groupId, req.file.size, client);
 
     await client.query('COMMIT');
 

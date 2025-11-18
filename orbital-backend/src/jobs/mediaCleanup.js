@@ -12,6 +12,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const quotaService = require('../services/quotaService');
 
 /**
  * Delete expired media files
@@ -68,14 +69,7 @@ async function cleanupExpiredMedia() {
         }
 
         // Update group quota (decrement)
-        await client.query(
-          `UPDATE group_quotas
-           SET total_bytes = GREATEST(0, total_bytes - $1),
-               media_count = GREATEST(0, media_count - 1),
-               updated_at = NOW()
-           WHERE group_id = $2`,
-          [media.size_bytes, media.group_id]
-        );
+        await quotaService.decrementQuota(media.group_id, parseInt(media.size_bytes, 10), client);
 
         // Delete media record
         await client.query(
