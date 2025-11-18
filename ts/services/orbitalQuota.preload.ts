@@ -76,12 +76,19 @@ export async function getQuotaInfo(groupId: string): Promise<QuotaInfo> {
   const logId = `getQuotaInfo(${groupId})`;
 
   try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
     const response = await makeRequest({
       url: `${ORBITAL_API_URL}/api/groups/${groupId}/quota`,
       method: 'GET',
       headers: {
-        // TODO: Add JWT authentication
-        // 'Authorization': `Bearer ${getJWT()}`,
+        'Authorization': `Bearer ${jwtToken}`,
       },
     });
 
@@ -182,12 +189,19 @@ export async function deleteMedia(mediaId: string): Promise<void> {
   const logId = `deleteMedia(${mediaId})`;
 
   try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
     const response = await makeRequest({
       url: `${ORBITAL_API_URL}/api/media/${mediaId}`,
       method: 'DELETE',
       headers: {
-        // TODO: Add JWT authentication
-        // 'Authorization': `Bearer ${getJWT()}`,
+        'Authorization': `Bearer ${jwtToken}`,
       },
     });
 

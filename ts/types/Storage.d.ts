@@ -258,6 +258,11 @@ export type StorageAccessType = {
   defaultDimWallpaperInDarkMode: boolean;
   defaultAutoBubbleColor: boolean;
 
+  // Orbital-specific authentication
+  orbitalJwtToken: string | undefined;
+  orbitalUserId: string | undefined;
+  orbitalUsername: string | undefined;
+
   // Deprecated
   'challenge:retry-message-ids': never;
   nextSignedKeyRotationTime: number;

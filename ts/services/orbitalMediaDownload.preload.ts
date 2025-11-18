@@ -309,6 +309,14 @@ async function downloadEncryptedBlob(params: {
     const isHttps = parsedUrl.protocol === 'https:';
     const httpModule = isHttps ? https : http;
 
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
     const requestOptions = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port,
@@ -317,8 +325,7 @@ async function downloadEncryptedBlob(params: {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(requestBody),
-        // TODO: Add JWT authentication
-        // 'Authorization': `Bearer ${getJWT()}`,
+        'Authorization': `Bearer ${jwtToken}`,
       },
     };
 

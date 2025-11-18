@@ -582,13 +582,20 @@ async function uploadChunk(params: {
   const { body, boundary } = buildMultipartFormData(fields);
 
   // Make request using Electron net module
+  // Get JWT token for authentication
+  const { getJWT } = await import('./orbitalAuth.preload.js');
+  const jwtToken = await getJWT();
+
+  if (!jwtToken) {
+    throw new Error('Not authenticated. Please log in first.');
+  }
+
   const response = await makeRequest({
     url: `${ORBITAL_API_URL}/api/media/upload/chunk`,
     method: 'POST',
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      // TODO: Add JWT authentication header
-      // 'Authorization': `Bearer ${getJWT()}`,
+      'Authorization': `Bearer ${jwtToken}`,
     },
     body,
     signal,
@@ -615,13 +622,20 @@ async function finalizeUpload(params: {
 
   const requestBody = JSON.stringify({ id, threadId });
 
+  // Get JWT token for authentication
+  const { getJWT } = await import('./orbitalAuth.preload.js');
+  const jwtToken = await getJWT();
+
+  if (!jwtToken) {
+    throw new Error('Not authenticated. Please log in first.');
+  }
+
   const response = await makeRequest({
     url: `${ORBITAL_API_URL}/api/media/upload/complete`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // TODO: Add JWT authentication
-      // 'Authorization': `Bearer ${getJWT()}`,
+      'Authorization': `Bearer ${jwtToken}`,
     },
     body: Buffer.from(requestBody),
     signal,
