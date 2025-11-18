@@ -1,13 +1,16 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use '../mixins';
+@use '../orbital-variables' as *;
+
 .OrbitalLogin {
   padding: 16px 0;
   max-width: 400px;
   margin: 0 auto;
 
   &__description {
-    color: $color-gray-60;
+    color: $orbital-text-secondary;
     font-size: 14px;
     line-height: 20px;
     margin-bottom: 24px;
@@ -29,16 +32,16 @@
   &__label {
     font-size: 14px;
     font-weight: 500;
-    color: $color-gray-90;
+    color: $orbital-text-primary;
 
-    @include dark-theme {
-      color: $color-gray-05;
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
     }
   }
 
   &__error {
-    background-color: $color-accent-red;
-    color: $color-white;
+    background-color: #e32c2c;
+    color: white;
     padding: 12px 16px;
     border-radius: 8px;
     font-size: 14px;
@@ -62,15 +65,15 @@
   &__footer {
     margin-top: 24px;
     padding-top: 16px;
-    border-top: 1px solid $color-gray-15;
-    color: $color-gray-45;
+    border-top: 1px solid $orbital-border-subtle;
+    color: $orbital-text-tertiary;
     font-size: 13px;
     line-height: 18px;
     text-align: center;
 
-    @include dark-theme {
-      border-top-color: $color-gray-65;
-      color: $color-gray-25;
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+      color: $orbital-dark-text-tertiary;
     }
   }
 }

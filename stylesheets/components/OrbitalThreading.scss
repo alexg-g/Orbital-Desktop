@@ -614,9 +614,53 @@
 
   // Media (images, videos) in posted messages
   &__media {
-    max-width: 400px;
     margin-top: $orbital-space-sm;
 
+    // Single media
+    &--single {
+      max-width: 600px;
+    }
+
+    // Two media - side by side
+    &--two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      max-width: 600px;
+    }
+
+    // Three media - first large, two stacked
+    &--three {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 4px;
+      max-width: 600px;
+      height: 400px;
+    }
+
+    &--three-main {
+      grid-row: 1 / 3;
+      height: 100%;
+    }
+
+    &--three-side {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 4px;
+      height: 100%;
+    }
+
+    // Four or more media - 2x2 grid
+    &--four-plus {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 4px;
+      max-width: 600px;
+      height: 400px;
+    }
+
+    // Legacy media support
     img,
     video {
       max-width: 100%;

@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2025 Orbital
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
 import type { LocalizerType } from '../../types/Util.std';
 import type { OrbitalMessageType } from './OrbitalThreadDetail';
+import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
 import { StagedLinkPreview } from '../conversation/StagedLinkPreview.dom';
 import { OrbitalPhotoGallery } from './OrbitalPhotoGallery';
+import { OrbitalMediaViewer } from './OrbitalMediaViewer';
+import { OrbitalPhotoLightbox } from './OrbitalPhotoLightbox';
 
 export type OrbitalMessageProps = {
   message: OrbitalMessageType;
@@ -15,6 +18,11 @@ export type OrbitalMessageProps = {
   onReply: (messageId: string) => void;
   onQuote?: (messageId: string) => void;
   i18n: LocalizerType;
+  threadId: string;
+  mediaMap: Map<string, OrbitalMediaAttachment>;
+  currentUserId?: string;
+  onDeleteMedia?: (mediaId: string) => void;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
 };
 
 /**
@@ -48,7 +56,15 @@ export function OrbitalMessage({
   onReply,
   onQuote,
   i18n,
+  threadId,
+  mediaMap,
+  currentUserId,
+  onDeleteMedia,
+  getAbsoluteAttachmentPath,
 }: OrbitalMessageProps): JSX.Element {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
   const handleReply = useCallback(() => {
     onReply(message.id);
   }, [onReply, message.id]);
@@ -71,6 +87,22 @@ export function OrbitalMessage({
 
   // Determine CSS class based on reply depth
   const levelClass = getLevelClass(message.level);
+
+  // Get media items from mediaMap
+  const mediaItems = (message.mediaIds || [])
+    .map(id => mediaMap.get(id))
+    .filter((m): m is OrbitalMediaAttachment => m !== undefined);
+
+  // Filter for images only (for lightbox)
+  const imageMedia = mediaItems.filter(m => m.contentType.startsWith('image/'));
+  const imageUrls = imageMedia
+    .filter(m => m.localPath)
+    .map(m => `file://${getAbsoluteAttachmentPath(m.localPath as string)}`);
+
+  const openLightbox = useCallback((index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  }, []);
 
   return (
     <div
@@ -160,8 +192,146 @@ export function OrbitalMessage({
             </div>
           )}
 
-          {/* Media */}
-          {message.hasMedia && (
+          {/* Media - New implementation with OrbitalMediaViewer */}
+          {mediaItems.length > 0 && (
+            <div className="OrbitalMessage__media">
+              {/* Single media */}
+              {mediaItems.length === 1 && (
+                <div className="OrbitalMessage__media--single">
+                  <OrbitalMediaViewer
+                    mediaId={mediaItems[0].mediaId}
+                    threadId={threadId}
+                    contentType={mediaItems[0].contentType}
+                    fileName={mediaItems[0].fileName}
+                    size={mediaItems[0].size}
+                    expiresAt={mediaItems[0].expiresAt}
+                    blurHash={mediaItems[0].blurHash}
+                    width={mediaItems[0].width}
+                    height={mediaItems[0].height}
+                    getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+                    uploadedBy={mediaItems[0].uploadedBy}
+                    currentUserId={currentUserId}
+                    onDelete={onDeleteMedia}
+                    onOpenFullscreen={() => openLightbox(0)}
+                  />
+                </div>
+              )}
+
+              {/* Two media - side by side */}
+              {mediaItems.length === 2 && (
+                <div className="OrbitalMessage__media--two-col">
+                  {mediaItems.map(media => (
+                    <OrbitalMediaViewer
+                      key={media.mediaId}
+                      mediaId={media.mediaId}
+                      threadId={threadId}
+                      contentType={media.contentType}
+                      fileName={media.fileName}
+                      size={media.size}
+                      expiresAt={media.expiresAt}
+                      blurHash={media.blurHash}
+                      width={media.width}
+                      height={media.height}
+                      getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+                      uploadedBy={media.uploadedBy}
+                      currentUserId={currentUserId}
+                      onDelete={onDeleteMedia}
+                      onOpenFullscreen={
+                        media.contentType.startsWith('image/')
+                          ? () => openLightbox(imageMedia.indexOf(media))
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Three media - first large, two stacked */}
+              {mediaItems.length === 3 && (
+                <div className="OrbitalMessage__media--three">
+                  <div className="OrbitalMessage__media--three-main">
+                    <OrbitalMediaViewer
+                      mediaId={mediaItems[0].mediaId}
+                      threadId={threadId}
+                      contentType={mediaItems[0].contentType}
+                      fileName={mediaItems[0].fileName}
+                      size={mediaItems[0].size}
+                      expiresAt={mediaItems[0].expiresAt}
+                      blurHash={mediaItems[0].blurHash}
+                      width={mediaItems[0].width}
+                      height={mediaItems[0].height}
+                      getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+                      uploadedBy={mediaItems[0].uploadedBy}
+                      currentUserId={currentUserId}
+                      onDelete={onDeleteMedia}
+                      onOpenFullscreen={
+                        mediaItems[0].contentType.startsWith('image/')
+                          ? () => openLightbox(0)
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <div className="OrbitalMessage__media--three-side">
+                    {mediaItems.slice(1).map(media => (
+                      <OrbitalMediaViewer
+                        key={media.mediaId}
+                        mediaId={media.mediaId}
+                        threadId={threadId}
+                        contentType={media.contentType}
+                        fileName={media.fileName}
+                        size={media.size}
+                        expiresAt={media.expiresAt}
+                        blurHash={media.blurHash}
+                        width={media.width}
+                        height={media.height}
+                        getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+                        uploadedBy={media.uploadedBy}
+                        currentUserId={currentUserId}
+                        onDelete={onDeleteMedia}
+                        onOpenFullscreen={
+                          media.contentType.startsWith('image/')
+                            ? () => openLightbox(imageMedia.indexOf(media))
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Four or more media - 2x2 grid */}
+              {mediaItems.length >= 4 && (
+                <div className="OrbitalMessage__media--four-plus">
+                  {mediaItems.slice(0, 4).map(media => (
+                    <OrbitalMediaViewer
+                      key={media.mediaId}
+                      mediaId={media.mediaId}
+                      threadId={threadId}
+                      contentType={media.contentType}
+                      fileName={media.fileName}
+                      size={media.size}
+                      expiresAt={media.expiresAt}
+                      blurHash={media.blurHash}
+                      width={media.width}
+                      height={media.height}
+                      getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+                      uploadedBy={media.uploadedBy}
+                      currentUserId={currentUserId}
+                      onDelete={onDeleteMedia}
+                      onOpenFullscreen={
+                        media.contentType.startsWith('image/')
+                          ? () => openLightbox(imageMedia.indexOf(media))
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fallback: Legacy media rendering for backward compatibility */}
+          {!mediaItems.length && message.hasMedia && (
             <div className="OrbitalMessage__media">
               {/* Photo gallery for multiple images */}
               {message.mediaUrls && message.mediaUrls.length > 0 && (
@@ -218,6 +388,16 @@ export function OrbitalMessage({
           )}
         </div>
       </div>
+
+      {/* Lightbox for images */}
+      {lightboxOpen && imageUrls.length > 0 && (
+        <OrbitalPhotoLightbox
+          photos={imageUrls}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onNavigate={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }

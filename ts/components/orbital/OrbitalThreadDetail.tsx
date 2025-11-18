@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2025 Orbital
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
 import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews.std';
+import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
 import { OrbitalMessage } from './OrbitalMessage';
 import { OrbitalComposer } from './OrbitalComposer';
 
@@ -20,6 +21,7 @@ export type OrbitalMessageType = {
   mediaType?: 'image' | 'video';
   mediaUrl?: string; // Single media URL (for backward compatibility)
   mediaUrls?: Array<string>; // Multiple media URLs (for photo galleries)
+  mediaIds?: string[]; // NEW: Array of media IDs from orbital_media table
   avatarUrl?: string; // Optional avatar URL (48x48 pixel art)
   linkPreviews?: ReadonlyArray<LinkPreviewForUIType>; // Link previews (YouTube, etc.)
 };
@@ -60,6 +62,36 @@ export function OrbitalThreadDetail({
   onSendMessage,
 }: OrbitalThreadDetailProps): JSX.Element {
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
+  const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaAttachment>>(
+    new Map()
+  );
+
+  // Fetch media metadata for this thread
+  useEffect(() => {
+    async function fetchThreadMedia() {
+      try {
+        // Access DataReader from window.Signal
+        const dataReader = window.Signal?.DataReader as {
+          getThreadMedia?: (threadId: string) => Promise<Array<OrbitalMediaAttachment>>;
+        } | undefined;
+
+        if (!dataReader?.getThreadMedia) {
+          console.warn('DataReader.getThreadMedia not available');
+          return;
+        }
+
+        const threadMedia = await dataReader.getThreadMedia(threadId);
+        const map = new Map(threadMedia.map(m => [m.mediaId, m]));
+        setMediaMap(map);
+      } catch (error) {
+        console.error('Failed to fetch thread media:', error);
+      }
+    }
+
+    if (threadId) {
+      fetchThreadMedia();
+    }
+  }, [threadId]);
 
   const handleSubmitReply = useCallback(
     (body: string, mediaIds: string[]) => {
@@ -70,6 +102,25 @@ export function OrbitalThreadDetail({
 
   const handleToggleComposer = useCallback(() => {
     setIsComposerCollapsed(prev => !prev);
+  }, []);
+
+  const handleDeleteMedia = useCallback(
+    (mediaId: string) => {
+      // Remove from map to trigger re-render
+      setMediaMap(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(mediaId);
+        return newMap;
+      });
+    },
+    []
+  );
+
+  // Helper to get absolute attachment path
+  const getAbsoluteAttachmentPath = useCallback((relativePath: string): string => {
+    // Use window.Signal.getPath to get the userData directory
+    const userDataPath = window.SignalContext?.getPath('userData') || '';
+    return `${userDataPath}/attachments.noindex/${relativePath}`;
   }, []);
 
   return (
@@ -94,6 +145,11 @@ export function OrbitalThreadDetail({
             isOwnMessage={message.authorId === currentUserId}
             onReply={() => {}} // Reply button click handler (not used when always showing composer)
             i18n={i18n}
+            threadId={threadId}
+            mediaMap={mediaMap}
+            currentUserId={currentUserId}
+            onDeleteMedia={handleDeleteMedia}
+            getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
           />
         ))}
 
