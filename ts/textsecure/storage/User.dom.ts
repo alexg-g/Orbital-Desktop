@@ -72,6 +72,13 @@ export class User {
   public getPni(): PniString | undefined {
     const pni = this.storage.get('pni');
     if (pni === undefined || !isPniString(pni)) {
+      // ORBITAL: Return stub PNI for Orbital users
+      const orbitalUserId = this.storage.get('orbitalUserId');
+      if (orbitalUserId) {
+        // Generate a fake PNI from Orbital user ID
+        const stubPni = `PNI:${orbitalUserId}`;
+        return stubPni as PniString;
+      }
       return undefined;
     }
     return pni;
@@ -80,6 +87,14 @@ export class User {
   public getAci(): AciString | undefined {
     const uuidId = this.storage.get('uuid_id');
     if (!uuidId) {
+      // ORBITAL: If no Signal ACI but we have Orbital auth, return a stub ACI
+      const orbitalUserId = this.storage.get('orbitalUserId');
+      if (orbitalUserId) {
+        // Use Orbital user ID as a stub ACI (format: userId.1)
+        const stubAci = `${orbitalUserId}.1`;
+        log.info('Using Orbital user ID as stub ACI');
+        return stubAci as AciString;
+      }
       return undefined;
     }
     const aci = Helpers.unencodeNumber(uuidId.toLowerCase())[0];
@@ -147,6 +162,11 @@ export class User {
     const value =
       this.#_getDeviceIdFromUuid() || this.#_getDeviceIdFromNumber();
     if (value === undefined) {
+      // ORBITAL: Return stub device ID for Orbital users
+      const orbitalUserId = this.storage.get('orbitalUserId');
+      if (orbitalUserId) {
+        return 1; // Default device ID for Orbital users
+      }
       return undefined;
     }
     return parseInt(value, 10);

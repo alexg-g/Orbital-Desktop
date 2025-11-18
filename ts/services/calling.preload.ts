@@ -32,6 +32,10 @@ export class CallingClass {
       selectedSpeaker: undefined,
     };
   }
+
+  public groupMembersChanged(..._args: Array<unknown>): void {
+    // Stub implementation - Orbital doesn't use group calling
+  }
 }
 
 export const calling = new CallingClass();

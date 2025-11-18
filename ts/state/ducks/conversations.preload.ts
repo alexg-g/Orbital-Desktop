@@ -3001,7 +3001,10 @@ function conversationsUpdated(
 ): ThunkAction<void, RootStateType, unknown, ConversationsUpdatedActionType> {
   return (dispatch, getState) => {
     for (const conversation of data) {
-      calling.groupMembersChanged(conversation.id);
+      // ORBITAL: Skip calling functionality (Orbital doesn't use Signal's calling features)
+      if (calling?.groupMembersChanged) {
+        calling.groupMembersChanged(conversation.id);
+      }
     }
 
     const { conversationLookup: oldConversationLookup } =
