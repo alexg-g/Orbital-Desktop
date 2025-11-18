@@ -46,6 +46,7 @@ import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import { strictAssert } from '../util/assert.std.js';
 import { DataReader, DataWriter } from '../sql/Client.preload.js';
+import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
 
 const log = createLogger('OrbitalMediaDownload');
 
@@ -210,6 +211,9 @@ export async function downloadMediaFromOrbital(
     return decryptedPath;
   } catch (error) {
     log.error(`${logId}: Download failed`, Errors.toLogFormat(error));
+
+    // Handle 401 errors (show login modal, clear JWT)
+    await handleOrbitalAPIError(error);
 
     // Clean up temp decrypted file on error
     if (decryptedPath) {

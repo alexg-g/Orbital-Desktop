@@ -46,6 +46,7 @@ import * as Errors from '../types/errors.std.js';
 import { strictAssert } from '../util/assert.std.js';
 import { toBase64 } from '../Bytes.std.js';
 import { DataWriter } from '../sql/Client.preload.js';
+import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
 
 const log = createLogger('OrbitalMediaUpload');
 
@@ -305,6 +306,10 @@ export async function uploadMediaToOrbital(
     return media;
   } catch (error) {
     log.error(`${logId}: Upload failed`, Errors.toLogFormat(error));
+
+    // Handle 401 errors (show login modal, clear JWT)
+    await handleOrbitalAPIError(error);
+
     throw error;
   } finally {
     // Step 6: Clean up temp encrypted file

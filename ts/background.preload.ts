@@ -1411,6 +1411,16 @@ export async function startApp(): Promise<void> {
 
     if (isCoreDataValid && Registration.everDone()) {
       idleDetector.start();
+
+      // Orbital: Check JWT authentication after Signal registration
+      const { isAuthenticated } = await import('./services/orbitalAuth.preload.js');
+      const authenticated = await isAuthenticated();
+
+      if (!authenticated) {
+        log.info('Orbital: No JWT token found, showing login modal');
+        window.reduxActions.globalModals.toggleOrbitalLogin(true);
+      }
+
       if (itemStorage.get('backupDownloadPath')) {
         window.reduxActions.installer.showBackupImport();
       } else {

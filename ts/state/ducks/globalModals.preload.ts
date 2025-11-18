@@ -127,6 +127,7 @@ export type GlobalModalsStateType = ReadonlyDeep<{
   forwardMessagesProps?: ForwardMessagesPropsType;
   gv2MigrationProps?: MigrateToGV2PropsType;
   hasConfirmationModal: boolean;
+  isOrbitalLoginVisible: boolean;
   isProfileNameWarningModalVisible: boolean;
   profileNameWarningModalConversationType?: string;
   isShortcutGuideModalVisible: boolean;
@@ -223,6 +224,7 @@ const SHOW_LOW_DISK_SPACE_BACKUP_IMPORT_MODAL =
   'globalModals/SHOW_LOW_DISK_SPACE_BACKUP_IMPORT_MODAL';
 const HIDE_LOW_DISK_SPACE_BACKUP_IMPORT_MODAL =
   'globalModals/HIDE_LOW_DISK_SPACE_BACKUP_IMPORT_MODAL';
+const TOGGLE_ORBITAL_LOGIN = 'globalModals/TOGGLE_ORBITAL_LOGIN';
 
 export type ContactModalStateType = ReadonlyDeep<{
   contactId: string;
@@ -348,6 +350,11 @@ type ToggleAboutContactModalActionType = ReadonlyDeep<{
 
 type ToggleSignalConnectionsModalActionType = ReadonlyDeep<{
   type: typeof TOGGLE_SIGNAL_CONNECTIONS_MODAL;
+}>;
+
+type ToggleOrbitalLoginActionType = ReadonlyDeep<{
+  type: typeof TOGGLE_ORBITAL_LOGIN;
+  payload?: boolean;
 }>;
 
 type ToggleConfirmationModalActionType = ReadonlyDeep<{
@@ -530,6 +537,7 @@ export type GlobalModalsActionType = ReadonlyDeep<
   | ToggleForwardMessagesModalActionType
   | ToggleMessageRequestActionsConfirmationActionType
   | ToggleNotePreviewModalActionType
+  | ToggleOrbitalLoginActionType
   | ToggleProfileNameWarningModalActionType
   | ToggleSafetyNumberModalActionType
   | ToggleSignalConnectionsModalActionType
@@ -585,6 +593,7 @@ export const actions = {
   toggleForwardMessagesModal,
   toggleMessageRequestActionsConfirmation,
   toggleNotePreviewModal,
+  toggleOrbitalLogin,
   toggleProfileNameWarningModal,
   toggleSafetyNumberModal,
   toggleSignalConnectionsModal,
@@ -985,6 +994,13 @@ function toggleSignalConnectionsModal(): ToggleSignalConnectionsModalActionType 
   };
 }
 
+function toggleOrbitalLogin(show?: boolean): ToggleOrbitalLoginActionType {
+  return {
+    type: TOGGLE_ORBITAL_LOGIN,
+    payload: show,
+  };
+}
+
 function toggleConfirmationModal(
   isOpen: boolean
 ): ToggleConfirmationModalActionType {
@@ -1310,6 +1326,7 @@ export function getEmptyState(): GlobalModalsStateType {
     criticalIdlePrimaryDeviceModal: false,
     draftGifMessageSendModalProps: null,
     editNicknameAndNoteModalProps: null,
+    isOrbitalLoginVisible: false,
     isProfileNameWarningModalVisible: false,
     profileNameWarningModalConversationType: undefined,
     isShortcutGuideModalVisible: false,
@@ -1514,6 +1531,13 @@ export function reducer(
     return {
       ...state,
       isSignalConnectionsVisible: !state.isSignalConnectionsVisible,
+    };
+  }
+
+  if (action.type === TOGGLE_ORBITAL_LOGIN) {
+    return {
+      ...state,
+      isOrbitalLoginVisible: action.payload !== undefined ? action.payload : !state.isOrbitalLoginVisible,
     };
   }
 

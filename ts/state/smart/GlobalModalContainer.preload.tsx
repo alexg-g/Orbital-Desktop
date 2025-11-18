@@ -32,6 +32,7 @@ import { SmartCallLinkPendingParticipantModal } from './CallLinkPendingParticipa
 import { SmartProfileNameWarningModal } from './ProfileNameWarningModal.preload.js';
 import { SmartDraftGifMessageSendModal } from './DraftGifMessageSendModal.preload.js';
 import { DebugLogErrorModal } from '../../components/DebugLogErrorModal.dom.js';
+import { OrbitalLogin } from '../../components/orbital/OrbitalLogin.js';
 
 function renderCallLinkAddNameModal(): JSX.Element {
   return <SmartCallLinkAddNameModal />;
@@ -130,6 +131,7 @@ export const SmartGlobalModalContainer = memo(
       editNicknameAndNoteModalProps,
       errorModalProps,
       forwardMessagesProps,
+      isOrbitalLoginVisible,
       lowDiskSpaceBackupImportModal,
       mediaPermissionsModalProps,
       messageRequestActionsConfirmationProps,
@@ -158,6 +160,7 @@ export const SmartGlobalModalContainer = memo(
       hideUserNotFoundModal,
       hideWhatsNewModal,
       hideBackfillFailureModal,
+      toggleOrbitalLogin,
       toggleSignalConnectionsModal,
     } = useGlobalModalActions();
 
@@ -252,6 +255,7 @@ export const SmartGlobalModalContainer = memo(
         hideTapToViewNotAvailableModal={hideTapToViewNotAvailableModal}
         i18n={i18n}
         isAboutContactModalVisible={aboutContactModalContactId != null}
+        isOrbitalLoginVisible={isOrbitalLoginVisible}
         isProfileNameWarningModalVisible={isProfileNameWarningModalVisible}
         isShortcutGuideModalVisible={isShortcutGuideModalVisible}
         isSignalConnectionsVisible={isSignalConnectionsVisible}
@@ -289,6 +293,7 @@ export const SmartGlobalModalContainer = memo(
         stickerPackPreviewId={stickerPackPreviewId}
         tapToViewNotAvailableModalProps={tapToViewNotAvailableModalProps}
         theme={theme}
+        toggleOrbitalLogin={toggleOrbitalLogin}
         toggleSignalConnectionsModal={toggleSignalConnectionsModal}
         userNotFoundModalState={userNotFoundModalState}
         usernameOnboardingState={usernameOnboardingState}

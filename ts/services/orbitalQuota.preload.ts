@@ -24,6 +24,7 @@ import * as http from 'node:http';
 import { URL } from 'node:url';
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
+import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
 
 const log = createLogger('OrbitalQuota');
 
@@ -123,6 +124,7 @@ export async function getQuotaInfo(groupId: string): Promise<QuotaInfo> {
     return quotaInfo;
   } catch (error) {
     log.error(`${logId}: Failed to get quota`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
     throw error;
   }
 }
@@ -175,6 +177,7 @@ export async function checkUploadAllowed(
     };
   } catch (error) {
     log.error(`${logId}: Failed to check upload`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
     throw error;
   }
 }
@@ -214,6 +217,7 @@ export async function deleteMedia(mediaId: string): Promise<void> {
     log.info(`${logId}: Media deleted successfully`);
   } catch (error) {
     log.error(`${logId}: Failed to delete media`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
     throw error;
   }
 }

@@ -34,6 +34,7 @@ import type { SmartDraftGifMessageSendModalProps } from '../state/smart/DraftGif
 import { CriticalIdlePrimaryDeviceModal } from './CriticalIdlePrimaryDeviceModal.dom.js';
 import { LowDiskSpaceBackupImportModal } from './LowDiskSpaceBackupImportModal.dom.js';
 import { isUsernameValid } from '../util/Username.dom.js';
+import { OrbitalLogin } from './orbital/OrbitalLogin.js';
 
 // NOTE: All types should be required for this component so that the smart
 // component gives you type errors when adding/removing props.
@@ -117,6 +118,9 @@ export type PropsType = {
   // SignalConnectionsModal
   isSignalConnectionsVisible: boolean;
   toggleSignalConnectionsModal: () => unknown;
+  // OrbitalLogin
+  isOrbitalLoginVisible: boolean;
+  toggleOrbitalLogin: () => unknown;
   // AboutContactModal
   isAboutContactModalVisible: boolean;
   renderAboutContactModal: () => JSX.Element | null;
@@ -218,6 +222,9 @@ export function GlobalModalContainer({
   // SignalConnectionsModal
   isSignalConnectionsVisible,
   toggleSignalConnectionsModal,
+  // OrbitalLogin
+  isOrbitalLoginVisible,
+  toggleOrbitalLogin,
   // AboutContactModal
   isAboutContactModalVisible,
   renderAboutContactModal,
@@ -280,6 +287,16 @@ export function GlobalModalContainer({
   // Forward Modal
   if (forwardMessagesProps) {
     return renderForwardMessagesModal();
+  }
+
+  // Orbital Login - Show before other modals if authentication required
+  if (isOrbitalLoginVisible) {
+    return (
+      <OrbitalLogin
+        i18n={i18n}
+        onClose={() => toggleOrbitalLogin(false)}
+      />
+    );
   }
 
   // Media Permissions Modal
