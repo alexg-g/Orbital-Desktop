@@ -1404,12 +1404,20 @@ export async function startApp(): Promise<void> {
       tapToViewMessagesDeletionService.update();
     });
 
+    // Orbital: Automatically mark Signal registration as done to bypass QR code flow
+    if (!Registration.everDone()) {
+      log.info('Orbital: Auto-completing Signal registration');
+      await Registration.markEverDone();
+    }
+
+    // Orbital: Skip Signal core data validation - we only need Orbital JWT auth
     const isCoreDataValid = Boolean(
       itemStorage.user.getAci() &&
         window.ConversationController.getOurConversation()
     );
 
-    if (isCoreDataValid && Registration.everDone()) {
+    // Orbital: Only check if registration is done, not if Signal core data is valid
+    if (Registration.everDone()) {
       idleDetector.start();
 
       // Orbital: Check JWT authentication after Signal registration
@@ -1427,13 +1435,17 @@ export async function startApp(): Promise<void> {
         window.reduxActions.app.openInbox();
       }
     } else {
+      // Orbital: Skip Signal registration, show Orbital login instead
       window.IPC.readyForUpdates();
       drop(
         (async () => {
           try {
             await window.IPC.whenWindowVisible();
           } finally {
-            window.reduxActions.installer.startInstaller();
+            // Show Orbital login modal and open inbox
+            log.info('Orbital: First-time startup, showing login modal');
+            window.reduxActions.globalModals.toggleOrbitalLogin(true);
+            window.reduxActions.app.openInbox();
           }
         })()
       );
