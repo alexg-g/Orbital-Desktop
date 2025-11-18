@@ -1,5 +1,14 @@
-// Load environment variables
-require('dotenv').config();
+// Load environment variables (.env.local takes priority for local dev)
+const fs = require('fs');
+const path = require('path');
+const envLocalPath = path.join(__dirname, '../../.env.local');
+const envPath = path.join(__dirname, '../../.env');
+
+if (fs.existsSync(envLocalPath)) {
+  require('dotenv').config({ path: envLocalPath, override: true });
+} else {
+  require('dotenv').config({ path: envPath });
+}
 
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
