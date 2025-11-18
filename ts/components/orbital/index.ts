@@ -32,3 +32,12 @@ export {
 export type { OrbitalDaySeparatorProps } from './OrbitalDaySeparator';
 
 export { OrbitalThreadingDemo } from './OrbitalThreadingDemo';
+
+export { OrbitalMediaViewer } from './OrbitalMediaViewer';
+export type { OrbitalMediaViewerProps } from './OrbitalMediaViewer';
+
+export { OrbitalMediaPicker } from './OrbitalMediaPicker';
+export type { OrbitalMediaPickerProps, SelectedFile } from './OrbitalMediaPicker';
+
+export { OrbitalUploadProgress } from './OrbitalUploadProgress';
+export type { OrbitalUploadProgressProps, UploadFile } from './OrbitalUploadProgress';

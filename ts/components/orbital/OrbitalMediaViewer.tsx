@@ -23,6 +23,7 @@ import {
   getMediaDownloadStatus,
   createDownloadController,
 } from '../../services/orbitalMediaDownload.preload';
+import { deleteMedia, formatBytes } from '../../services/orbitalQuota.preload';
 
 export type OrbitalMediaViewerProps = {
   mediaId: string;
@@ -36,6 +37,9 @@ export type OrbitalMediaViewerProps = {
   height?: number;
   getAbsoluteAttachmentPath: (relativePath: string) => string;
   onOpenFullscreen?: () => void;
+  uploadedBy?: string; // Member ID of uploader
+  currentUserId?: string; // Current user's member ID
+  onDelete?: (mediaId: string) => void; // Callback when media is deleted
 };
 
 /**
@@ -48,17 +52,23 @@ export function OrbitalMediaViewer({
   contentType,
   fileName,
   size,
+  expiresAt,
   blurHash,
   width,
   height,
   getAbsoluteAttachmentPath,
   onOpenFullscreen,
+  uploadedBy,
+  currentUserId,
+  onDelete,
 }: OrbitalMediaViewerProps): JSX.Element {
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [localPath, setLocalPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [isExpiringSoon, setIsExpiringSoon] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Check if media is downloaded and expiring soon
   useEffect(() => {
@@ -123,6 +133,43 @@ export function OrbitalMediaViewer({
 
   const isImage = contentType.startsWith('image/');
   const isVideo = contentType.startsWith('video/');
+
+  // Can delete if current user uploaded this media
+  const canDelete = uploadedBy && currentUserId && uploadedBy === currentUserId;
+
+  // Handle delete media
+  const handleDeleteClick = useCallback(() => {
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!canDelete || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      await deleteMedia(mediaId);
+      onDelete?.(mediaId);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Delete failed';
+      setError(errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [mediaId, canDelete, isDeleting, onDelete]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setShowDeleteConfirm(false);
+  }, []);
+
+  // Calculate time until expiration
+  const timeUntilExpiration = expiresAt - Date.now();
+  const daysUntilExpiration = Math.floor(timeUntilExpiration / (24 * 60 * 60 * 1000));
+  const hoursUntilExpiration = Math.floor(timeUntilExpiration / (60 * 60 * 1000));
 
   return (
     <div className="OrbitalMediaViewer">
@@ -220,7 +267,7 @@ export function OrbitalMediaViewer({
                   {fileName || 'Attachment'}
                 </div>
                 <div className="OrbitalMediaViewer__file-size">
-                  {formatFileSize(size)}
+                  {formatBytes(size)}
                 </div>
                 <a
                   href={`file://${localPath}`}
@@ -248,7 +295,7 @@ export function OrbitalMediaViewer({
               onClick={handleDownload}
             >
               📥 Download {isImage ? 'Image' : isVideo ? 'Video' : 'File'} (
-              {formatFileSize(size)})
+              {formatBytes(size)})
             </button>
           </div>
         )}
@@ -260,25 +307,61 @@ export function OrbitalMediaViewer({
           <div className="OrbitalMediaViewer__filename">{fileName}</div>
         )}
         <div className="OrbitalMediaViewer__metadata">
-          {formatFileSize(size)}
+          {formatBytes(size)}
           {width && height && ` • ${width}x${height}`}
+          {!isDownloaded && timeUntilExpiration > 0 && (
+            <>
+              {' • '}
+              <span className="OrbitalMediaViewer__expiration">
+                Expires in{' '}
+                {daysUntilExpiration > 0
+                  ? `${daysUntilExpiration} day${daysUntilExpiration > 1 ? 's' : ''}`
+                  : `${hoursUntilExpiration} hour${hoursUntilExpiration > 1 ? 's' : ''}`}
+              </span>
+            </>
+          )}
         </div>
+
+        {/* Delete Button (if user uploaded this media) */}
+        {canDelete && !showDeleteConfirm && (
+          <button
+            type="button"
+            className="OrbitalMediaViewer__delete-button"
+            onClick={handleDeleteClick}
+            disabled={isDeleting}
+          >
+            🗑️ Delete
+          </button>
+        )}
+
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && (
+          <div className="OrbitalMediaViewer__delete-confirm">
+            <p className="OrbitalMediaViewer__delete-confirm-text">
+              Delete this media? This will free {formatBytes(size)} of storage.
+            </p>
+            <div className="OrbitalMediaViewer__delete-confirm-actions">
+              <button
+                type="button"
+                className="OrbitalMediaViewer__delete-confirm-cancel"
+                onClick={handleDeleteCancel}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="OrbitalMediaViewer__delete-confirm-delete"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) {
-    return '0 Bytes';
-  }
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
-}
