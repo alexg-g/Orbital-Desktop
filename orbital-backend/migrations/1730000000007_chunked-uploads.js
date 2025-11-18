@@ -19,11 +19,12 @@ exports.up = (pgm) => {
       unique: true,
       comment: 'Client-generated UUID for this upload session',
     },
-    thread_id: {
+    group_id: {
       type: 'uuid',
       notNull: true,
-      references: 'threads(id)',
+      references: 'groups(id)',
       onDelete: 'CASCADE',
+      comment: 'Group that media belongs to (for access control)',
     },
     user_id: {
       type: 'uuid',
@@ -96,8 +97,8 @@ exports.up = (pgm) => {
     comment: 'Index for cleanup of abandoned uploads (>24 hours old)',
   });
 
-  pgm.createIndex('temp_uploads', ['thread_id', 'user_id'], {
-    name: 'idx_temp_uploads_thread_user',
+  pgm.createIndex('temp_uploads', ['group_id', 'user_id'], {
+    name: 'idx_temp_uploads_group_user',
   });
 
   // Add comment to table

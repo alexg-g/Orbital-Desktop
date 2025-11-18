@@ -66,7 +66,7 @@ const chunkUpload = multer({
  *
  * Body params:
  * - media_id: UUID (client-generated, consistent across chunks)
- * - thread_id: UUID
+ * - group_id: UUID
  * - chunk_index: Integer (0-based)
  * - total_chunks: Integer
  * - encrypted_metadata: String (only required on first chunk)
@@ -83,7 +83,7 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
 
   const {
     media_id,
-    thread_id,
+    group_id,
     chunk_index,
     total_chunks,
     encrypted_metadata,
@@ -92,8 +92,8 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
   } = req.body;
 
   // Validate required fields
-  if (!media_id || !thread_id || chunk_index === undefined || !total_chunks) {
-    throw validationError('Missing required fields: media_id, thread_id, chunk_index, total_chunks');
+  if (!media_id || !group_id || chunk_index === undefined || !total_chunks) {
+    throw validationError('Missing required fields: media_id, group_id, chunk_index, total_chunks');
   }
 
   const chunkIdx = parseInt(chunk_index, 10);
@@ -108,22 +108,10 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
     throw validationError('Maximum 100 chunks allowed (500MB file ÷ 5MB chunks)');
   }
 
-  // Verify thread exists and user is member
-  const threadCheck = await db.query(
-    'SELECT group_id FROM threads WHERE id = $1',
-    [thread_id]
-  );
-
-  if (threadCheck.rowCount === 0) {
-    throw notFoundError('Thread not found');
-  }
-
-  const groupId = threadCheck.rows[0].group_id;
-
-  // Verify membership
+  // Verify user is member of group
   const memberCheck = await db.query(
     'SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2',
-    [groupId, req.user.userId]
+    [group_id, req.user.userId]
   );
 
   if (memberCheck.rowCount === 0) {
@@ -153,7 +141,7 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
 
       // Check group quota before starting (estimate based on max chunk size)
       const estimatedSize = totalChunks * 5 * 1024 * 1024; // Estimate 5MB per chunk
-      const quotaCheck = await quotaService.checkQuotaAvailable(groupId, estimatedSize, client);
+      const quotaCheck = await quotaService.checkQuotaAvailable(group_id, estimatedSize, client);
 
       if (!quotaCheck.allowed) {
         throw new Error(quotaCheck.reason);
@@ -162,16 +150,16 @@ router.post('/upload/chunk', authenticate, chunkUpload.single('chunk'), asyncHan
       // Create temp_uploads record
       await client.query(
         `INSERT INTO temp_uploads
-         (media_id, thread_id, user_id, total_chunks, chunks_received, chunk_bitmap,
+         (media_id, group_id, user_id, total_chunks, chunks_received, chunk_bitmap,
           encrypted_metadata, encryption_iv, plaintext_hash, total_size_bytes)
          VALUES ($1, $2, $3, $4, 1, $5, $6, $7, $8, $9)`,
-        [media_id, thread_id, req.user.userId, totalChunks, '0',
+        [media_id, group_id, req.user.userId, totalChunks, '0',
          encrypted_metadata, encryption_iv, plaintext_hash || null, req.file.size]
       );
 
       logger.info('Started chunked upload', {
         mediaId: media_id,
-        threadId: thread_id,
+        groupId: group_id,
         userId: req.user.userId,
         totalChunks,
         chunkIndex: chunkIdx,
@@ -287,9 +275,8 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
 
   // Fetch temp_upload record
   const tempUploadResult = await db.query(
-    `SELECT tu.*, t.group_id
+    `SELECT tu.*
      FROM temp_uploads tu
-     INNER JOIN threads t ON t.id = tu.thread_id
      WHERE tu.media_id = $1`,
     [media_id]
   );
@@ -378,14 +365,14 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Create media record
+    // Create media record (thread_id is null, will be set when creating thread/reply)
     const mediaResult = await client.query(
       `INSERT INTO media
-       (thread_id, author_id, encrypted_metadata, storage_url, encryption_iv, size_bytes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (group_id, thread_id, author_id, encrypted_metadata, storage_url, encryption_iv, size_bytes, expires_at)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7)
        RETURNING id, uploaded_at, expires_at`,
       [
-        tempUpload.thread_id,
+        tempUpload.group_id,
         tempUpload.user_id,
         tempUpload.encrypted_metadata,
         finalPath,
@@ -419,7 +406,6 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
 
     logger.info('Chunked upload finalized', {
       mediaId: media.id,
-      threadId: tempUpload.thread_id,
       groupId: tempUpload.group_id,
       userId: tempUpload.user_id,
       sizeBytes: finalSize,
@@ -453,31 +439,18 @@ router.post('/upload', authenticate, upload.single('file'), asyncHandler(async (
     throw validationError('No file uploaded');
   }
 
-  const { thread_id, encrypted_metadata, encryption_iv } = req.body;
+  const { group_id, encrypted_metadata, encryption_iv } = req.body;
 
-  if (!thread_id || !encrypted_metadata || !encryption_iv) {
+  if (!group_id || !encrypted_metadata || !encryption_iv) {
     // Clean up uploaded file
     await fs.unlink(req.file.path);
-    throw validationError('Missing required fields: thread_id, encrypted_metadata, encryption_iv');
+    throw validationError('Missing required fields: group_id, encrypted_metadata, encryption_iv');
   }
 
-  // Verify thread exists and user is member
-  const threadCheck = await db.query(
-    `SELECT t.group_id FROM threads t WHERE t.id = $1`,
-    [thread_id]
-  );
-
-  if (threadCheck.rowCount === 0) {
-    await fs.unlink(req.file.path);
-    throw notFoundError('Thread not found');
-  }
-
-  const groupId = threadCheck.rows[0].group_id;
-
-  // Verify membership
+  // Verify user is member of group
   const memberCheck = await db.query(
     'SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2',
-    [groupId, req.user.userId]
+    [group_id, req.user.userId]
   );
 
   if (memberCheck.rowCount === 0) {
@@ -486,7 +459,7 @@ router.post('/upload', authenticate, upload.single('file'), asyncHandler(async (
   }
 
   // Check group quota
-  const quotaCheck = await quotaService.checkQuotaAvailable(groupId, req.file.size);
+  const quotaCheck = await quotaService.checkQuotaAvailable(group_id, req.file.size);
 
   if (!quotaCheck.allowed) {
     await fs.unlink(req.file.path);
@@ -505,25 +478,24 @@ router.post('/upload', authenticate, upload.single('file'), asyncHandler(async (
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Store media metadata
+    // Store media metadata (thread_id is null, will be set when creating thread/reply)
     const result = await client.query(
-      `INSERT INTO media (thread_id, author_id, encrypted_metadata, storage_url, encryption_iv, size_bytes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO media (group_id, thread_id, author_id, encrypted_metadata, storage_url, encryption_iv, size_bytes, expires_at)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7)
        RETURNING id, uploaded_at, expires_at`,
-      [thread_id, req.user.userId, encrypted_metadata, req.file.path, encryption_iv, req.file.size, expiresAt]
+      [group_id, req.user.userId, encrypted_metadata, req.file.path, encryption_iv, req.file.size, expiresAt]
     );
 
     const media = result.rows[0];
 
     // Update group quota
-    await quotaService.incrementQuota(groupId, req.file.size, client);
+    await quotaService.incrementQuota(group_id, req.file.size, client);
 
     await client.query('COMMIT');
 
     logger.info('Media uploaded', {
       mediaId: media.id,
-      threadId: thread_id,
-      groupId,
+      groupId: group_id,
       authorId: req.user.userId,
       sizeBytes: req.file.size
     });
@@ -553,10 +525,8 @@ router.get('/:mediaId/download', authenticate, asyncHandler(async (req, res) => 
 
   // Fetch media metadata
   const result = await db.query(
-    `SELECT m.id, m.thread_id, m.storage_url, m.encryption_iv, m.size_bytes, m.expires_at,
-            t.group_id
+    `SELECT m.id, m.group_id, m.thread_id, m.storage_url, m.encryption_iv, m.size_bytes, m.expires_at
      FROM media m
-     INNER JOIN threads t ON t.id = m.thread_id
      WHERE m.id = $1`,
     [mediaId]
   );
@@ -626,10 +596,9 @@ router.get('/:mediaId/info', authenticate, asyncHandler(async (req, res) => {
   const { mediaId } = req.params;
 
   const result = await db.query(
-    `SELECT m.id, m.thread_id, m.encrypted_metadata, m.encryption_iv, m.size_bytes,
-            m.uploaded_at, m.expires_at, t.group_id
+    `SELECT m.id, m.group_id, m.thread_id, m.encrypted_metadata, m.encryption_iv, m.size_bytes,
+            m.uploaded_at, m.expires_at
      FROM media m
-     INNER JOIN threads t ON t.id = m.thread_id
      WHERE m.id = $1`,
     [mediaId]
   );
@@ -652,6 +621,7 @@ router.get('/:mediaId/info', authenticate, asyncHandler(async (req, res) => {
 
   res.status(200).json({
     media_id: media.id,
+    group_id: media.group_id,
     thread_id: media.thread_id,
     encrypted_metadata: media.encrypted_metadata,
     size_bytes: parseInt(media.size_bytes, 10),

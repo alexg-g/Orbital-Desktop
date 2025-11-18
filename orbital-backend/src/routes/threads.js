@@ -18,11 +18,16 @@ const router = express.Router();
  * Create new discussion thread
  */
 router.post('/', authenticate, asyncHandler(async (req, res) => {
-  const { group_id, encrypted_title, encrypted_body, root_message_id } = req.body;
+  const { group_id, encrypted_title, encrypted_body, root_message_id, media_ids } = req.body;
 
   // Validate required fields
   if (!group_id || !encrypted_title || !encrypted_body) {
     throw validationError('Missing required fields: group_id, encrypted_title, encrypted_body');
+  }
+
+  // Validate media_ids if provided
+  if (media_ids !== undefined && !Array.isArray(media_ids)) {
+    throw validationError('media_ids must be an array');
   }
 
   // Verify user is member of group
@@ -35,29 +40,106 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     throw forbiddenError('Not a member of this group');
   }
 
-  // Create thread (optionally linked to Signal message)
-  const result = await db.query(
-    `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, created_at`,
-    [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
-  );
+  const client = await db.getClient();
 
-  const thread = result.rows[0];
+  try {
+    await client.query('BEGIN');
 
-  logger.info('Thread created', {
-    threadId: thread.id,
-    groupId: group_id,
-    authorId: req.user.userId
-  });
+    // Validate media_ids if provided
+    let validatedMediaIds = [];
+    if (media_ids && media_ids.length > 0) {
+      // Verify all media IDs exist and belong to the correct group
+      const mediaCheck = await client.query(
+        `SELECT id, group_id, thread_id
+         FROM media
+         WHERE id = ANY($1::uuid[])`,
+        [media_ids]
+      );
 
-  res.status(201).json({
-    thread_id: thread.id,
-    group_id: group_id,
-    created_at: thread.created_at
-  });
+      if (mediaCheck.rowCount !== media_ids.length) {
+        const foundIds = mediaCheck.rows.map(r => r.id);
+        const missingIds = media_ids.filter(id => !foundIds.includes(id));
+        throw notFoundError(`Media not found: ${missingIds.join(', ')}`);
+      }
 
-  // TODO: Broadcast to WebSocket clients in group
+      // Verify all media belongs to the same group
+      const wrongGroupMedia = mediaCheck.rows.filter(m => m.group_id !== group_id);
+      if (wrongGroupMedia.length > 0) {
+        throw forbiddenError(`Media ${wrongGroupMedia.map(m => m.id).join(', ')} belongs to a different group`);
+      }
+
+      // Verify media isn't already associated with another thread
+      const alreadyAssociated = mediaCheck.rows.filter(m => m.thread_id !== null);
+      if (alreadyAssociated.length > 0) {
+        const error = new Error(`Media already associated with another thread: ${alreadyAssociated.map(m => m.id).join(', ')}`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      validatedMediaIds = mediaCheck.rows.map(m => m.id);
+    }
+
+    // Create thread (optionally linked to Signal message)
+    const result = await client.query(
+      `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, created_at`,
+      [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
+    );
+
+    const thread = result.rows[0];
+
+    // Associate media with thread if provided
+    let associatedMedia = [];
+    if (validatedMediaIds.length > 0) {
+      await client.query(
+        `UPDATE media
+         SET thread_id = $1
+         WHERE id = ANY($2::uuid[])`,
+        [thread.id, validatedMediaIds]
+      );
+
+      // Fetch media metadata to return in response
+      const mediaResult = await client.query(
+        `SELECT id, encrypted_metadata, size_bytes, uploaded_at, expires_at
+         FROM media
+         WHERE id = ANY($1::uuid[])
+         ORDER BY uploaded_at ASC`,
+        [validatedMediaIds]
+      );
+
+      associatedMedia = mediaResult.rows.map(row => ({
+        media_id: row.id,
+        encrypted_metadata: row.encrypted_metadata,
+        size_bytes: parseInt(row.size_bytes, 10),
+        uploaded_at: row.uploaded_at,
+        expires_at: row.expires_at
+      }));
+    }
+
+    await client.query('COMMIT');
+
+    logger.info('Thread created', {
+      threadId: thread.id,
+      groupId: group_id,
+      authorId: req.user.userId,
+      mediaCount: associatedMedia.length
+    });
+
+    res.status(201).json({
+      thread_id: thread.id,
+      group_id: group_id,
+      created_at: thread.created_at,
+      media: associatedMedia
+    });
+
+    // TODO: Broadcast to WebSocket clients in group
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
 /**
@@ -257,10 +339,15 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
  */
 router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) => {
   const { threadId } = req.params;
-  const { encrypted_body, message_id } = req.body;
+  const { encrypted_body, message_id, media_ids } = req.body;
 
   if (!encrypted_body) {
     throw validationError('Missing required field: encrypted_body');
+  }
+
+  // Validate media_ids if provided
+  if (media_ids !== undefined && !Array.isArray(media_ids)) {
+    throw validationError('media_ids must be an array');
   }
 
   // Verify thread exists and user has access
@@ -285,29 +372,106 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
     throw forbiddenError('Not a member of this group');
   }
 
-  // Create reply
-  const result = await db.query(
-    `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, created_at`,
-    [threadId, message_id || null, req.user.userId, encrypted_body]
-  );
+  const client = await db.getClient();
 
-  const reply = result.rows[0];
+  try {
+    await client.query('BEGIN');
 
-  logger.info('Reply created', {
-    replyId: reply.id,
-    threadId,
-    authorId: req.user.userId
-  });
+    // Validate media_ids if provided
+    let validatedMediaIds = [];
+    if (media_ids && media_ids.length > 0) {
+      // Verify all media IDs exist and belong to the correct group
+      const mediaCheck = await client.query(
+        `SELECT id, group_id, thread_id
+         FROM media
+         WHERE id = ANY($1::uuid[])`,
+        [media_ids]
+      );
 
-  res.status(201).json({
-    reply_id: reply.id,
-    thread_id: threadId,
-    created_at: reply.created_at
-  });
+      if (mediaCheck.rowCount !== media_ids.length) {
+        const foundIds = mediaCheck.rows.map(r => r.id);
+        const missingIds = media_ids.filter(id => !foundIds.includes(id));
+        throw notFoundError(`Media not found: ${missingIds.join(', ')}`);
+      }
 
-  // TODO: Broadcast to WebSocket clients in group
+      // Verify all media belongs to the same group
+      const wrongGroupMedia = mediaCheck.rows.filter(m => m.group_id !== groupId);
+      if (wrongGroupMedia.length > 0) {
+        throw forbiddenError(`Media ${wrongGroupMedia.map(m => m.id).join(', ')} belongs to a different group`);
+      }
+
+      // Verify media isn't already associated with another thread
+      const alreadyAssociated = mediaCheck.rows.filter(m => m.thread_id !== null);
+      if (alreadyAssociated.length > 0) {
+        const error = new Error(`Media already associated with another thread: ${alreadyAssociated.map(m => m.id).join(', ')}`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      validatedMediaIds = mediaCheck.rows.map(m => m.id);
+    }
+
+    // Create reply
+    const result = await client.query(
+      `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, created_at`,
+      [threadId, message_id || null, req.user.userId, encrypted_body]
+    );
+
+    const reply = result.rows[0];
+
+    // Associate media with the parent thread (replies don't have their own media, they attach to thread)
+    let associatedMedia = [];
+    if (validatedMediaIds.length > 0) {
+      await client.query(
+        `UPDATE media
+         SET thread_id = $1
+         WHERE id = ANY($2::uuid[])`,
+        [threadId, validatedMediaIds]
+      );
+
+      // Fetch media metadata to return in response
+      const mediaResult = await client.query(
+        `SELECT id, encrypted_metadata, size_bytes, uploaded_at, expires_at
+         FROM media
+         WHERE id = ANY($1::uuid[])
+         ORDER BY uploaded_at ASC`,
+        [validatedMediaIds]
+      );
+
+      associatedMedia = mediaResult.rows.map(row => ({
+        media_id: row.id,
+        encrypted_metadata: row.encrypted_metadata,
+        size_bytes: parseInt(row.size_bytes, 10),
+        uploaded_at: row.uploaded_at,
+        expires_at: row.expires_at
+      }));
+    }
+
+    await client.query('COMMIT');
+
+    logger.info('Reply created', {
+      replyId: reply.id,
+      threadId,
+      authorId: req.user.userId,
+      mediaCount: associatedMedia.length
+    });
+
+    res.status(201).json({
+      reply_id: reply.id,
+      thread_id: threadId,
+      created_at: reply.created_at,
+      media: associatedMedia
+    });
+
+    // TODO: Broadcast to WebSocket clients in group
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
 module.exports = router;

@@ -26,6 +26,7 @@ export type OrbitalMessageType = {
 
 export type OrbitalThreadDetailProps = {
   threadId: string;
+  groupId: string;
   threadTitle: string;
   threadAuthor: string;
   threadTimestamp: number;
@@ -33,7 +34,7 @@ export type OrbitalThreadDetailProps = {
   currentUserId: string;
   i18n: LocalizerType;
   onReply: (parentId: string, body: string) => void;
-  onSendMessage: (body: string) => void;
+  onSendMessage: (body: string, mediaIds: string[]) => void;
 };
 
 /**
@@ -48,6 +49,8 @@ export type OrbitalThreadDetailProps = {
  * - Reply composer at bottom
  */
 export function OrbitalThreadDetail({
+  threadId,
+  groupId,
   threadTitle,
   threadAuthor,
   threadTimestamp,
@@ -59,8 +62,8 @@ export function OrbitalThreadDetail({
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
 
   const handleSubmitReply = useCallback(
-    (body: string) => {
-      onSendMessage(body);
+    (body: string, mediaIds: string[]) => {
+      onSendMessage(body, mediaIds);
     },
     [onSendMessage]
   );
@@ -123,6 +126,8 @@ export function OrbitalThreadDetail({
         <div className="OrbitalThreadDetail__composer-area">
           <OrbitalComposer
             mode="reply"
+            groupId={groupId}
+            threadId={threadId}
             onSubmit={handleSubmitReply}
             i18n={i18n}
           />

@@ -86,9 +86,9 @@ export type UploadMediaOptions = {
   attachment: AttachmentWithHydratedData;
 
   /**
-   * Thread ID this media belongs to
+   * Group ID this media belongs to (backend expects group_id)
    */
-  threadId: string;
+  groupId: string;
 
   /**
    * Progress callback (0-100)
@@ -151,7 +151,7 @@ export async function uploadMediaToOrbital(
 ): Promise<OrbitalMediaAttachment> {
   const {
     attachment,
-    threadId,
+    groupId,
     onProgress,
     signal,
     getAbsoluteAttachmentPath,
@@ -227,7 +227,7 @@ export async function uploadMediaToOrbital(
       // Upload chunk with retry logic
       await uploadChunkWithRetry({
         id,
-        threadId,
+        groupId,
         chunkIndex,
         totalChunks,
         chunkData,
@@ -267,17 +267,19 @@ export async function uploadMediaToOrbital(
     // Step 4: Finalize upload
     const finalizeResponse = await finalizeUpload({
       id,
-      threadId,
+      groupId,
       signal,
     });
 
     log.info(`${logId}: Finalized upload: ${finalizeResponse.mediaId}`);
 
     // Step 5: Save to SQLCipher
+    // Note: OrbitalMediaAttachment type may still use threadId internally
+    // but we store groupId since media is shared across the entire group
     const media: OrbitalMediaAttachment = {
       id,
       mediaId: finalizeResponse.mediaId,
-      threadId,
+      threadId: groupId, // Using groupId here (schema may need update later)
       attachmentKeys,
       plaintextHash: encryptResult.plaintextHash,
       digest: toBase64(encryptResult.digest),
@@ -358,7 +360,7 @@ async function readChunk(
  */
 async function uploadChunkWithRetry(params: {
   id: string;
-  threadId: string;
+  groupId: string;
   chunkIndex: number;
   totalChunks: number;
   chunkData: Uint8Array;
@@ -539,7 +541,7 @@ function buildMultipartFormData(fields: {
  */
 async function uploadChunk(params: {
   id: string;
-  threadId: string;
+  groupId: string;
   chunkIndex: number;
   totalChunks: number;
   chunkData: Uint8Array;
@@ -561,7 +563,7 @@ async function uploadChunk(params: {
 }): Promise<UploadChunkResponse> {
   const {
     id,
-    threadId,
+    groupId,
     chunkIndex,
     totalChunks,
     chunkData,
@@ -570,18 +572,18 @@ async function uploadChunk(params: {
     signal,
   } = params;
 
-  // Build multipart form data
+  // Build multipart form data with snake_case field names (backend expects these)
   const fields: { [key: string]: string | Uint8Array } = {
-    id,
-    threadId,
-    chunkIndex: chunkIndex.toString(),
-    totalChunks: totalChunks.toString(),
+    media_id: id,
+    group_id: groupId,
+    chunk_index: chunkIndex.toString(),
+    total_chunks: totalChunks.toString(),
     chunk: chunkData,
   };
 
   // Add metadata on first chunk
   if (isFirstChunk && encryptedMetadata) {
-    fields.metadata = JSON.stringify(encryptedMetadata);
+    fields.encrypted_metadata = JSON.stringify(encryptedMetadata);
   }
 
   const { body, boundary } = buildMultipartFormData(fields);
@@ -620,12 +622,16 @@ async function uploadChunk(params: {
  */
 async function finalizeUpload(params: {
   id: string;
-  threadId: string;
+  groupId: string;
   signal?: AbortSignal;
 }): Promise<FinalizeUploadResponse> {
-  const { id, threadId, signal } = params;
+  const { id, groupId, signal } = params;
 
-  const requestBody = JSON.stringify({ id, threadId });
+  // Backend expects snake_case field names
+  const requestBody = JSON.stringify({
+    media_id: id,
+    group_id: groupId,
+  });
 
   // Get JWT token for authentication
   const { getJWT } = await import('./orbitalAuth.preload.js');

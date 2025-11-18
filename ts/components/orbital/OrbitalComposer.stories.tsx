@@ -45,6 +45,7 @@ export function ThreadMode(): JSX.Element {
       <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
         <OrbitalComposer
           mode="thread"
+          groupId="mock-group-id"
           onSubmit={action('onSubmit')}
           i18n={i18n}
         />
@@ -81,6 +82,8 @@ export function ReplyMode(): JSX.Element {
       <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
         <OrbitalComposer
           mode="reply"
+          groupId="mock-group-id"
+          threadId="mock-thread-id"
           replyContext={{
             author: 'Mom',
             body: 'Emma took her first steps today! So proud! 🎉',

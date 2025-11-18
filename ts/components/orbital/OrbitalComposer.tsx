@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2025 Orbital
 
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import type { LocalizerType } from '../../types/Util.std';
 import { FunPicker } from '../fun/FunPicker.dom';
 import { FunPickerButton } from '../fun/FunButton.dom';
@@ -11,16 +12,31 @@ import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom';
 import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom';
 import { getEmojiVariantByKey } from '../fun/data/emojis.std';
 import { OrbitalQuillEditor } from './OrbitalQuillEditor';
+import { OrbitalMediaPicker } from './OrbitalMediaPicker';
+import type { SelectedFile } from './OrbitalMediaPicker';
+import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+import { getQuotaInfo } from '../../services/orbitalQuota.preload';
+import { uploadMediaToOrbital } from '../../services/orbitalMediaUpload.preload';
+import { getAbsoluteAttachmentPath } from '../../util/migrations.preload';
 
 export type OrbitalComposerMode = 'thread' | 'reply';
 
 export type OrbitalComposerProps = {
   mode: OrbitalComposerMode;
+  groupId: string;
+  threadId?: string; // Optional for replies, will be generated for new threads
   replyContext?: {
     author: string;
     body: string;
   };
-  onSubmit: (title: string, body: string) => void | ((body: string) => void);
+  /**
+   * Submit handler receives mediaIds in camelCase.
+   * IMPORTANT: When implementing API calls, convert to snake_case (media_ids)
+   * before sending to backend, as the backend expects snake_case field names.
+   */
+  onSubmit:
+    | ((title: string, body: string, mediaIds: string[]) => void)
+    | ((body: string, mediaIds: string[]) => void);
   onCancel?: () => void;
   onSelectGif?: (gif: FunGifSelection) => void;
   onSelectSticker?: (sticker: FunStickerSelection) => void;
@@ -44,6 +60,8 @@ export type OrbitalComposerProps = {
  */
 export function OrbitalComposer({
   mode,
+  groupId,
+  threadId: providedThreadId,
   replyContext,
   onSubmit,
   onSelectGif,
@@ -56,9 +74,16 @@ export function OrbitalComposer({
   const [selectedGif, setSelectedGif] = useState<FunGifSelection | null>(null);
   const [selectedSticker, setSelectedSticker] =
     useState<FunStickerSelection | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadFileName, setUploadFileName] = useState<string>('');
-  const [uploadFileSize, setUploadFileSize] = useState<string>('');
+
+  // Media attachment state
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [uploadedMediaIds, setUploadedMediaIds] = useState<string[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
+
   const editorApiRef = useRef<{
     insertText: (text: string) => void;
     insertEmoji: (emoji: string) => void;
@@ -67,6 +92,20 @@ export function OrbitalComposer({
   // Character limits
   const TITLE_MAX_LENGTH = 200;
   const BODY_MAX_LENGTH = 5000;
+
+  // Load quota info on mount
+  useEffect(() => {
+    async function loadQuota() {
+      try {
+        const info = await getQuotaInfo(groupId);
+        setQuotaInfo(info);
+      } catch (error) {
+        console.error('Failed to load quota info:', error);
+      }
+    }
+
+    loadQuota();
+  }, [groupId]);
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,13 +118,32 @@ export function OrbitalComposer({
     [TITLE_MAX_LENGTH]
   );
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (mode === 'thread') {
       // Thread mode requires title
       if (!title.trim()) {
         return;
       }
-      (onSubmit as (title: string, body: string) => void)(title, body);
+
+      // Upload media first if any selected
+      let mediaIds: string[] = [...uploadedMediaIds];
+      if (selectedFiles.length > 0) {
+        try {
+          setUploadingMedia(true);
+          mediaIds = await uploadAllMedia();
+        } catch (error) {
+          console.error('Failed to upload media:', error);
+          setUploadingMedia(false);
+          return; // Don't submit if upload fails
+        }
+        setUploadingMedia(false);
+      }
+
+      (onSubmit as (title: string, body: string, mediaIds: string[]) => void)(
+        title,
+        body,
+        mediaIds
+      );
       setTitle('');
       setBody('');
     } else {
@@ -93,13 +151,32 @@ export function OrbitalComposer({
       if (!body.trim()) {
         return;
       }
-      (onSubmit as (body: string) => void)(body);
+
+      // Upload media first if any selected
+      let mediaIds: string[] = [...uploadedMediaIds];
+      if (selectedFiles.length > 0) {
+        try {
+          setUploadingMedia(true);
+          mediaIds = await uploadAllMedia();
+        } catch (error) {
+          console.error('Failed to upload media:', error);
+          setUploadingMedia(false);
+          return; // Don't submit if upload fails
+        }
+        setUploadingMedia(false);
+      }
+
+      (onSubmit as (body: string, mediaIds: string[]) => void)(body, mediaIds);
       setBody('');
     }
     // Clear attachments after submit
     setSelectedGif(null);
     setSelectedSticker(null);
-  }, [mode, title, body, onSubmit]);
+    setSelectedFiles([]);
+    setUploadedMediaIds([]);
+    setUploadProgress({});
+    setUploadErrors({});
+  }, [mode, title, body, onSubmit, uploadedMediaIds, selectedFiles]);
 
   const handleSelectEmoji = useCallback((emojiSelection: FunEmojiSelection) => {
     // Get emoji character from selection
@@ -156,46 +233,97 @@ export function OrbitalComposer({
     setSelectedSticker(null);
   }, []);
 
-  const handleFileSelect = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) {
-        return;
+  // Handle opening media picker
+  const handleOpenMediaPicker = useCallback(() => {
+    setShowMediaPicker(true);
+  }, []);
+
+  // Handle media files selected from picker
+  const handleFilesSelected = useCallback(
+    async (files: SelectedFile[]) => {
+      setSelectedFiles(files);
+      setShowMediaPicker(false);
+
+      // Automatically start upload
+      try {
+        setUploadingMedia(true);
+        const mediaIds = await uploadAllMedia(files);
+        setUploadedMediaIds(mediaIds);
+
+        // Refresh quota after upload
+        const info = await getQuotaInfo(groupId);
+        setQuotaInfo(info);
+      } catch (error) {
+        console.error('Failed to upload media:', error);
+      } finally {
+        setUploadingMedia(false);
       }
-
-      // Set file info
-      setUploadFileName(file.name);
-      setUploadFileSize(formatFileSize(file.size));
-
-      // Simulate upload progress
-      setUploadProgress(0);
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev === null) {
-            return null;
-          }
-          if (prev >= 100) {
-            clearInterval(interval);
-            // Clear progress after completion
-            setTimeout(() => {
-              setUploadProgress(null);
-              setUploadFileName('');
-              setUploadFileSize('');
-            }, 1000);
-            return 100;
-          }
-          // Increment by random amount (5-15%)
-          return Math.min(100, prev + Math.random() * 10 + 5);
-        });
-      }, 200);
     },
-    []
+    [groupId]
   );
 
-  const handleCancelUpload = useCallback(() => {
-    setUploadProgress(null);
-    setUploadFileName('');
-    setUploadFileSize('');
+  // Upload all selected media files
+  const uploadAllMedia = useCallback(
+    async (files?: SelectedFile[]): Promise<string[]> => {
+      const filesToUpload = files || selectedFiles;
+      const mediaIds: string[] = [];
+      const errors: Record<string, string> = {};
+
+      // Generate thread ID for new threads (for uploads to be associated with)
+      const threadId = providedThreadId || uuidv4();
+
+      for (const selectedFile of filesToUpload) {
+        const fileId = `${selectedFile.name}-${selectedFile.size}`;
+
+        try {
+          // Convert File to AttachmentWithHydratedData
+          const arrayBuffer = await selectedFile.file.arrayBuffer();
+          const data = new Uint8Array(arrayBuffer);
+
+          const attachment = {
+            contentType: selectedFile.type,
+            data,
+            size: selectedFile.size,
+            fileName: selectedFile.name,
+          };
+
+          // Upload with progress tracking
+          const media = await uploadMediaToOrbital({
+            attachment,
+            groupId, // Changed from threadId to groupId for backend compatibility
+            onProgress: (progress: number) => {
+              setUploadProgress(prev => ({
+                ...prev,
+                [fileId]: progress,
+              }));
+            },
+            getAbsoluteAttachmentPath,
+          });
+
+          mediaIds.push(media.mediaId);
+
+          // Clear progress for this file
+          setUploadProgress(prev => {
+            const updated = { ...prev };
+            delete updated[fileId];
+            return updated;
+          });
+        } catch (error) {
+          console.error(`Failed to upload ${selectedFile.name}:`, error);
+          errors[fileId] = error instanceof Error ? error.message : 'Upload failed';
+        }
+      }
+
+      setUploadErrors(errors);
+      return mediaIds;
+    },
+    [selectedFiles, providedThreadId, groupId]
+  );
+
+  // Remove uploaded media attachment
+  const handleRemoveMedia = useCallback((index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setUploadedMediaIds(prev => prev.filter((_, i) => i !== index));
   }, []);
 
   // Check if there's any content to submit
@@ -203,12 +331,16 @@ export function OrbitalComposer({
     body.trim().length > 0 ||
     selectedGif !== null ||
     selectedSticker !== null ||
-    uploadFileName.length > 0;
+    selectedFiles.length > 0;
 
   const isSubmitDisabled =
-    mode === 'thread'
+    uploadingMedia ||
+    (mode === 'thread'
       ? !title.trim() || !hasContent // Thread mode: require title AND content
-      : !hasContent; // Reply mode: just require content
+      : !hasContent); // Reply mode: just require content
+
+  // Check if paperclip button should be disabled (quota full)
+  const canUploadMedia = quotaInfo?.canUpload !== false;
 
   return (
     <div className="OrbitalComposer">
@@ -271,44 +403,79 @@ export function OrbitalComposer({
       </div>
 
       {/* Upload Progress Indicator */}
-      {uploadProgress !== null && (
-        <div className="OrbitalComposer__upload-progress">
-          <div className="OrbitalComposer__upload-progress__header">
-            <div className="OrbitalComposer__upload-progress__info">
-              <span className="OrbitalComposer__upload-progress__filename">
-                {uploadFileName}
-              </span>
-              <span className="OrbitalComposer__upload-progress__filesize">
-                {uploadFileSize}
-              </span>
+      {Object.keys(uploadProgress).length > 0 && (
+        <div className="OrbitalComposer__upload-progress-container">
+          {Object.entries(uploadProgress).map(([fileId, progress]) => (
+            <div key={fileId} className="OrbitalComposer__upload-progress">
+              <div className="OrbitalComposer__upload-progress__header">
+                <div className="OrbitalComposer__upload-progress__info">
+                  <span className="OrbitalComposer__upload-progress__filename">
+                    {fileId.split('-')[0]}
+                  </span>
+                </div>
+              </div>
+              <div className="OrbitalComposer__upload-progress__bar-container">
+                <div
+                  className="OrbitalComposer__upload-progress__bar"
+                  style={{ width: `${progress}%` }}
+                  role="progressbar"
+                  aria-valuenow={progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+              </div>
+              <div className="OrbitalComposer__upload-progress__percent">
+                {Math.round(progress)}%
+              </div>
             </div>
-            <button
-              type="button"
-              className="OrbitalComposer__upload-progress__cancel"
-              onClick={handleCancelUpload}
-              aria-label="Cancel upload"
-              title="Cancel upload"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="OrbitalComposer__upload-progress__bar-container">
-            <div
-              className="OrbitalComposer__upload-progress__bar"
-              style={{ width: `${uploadProgress}%` }}
-              role="progressbar"
-              aria-valuenow={uploadProgress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
-          </div>
-          <div className="OrbitalComposer__upload-progress__percent">
-            {Math.round(uploadProgress)}%
-          </div>
+          ))}
         </div>
       )}
 
-      {/* Attachment Preview */}
+      {/* Media Attachment Preview */}
+      {selectedFiles.length > 0 && (
+        <div className="OrbitalComposer__attachments">
+          {selectedFiles.map((file, index) => (
+            <div key={index} className="OrbitalComposer__attachment">
+              {file.preview ? (
+                <img
+                  src={file.preview}
+                  alt={file.name}
+                  className="OrbitalComposer__attachment-preview"
+                />
+              ) : (
+                <div className="OrbitalComposer__attachment-icon">
+                  {file.type.startsWith('video/') ? '🎥' : '📄'}
+                </div>
+              )}
+              <div className="OrbitalComposer__attachment-info">
+                <div className="OrbitalComposer__attachment-name">
+                  {file.name}
+                </div>
+                <div className="OrbitalComposer__attachment-size">
+                  {formatFileSize(file.size)}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="OrbitalComposer__attachment-remove"
+                onClick={() => handleRemoveMedia(index)}
+                aria-label="Remove media"
+                title="Remove media"
+              >
+                ✕
+              </button>
+              {uploadErrors[`${file.name}-${file.size}`] && (
+                <div className="OrbitalComposer__attachment-error">
+                  Error: {uploadErrors[`${file.name}-${file.size}`]}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* GIF/Sticker Attachment Preview */}
       {(selectedGif || selectedSticker) && (
         <div className="OrbitalComposer__attachments">
           {selectedGif && (
@@ -348,29 +515,34 @@ export function OrbitalComposer({
         </div>
       )}
 
+      {/* OrbitalMediaPicker Modal */}
+      {showMediaPicker && (
+        <div className="OrbitalComposer__modal-overlay">
+          <div className="OrbitalComposer__modal">
+            <OrbitalMediaPicker
+              groupId={groupId}
+              onFilesSelected={handleFilesSelected}
+              onCancel={() => setShowMediaPicker(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="OrbitalComposer__actions">
         <div className="OrbitalComposer__tools">
-          <input
-            type="file"
-            id="file-upload"
-            className="OrbitalComposer__file-input"
-            accept="image/*,video/*,.gif"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-            aria-label="Select file to upload"
-          />
-          <label htmlFor="file-upload">
-            <button
-              type="button"
-              className="OrbitalComposer__icon-btn"
-              aria-label="Attach file"
-              title="Attach file"
-              onClick={() => document.getElementById('file-upload')?.click()}
-            >
-              📎
-            </button>
-          </label>
+          <button
+            type="button"
+            className="OrbitalComposer__icon-btn"
+            aria-label="Attach file"
+            title={
+              canUploadMedia ? 'Attach file' : 'Storage quota full - cannot upload'
+            }
+            onClick={handleOpenMediaPicker}
+            disabled={!canUploadMedia}
+          >
+            📎
+          </button>
           <button
             type="button"
             className="OrbitalComposer__icon-btn"
