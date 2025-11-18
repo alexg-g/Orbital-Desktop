@@ -70,28 +70,6 @@ export function OrbitalMediaViewer({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Check if media is downloaded and expiring soon
-  useEffect(() => {
-    async function checkStatus() {
-      try {
-        const status = await getMediaDownloadStatus(mediaId);
-        setIsDownloaded(status.isDownloaded);
-        setLocalPath(status.localPath);
-
-        // Check if expiring within 24 hours
-        const timeUntilExpiration = status.expiresAt - Date.now();
-        const ONE_DAY = 24 * 60 * 60 * 1000;
-        setIsExpiringSoon(
-          timeUntilExpiration < ONE_DAY && timeUntilExpiration > 0
-        );
-      } catch (err) {
-        console.error('Failed to check media status:', err);
-      }
-    }
-
-    checkStatus();
-  }, [mediaId]);
-
   // Download handler
   const handleDownload = useCallback(async () => {
     if (isDownloaded || downloadProgress !== null) {
@@ -124,12 +102,32 @@ export function OrbitalMediaViewer({
     }
   }, [mediaId, isDownloaded, downloadProgress, getAbsoluteAttachmentPath]);
 
-  // Auto-download on mount if already available
+  // Check if media is downloaded and expiring soon, trigger auto-download if needed
   useEffect(() => {
-    if (!isDownloaded && downloadProgress === null && !error) {
-      handleDownload();
+    async function checkStatus() {
+      try {
+        const status = await getMediaDownloadStatus(mediaId);
+        setIsDownloaded(status.isDownloaded);
+        setLocalPath(status.localPath);
+
+        // Check if expiring within 24 hours
+        const timeUntilExpiration = status.expiresAt - Date.now();
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+        setIsExpiringSoon(
+          timeUntilExpiration < ONE_DAY && timeUntilExpiration > 0
+        );
+
+        // Auto-download if not yet downloaded
+        if (!status.isDownloaded && downloadProgress === null && !error) {
+          handleDownload();
+        }
+      } catch (err) {
+        console.error('Failed to check media status:', err);
+      }
     }
-  }, []); // Only run once on mount
+
+    checkStatus();
+  }, [mediaId, downloadProgress, error, handleDownload]);
 
   const isImage = contentType.startsWith('image/');
   const isVideo = contentType.startsWith('video/');
@@ -230,7 +228,7 @@ export function OrbitalMediaViewer({
                 }}
               >
                 <img
-                  src={`file://${localPath}`}
+                  src={`file://${getAbsoluteAttachmentPath(localPath)}`}
                   alt={fileName || 'Image attachment'}
                   className="OrbitalMediaViewer__image"
                   style={{
@@ -247,7 +245,7 @@ export function OrbitalMediaViewer({
             {isVideo && (
               <div className="OrbitalMediaViewer__video-container">
                 <video
-                  src={`file://${localPath}`}
+                  src={`file://${getAbsoluteAttachmentPath(localPath)}`}
                   controls
                   className="OrbitalMediaViewer__video"
                   style={{
@@ -270,7 +268,7 @@ export function OrbitalMediaViewer({
                   {formatBytes(size)}
                 </div>
                 <a
-                  href={`file://${localPath}`}
+                  href={`file://${getAbsoluteAttachmentPath(localPath)}`}
                   download={fileName}
                   className="OrbitalMediaViewer__file-download"
                 >
