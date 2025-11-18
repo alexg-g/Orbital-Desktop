@@ -711,4 +711,87 @@ router.get('/threads/:threadId/media', authenticate, asyncHandler(async (req, re
   res.status(200).json({ media: mediaList });
 }));
 
+/**
+ * DELETE /api/media/:mediaId
+ * Delete media file and free up quota
+ * Only the author or group creator can delete media
+ */
+router.delete('/:mediaId', authenticate, asyncHandler(async (req, res) => {
+  const { mediaId } = req.params;
+
+  const client = await db.getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // Fetch media with author, group info, and file path
+    const result = await client.query(
+      `SELECT m.id, m.author_id, m.storage_url, m.size_bytes, t.group_id, g.created_by as group_creator
+       FROM media m
+       INNER JOIN threads t ON t.id = m.thread_id
+       INNER JOIN groups g ON g.id = t.group_id
+       WHERE m.id = $1
+       FOR UPDATE`,
+      [mediaId]
+    );
+
+    if (result.rowCount === 0) {
+      throw notFoundError('Media not found');
+    }
+
+    const media = result.rows[0];
+
+    // Verify user is either the author or group creator
+    const isAuthor = media.author_id === req.user.userId;
+    const isGroupCreator = media.group_creator === req.user.userId;
+
+    if (!isAuthor && !isGroupCreator) {
+      throw forbiddenError('Only the uploader or group creator can delete media');
+    }
+
+    // Delete file from disk
+    try {
+      await fs.unlink(media.storage_url);
+      logger.info('Media file deleted from disk', {
+        mediaId,
+        filePath: media.storage_url
+      });
+    } catch (error) {
+      // Log but don't fail if file already deleted
+      logger.warn('Failed to delete media file from disk', {
+        mediaId,
+        filePath: media.storage_url,
+        error: error.message
+      });
+    }
+
+    // Delete database record
+    await client.query('DELETE FROM media WHERE id = $1', [mediaId]);
+
+    // Decrement quota
+    const fileSize = parseInt(media.size_bytes, 10);
+    await quotaService.decrementQuota(media.group_id, fileSize, client);
+
+    await client.query('COMMIT');
+
+    logger.info('Media deleted successfully', {
+      mediaId,
+      groupId: media.group_id,
+      deletedBy: req.user.userId,
+      sizeBytes: fileSize
+    });
+
+    res.status(200).json({
+      message: 'Media deleted successfully',
+      media_id: mediaId,
+      quota_freed_bytes: fileSize
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}));
+
 module.exports = router;

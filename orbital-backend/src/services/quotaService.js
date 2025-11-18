@@ -33,11 +33,13 @@ async function checkQuotaAvailable(groupId, fileSize, client = null) {
   }
 
   try {
-    // Fetch current quota
+    // Fetch current quota with row-level lock if in transaction
+    // This prevents race conditions during concurrent uploads
+    const lockClause = client ? 'FOR UPDATE' : '';
     const result = await dbClient.query(
       `SELECT total_bytes, media_count, max_bytes, max_media_count
        FROM group_quotas
-       WHERE group_id = $1`,
+       WHERE group_id = $1 ${lockClause}`,
       [groupId]
     );
 

@@ -3,6 +3,7 @@ const { authenticate } = require('../middleware/auth');
 const { asyncHandler, validationError, forbiddenError, notFoundError, conflictError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const quotaService = require('../services/quotaService');
 
 const router = express.Router();
 
@@ -74,12 +75,8 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
       [group.id, req.user.userId, encrypted_group_key]
     );
 
-    // Initialize group quota
-    await client.query(
-      `INSERT INTO group_quotas (group_id, total_bytes, media_count)
-       VALUES ($1, 0, 0)`,
-      [group.id]
-    );
+    // Initialize group quota using quotaService
+    await quotaService.initializeQuota(group.id, client);
 
     await client.query('COMMIT');
 
@@ -246,44 +243,12 @@ router.get('/:groupId/quota', authenticate, asyncHandler(async (req, res) => {
     throw forbiddenError('Not a member of this group');
   }
 
-  // Fetch quota
-  const result = await db.query(
-    'SELECT total_bytes, media_count, max_bytes, max_media_count FROM group_quotas WHERE group_id = $1',
-    [groupId]
-  );
-
-  if (result.rowCount === 0) {
-    // Initialize quota if missing
-    await db.query(
-      'INSERT INTO group_quotas (group_id) VALUES ($1)',
-      [groupId]
-    );
-    return res.status(200).json({
-      group_id: groupId,
-      total_bytes: 0,
-      max_bytes: 10737418240, // 10GB
-      media_count: 0,
-      max_media_count: 100,
-      usage_percent: 0,
-      is_warning: false,
-      is_full: false
-    });
-  }
-
-  const quota = result.rows[0];
-  const usagePercent = Math.round((quota.total_bytes / quota.max_bytes) * 100);
-  const warningThreshold = 80;
+  // Use quotaService to get quota info
+  const quotaInfo = await quotaService.getQuotaInfo(groupId);
 
   res.status(200).json({
     group_id: groupId,
-    total_bytes: parseInt(quota.total_bytes, 10),
-    max_bytes: parseInt(quota.max_bytes, 10),
-    media_count: parseInt(quota.media_count, 10),
-    max_media_count: parseInt(quota.max_media_count, 10),
-    usage_percent: usagePercent,
-    warning_threshold: warningThreshold,
-    is_warning: usagePercent >= warningThreshold,
-    is_full: quota.total_bytes >= quota.max_bytes || quota.media_count >= quota.max_media_count
+    ...quotaInfo
   });
 }));
 

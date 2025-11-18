@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
@@ -7,6 +10,13 @@ const logger = require('../utils/logger');
  * Uses connection pooling for efficient database access.
  * Connects to Signal messages, threads, groups, and media tables.
  */
+
+// Debug: Log if DATABASE_URL is set
+if (!process.env.DATABASE_URL) {
+  console.error('WARNING: DATABASE_URL is not set! Tests will fail.');
+  console.error('Current working directory:', process.cwd());
+  console.error('NODE_ENV:', process.env.NODE_ENV);
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

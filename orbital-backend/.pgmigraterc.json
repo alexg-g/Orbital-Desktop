@@ -1,0 +1,5 @@
+{
+  "database-url-var": "DATABASE_URL",
+  "migrations-dir": "migrations",
+  "ignore-pattern": "\\.md$"
+}
