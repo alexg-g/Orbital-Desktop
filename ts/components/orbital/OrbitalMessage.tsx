@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 import React, { useCallback } from 'react';
 import classNames from 'classnames';
@@ -44,10 +45,10 @@ export type OrbitalMessageProps = {
  */
 export function OrbitalMessage({
   message,
-  isOwnMessage,
   onReply,
   onQuote,
-  i18n}: OrbitalMessageProps): JSX.Element {
+  i18n,
+}: OrbitalMessageProps): JSX.Element {
   const handleReply = useCallback(() => {
     onReply(message.id);
   }, [onReply, message.id]);
@@ -81,7 +82,12 @@ export function OrbitalMessage({
     >
       {/* Avatar - Left column */}
       {message.avatarUrl ? (
-        <div className={classNames('OrbitalMessage__avatar', `OrbitalMessage__avatar--level-${message.level}`)}>
+        <div
+          className={classNames(
+            'OrbitalMessage__avatar',
+            `OrbitalMessage__avatar--level-${message.level}`
+          )}
+        >
           <img
             src={message.avatarUrl}
             alt={`${message.author}'s avatar`}
@@ -89,7 +95,13 @@ export function OrbitalMessage({
           />
         </div>
       ) : (
-        <div className={classNames('OrbitalMessage__avatar', 'OrbitalMessage__avatar-placeholder', `OrbitalMessage__avatar--level-${message.level}`)}>
+        <div
+          className={classNames(
+            'OrbitalMessage__avatar',
+            'OrbitalMessage__avatar-placeholder',
+            `OrbitalMessage__avatar--level-${message.level}`
+          )}
+        >
           <span className="OrbitalMessage__avatar-initials">
             {getInitials(message.author)}
           </span>
@@ -132,7 +144,7 @@ export function OrbitalMessage({
                   role="button"
                   tabIndex={0}
                   onClick={() => window.open(preview.url, '_blank')}
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       window.open(preview.url, '_blank');
                     }
@@ -157,24 +169,28 @@ export function OrbitalMessage({
               )}
 
               {/* Single image */}
-              {!message.mediaUrls && message.mediaUrl && message.mediaType === 'image' && (
-                <img
-                  src={message.mediaUrl}
-                  alt="Attached image"
-                  style={{ maxWidth: '100%', borderRadius: '3px' }}
-                />
-              )}
+              {!message.mediaUrls &&
+                message.mediaUrl &&
+                message.mediaType === 'image' && (
+                  <img
+                    src={message.mediaUrl}
+                    alt="Attached image"
+                    style={{ maxWidth: '100%', borderRadius: '3px' }}
+                  />
+                )}
 
               {/* Video */}
-              {!message.mediaUrls && message.mediaUrl && message.mediaType === 'video' && (
-                <video
-                  src={message.mediaUrl}
-                  controls
-                  style={{ maxWidth: '100%', borderRadius: '3px' }}
-                >
-                  <track kind="captions" />
-                </video>
-              )}
+              {!message.mediaUrls &&
+                message.mediaUrl &&
+                message.mediaType === 'video' && (
+                  <video
+                    src={message.mediaUrl}
+                    controls
+                    style={{ maxWidth: '100%', borderRadius: '3px' }}
+                  >
+                    <track kind="captions" />
+                  </video>
+                )}
             </div>
           )}
         </div>
@@ -217,10 +233,18 @@ export function OrbitalMessage({
  * - Level 4+: level-4-plus (stronger purple, max indent)
  */
 function getLevelClass(level: number): string {
-  if (level === 0) return 'OrbitalMessage--level-0';
-  if (level === 1) return 'OrbitalMessage--level-1';
-  if (level === 2) return 'OrbitalMessage--level-2';
-  if (level === 3) return 'OrbitalMessage--level-3';
+  if (level === 0) {
+    return 'OrbitalMessage--level-0';
+  }
+  if (level === 1) {
+    return 'OrbitalMessage--level-1';
+  }
+  if (level === 2) {
+    return 'OrbitalMessage--level-2';
+  }
+  if (level === 3) {
+    return 'OrbitalMessage--level-3';
+  }
   return 'OrbitalMessage--level-4-plus'; // 4 and beyond
 }
 
@@ -236,7 +260,8 @@ function formatTimestamp(timestamp: number, i18n: LocalizerType): string {
   const time = date.toLocaleTimeString(i18n.getLocale(), {
     hour: 'numeric',
     minute: '2-digit',
-    hour12: true});
+    hour12: true,
+  });
 
   if (isToday) {
     return time;
@@ -254,9 +279,15 @@ function formatTimestamp(timestamp: number, i18n: LocalizerType): string {
  * This is used to determine the correct color and indentation.
  * The pattern repeats: Blue (1) → Purple (2) → Blue (3) → Purple (4+)
  */
-export function getReplyDepthColor(level: number): 'blue' | 'purple' | 'neutral' {
-  if (level === 0) return 'neutral';
-  if (level === 1 || level === 3) return 'blue';
+export function getReplyDepthColor(
+  level: number
+): 'blue' | 'purple' | 'neutral' {
+  if (level === 0) {
+    return 'neutral';
+  }
+  if (level === 1 || level === 3) {
+    return 'blue';
+  }
   return 'purple'; // level 2, 4+
 }
 
@@ -276,7 +307,11 @@ export function getReplyIndentation(level: number): number {
  */
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  if (parts.length === 0) {
+    return '?';
+  }
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }

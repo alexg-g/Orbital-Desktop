@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 /**
  * Orbital Media Download Service
@@ -24,19 +25,22 @@
  * - Attachment keys retrieved from SQLCipher (encrypted at rest)
  */
 
-import { createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
+// TODO: Add streaming support for large files
+// import { createWriteStream } from 'node:fs';
+// import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { URL } from 'node:url';
-import { fromBase64, toBase64 } from '../Bytes.std.js';
+import { fromBase64 } from '../Bytes.std.js';
 
-import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
+// TODO: Use OrbitalMediaAttachment type for better type safety
+// import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
 import {
   decryptAttachmentV2,
   safeUnlink,
-  measureSize,
+  // TODO: Add file size validation
+  // measureSize,
 } from '../AttachmentCrypto.node.js';
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
@@ -142,7 +146,8 @@ export async function downloadMediaFromOrbital(
   }
 
   // Step 3: Download encrypted blob with retry
-  let tempEncryptedPath: string | undefined;
+  // TODO: Save temp encrypted file for resume capability
+  // let tempEncryptedPath: string | undefined;
   let decryptedPath: string | undefined;
 
   try {
@@ -263,7 +268,7 @@ async function downloadEncryptedBlobWithRetry(params: {
 
       // Exponential backoff
       if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+        const delay = INITIAL_RETRY_DELAY * 2 ** attempt;
         log.info(
           `downloadEncryptedBlobWithRetry(${mediaId}): Retrying in ${delay}ms`
         );
@@ -293,7 +298,7 @@ async function downloadEncryptedBlob(params: {
   const requestBody = JSON.stringify({ threadId });
   const url = `${ORBITAL_API_URL}/api/media/${mediaId}/download`;
 
-  const chunks: Buffer[] = [];
+  const chunks: Array<Buffer> = [];
   let downloadedBytes = 0;
   let responseStatus = 0;
   let responseStatusText = '';
@@ -400,9 +405,7 @@ async function downloadEncryptedBlob(params: {
  *
  * Useful for displaying download status in UI
  */
-export async function getMediaDownloadStatus(
-  mediaId: string
-): Promise<{
+export async function getMediaDownloadStatus(mediaId: string): Promise<{
   isDownloaded: boolean;
   isAvailableOnServer: boolean;
   expiresAt: number;

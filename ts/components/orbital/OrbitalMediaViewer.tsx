@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 /**
  * OrbitalMediaViewer - Display media attachments in threads
@@ -15,7 +16,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
+// Type import for future use
+// import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
 import {
   downloadMediaFromOrbital,
   getMediaDownloadStatus,
@@ -43,11 +45,9 @@ export type OrbitalMediaViewerProps = {
  */
 export function OrbitalMediaViewer({
   mediaId,
-  threadId,
   contentType,
   fileName,
   size,
-  expiresAt,
   blurHash,
   width,
   height,
@@ -71,7 +71,9 @@ export function OrbitalMediaViewer({
         // Check if expiring within 24 hours
         const timeUntilExpiration = status.expiresAt - Date.now();
         const ONE_DAY = 24 * 60 * 60 * 1000;
-        setIsExpiringSoon(timeUntilExpiration < ONE_DAY && timeUntilExpiration > 0);
+        setIsExpiringSoon(
+          timeUntilExpiration < ONE_DAY && timeUntilExpiration > 0
+        );
       } catch (err) {
         console.error('Failed to check media status:', err);
       }
@@ -94,7 +96,7 @@ export function OrbitalMediaViewer({
     try {
       const path = await downloadMediaFromOrbital({
         mediaId,
-        onProgress: (progress) => {
+        onProgress: progress => {
           setDownloadProgress(progress);
         },
         signal: abortController.signal,
@@ -105,7 +107,8 @@ export function OrbitalMediaViewer({
       setIsDownloaded(true);
       setDownloadProgress(null);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Download failed';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Download failed';
       setError(errorMessage);
       setDownloadProgress(null);
     }
@@ -126,7 +129,8 @@ export function OrbitalMediaViewer({
       {/* Expiration Warning */}
       {isExpiringSoon && !isDownloaded && (
         <div className="OrbitalMediaViewer__expiration-warning">
-          Expires in less than 24 hours! Download before it's removed from server.
+          Expires in less than 24 hours! Download before it's removed from
+          server.
         </div>
       )}
 
@@ -172,7 +176,7 @@ export function OrbitalMediaViewer({
                 onClick={onOpenFullscreen}
                 role="button"
                 tabIndex={0}
-                onKeyPress={(e) => {
+                onKeyPress={e => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     onOpenFullscreen?.();
                   }
@@ -268,11 +272,13 @@ export function OrbitalMediaViewer({
  * Format file size in human-readable format
  */
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) {
+    return '0 Bytes';
+  }
 
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
 }

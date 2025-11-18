@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 import React, { useCallback, useState, useRef } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
@@ -45,15 +46,16 @@ export function OrbitalComposer({
   mode,
   replyContext,
   onSubmit,
-  onCancel,
   onSelectGif,
   onSelectSticker,
-  i18n}: OrbitalComposerProps): JSX.Element {
+  i18n,
+}: OrbitalComposerProps): JSX.Element {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedGif, setSelectedGif] = useState<FunGifSelection | null>(null);
-  const [selectedSticker, setSelectedSticker] = useState<FunStickerSelection | null>(null);
+  const [selectedSticker, setSelectedSticker] =
+    useState<FunStickerSelection | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadFileName, setUploadFileName] = useState<string>('');
   const [uploadFileSize, setUploadFileSize] = useState<string>('');
@@ -99,27 +101,26 @@ export function OrbitalComposer({
     setSelectedSticker(null);
   }, [mode, title, body, onSubmit]);
 
-  const handleSelectEmoji = useCallback(
-    (emojiSelection: FunEmojiSelection) => {
-      // Get emoji character from selection
-      const emojiData = getEmojiVariantByKey(emojiSelection.variantKey);
-      const emojiChar = emojiData.value;
+  const handleSelectEmoji = useCallback((emojiSelection: FunEmojiSelection) => {
+    // Get emoji character from selection
+    const emojiData = getEmojiVariantByKey(emojiSelection.variantKey);
+    const emojiChar = emojiData.value;
 
-      // Debug logging
-      console.log('Emoji selection:', {
-        variantKey: emojiSelection.variantKey,
-        value: emojiChar,
-        codePoints: Array.from(emojiChar).map(c => c.codePointAt(0)?.toString(16)),
-        length: emojiChar.length,
-      });
+    // Debug logging
+    console.log('Emoji selection:', {
+      variantKey: emojiSelection.variantKey,
+      value: emojiChar,
+      codePoints: Array.from(emojiChar).map(c =>
+        c.codePointAt(0)?.toString(16)
+      ),
+      length: emojiChar.length,
+    });
 
-      // Insert at cursor position in Quill editor using specialized emoji insertion
-      if (editorApiRef.current) {
-        editorApiRef.current.insertEmoji(emojiChar);
-      }
-    },
-    []
-  );
+    // Insert at cursor position in Quill editor using specialized emoji insertion
+    if (editorApiRef.current) {
+      editorApiRef.current.insertEmoji(emojiChar);
+    }
+  }, []);
 
   const handleSelectGif = useCallback(
     (gif: FunGifSelection) => {
@@ -155,34 +156,41 @@ export function OrbitalComposer({
     setSelectedSticker(null);
   }, []);
 
-  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
 
-    // Set file info
-    setUploadFileName(file.name);
-    setUploadFileSize(formatFileSize(file.size));
+      // Set file info
+      setUploadFileName(file.name);
+      setUploadFileSize(formatFileSize(file.size));
 
-    // Simulate upload progress
-    setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev === null) return null;
-        if (prev >= 100) {
-          clearInterval(interval);
-          // Clear progress after completion
-          setTimeout(() => {
-            setUploadProgress(null);
-            setUploadFileName('');
-            setUploadFileSize('');
-          }, 1000);
-          return 100;
-        }
-        // Increment by random amount (5-15%)
-        return Math.min(100, prev + Math.random() * 10 + 5);
-      });
-    }, 200);
-  }, []);
+      // Simulate upload progress
+      setUploadProgress(0);
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev === null) {
+            return null;
+          }
+          if (prev >= 100) {
+            clearInterval(interval);
+            // Clear progress after completion
+            setTimeout(() => {
+              setUploadProgress(null);
+              setUploadFileName('');
+              setUploadFileSize('');
+            }, 1000);
+            return 100;
+          }
+          // Increment by random amount (5-15%)
+          return Math.min(100, prev + Math.random() * 10 + 5);
+        });
+      }, 200);
+    },
+    []
+  );
 
   const handleCancelUpload = useCallback(() => {
     setUploadProgress(null);
@@ -199,8 +207,8 @@ export function OrbitalComposer({
 
   const isSubmitDisabled =
     mode === 'thread'
-      ? !title.trim() || !hasContent  // Thread mode: require title AND content
-      : !hasContent;                   // Reply mode: just require content
+      ? !title.trim() || !hasContent // Thread mode: require title AND content
+      : !hasContent; // Reply mode: just require content
 
   return (
     <div className="OrbitalComposer">
@@ -253,8 +261,8 @@ export function OrbitalComposer({
               : 'Add a reply...'
           }
           initialMarkdown={body}
-          onChange={(markdown) => setBody(markdown)}
-          onReady={(api) => {
+          onChange={markdown => setBody(markdown)}
+          onReady={api => {
             editorApiRef.current = api;
           }}
           maxLength={BODY_MAX_LENGTH}
@@ -325,10 +333,7 @@ export function OrbitalComposer({
           )}
           {selectedSticker && (
             <div className="OrbitalComposer__attachment">
-              <img
-                src={selectedSticker.sticker.url}
-                alt="Selected sticker"
-              />
+              <img src={selectedSticker.stickerUrl} alt="Selected sticker" />
               <button
                 type="button"
                 className="OrbitalComposer__attachment-remove"
@@ -425,11 +430,13 @@ function truncateText(text: string, maxLength: number): string {
  * Format file size in human-readable format
  */
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) {
+    return '0 Bytes';
+  }
 
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
 }

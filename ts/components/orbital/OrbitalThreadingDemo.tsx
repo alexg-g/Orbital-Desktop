@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
+import type { MIMEType } from '../../types/MIME.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
 import { FunProvider } from '../fun/FunProvider.dom';
@@ -307,10 +308,11 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
           domain: 'youtube.com',
           image: {
             url: 'https://img.youtube.com/vi/Gj2nOk8af-o/hqdefault.jpg',
-            contentType: 'image/jpeg' as const,
+            contentType: 'image/jpeg' as MIMEType,
             width: 480,
             height: 360,
             size: 0,
+            isPermanentlyUndownloadable: false,
           },
           date: Date.now() - 14 * 24 * 60 * 60 * 1000, // 2 weeks ago
         },

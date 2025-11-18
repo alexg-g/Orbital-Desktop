@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 import React, { useCallback, useState } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
@@ -18,7 +19,7 @@ export type OrbitalMessageType = {
   hasMedia: boolean;
   mediaType?: 'image' | 'video';
   mediaUrl?: string; // Single media URL (for backward compatibility)
-  mediaUrls?: string[]; // Multiple media URLs (for photo galleries)
+  mediaUrls?: Array<string>; // Multiple media URLs (for photo galleries)
   avatarUrl?: string; // Optional avatar URL (48x48 pixel art)
   linkPreviews?: ReadonlyArray<LinkPreviewForUIType>; // Link previews (YouTube, etc.)
 };
@@ -47,15 +48,14 @@ export type OrbitalThreadDetailProps = {
  * - Reply composer at bottom
  */
 export function OrbitalThreadDetail({
-  threadId,
   threadTitle,
   threadAuthor,
   threadTimestamp,
   messages,
   currentUserId,
   i18n,
-  onReply,
-  onSendMessage}: OrbitalThreadDetailProps): JSX.Element {
+  onSendMessage,
+}: OrbitalThreadDetailProps): JSX.Element {
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
 
   const handleSubmitReply = useCallback(
@@ -108,10 +108,14 @@ export function OrbitalThreadDetail({
         type="button"
         className="OrbitalASCII OrbitalASCII--separator OrbitalASCII--toggle"
         onClick={handleToggleComposer}
-        aria-label={isComposerCollapsed ? 'Expand composer' : 'Collapse composer'}
+        aria-label={
+          isComposerCollapsed ? 'Expand composer' : 'Collapse composer'
+        }
         aria-expanded={!isComposerCollapsed}
       >
-        {isComposerCollapsed ? '▲  ▲  ▲   EXPAND   ▲  ▲  ▲' : '▼  ▼  ▼  COLLAPSE  ▼  ▼  ▼'}
+        {isComposerCollapsed
+          ? '▲  ▲  ▲   EXPAND   ▲  ▲  ▲'
+          : '▼  ▼  ▼  COLLAPSE  ▼  ▼  ▼'}
       </button>
 
       {/* Reply Composer - Conditionally visible */}
@@ -143,7 +147,8 @@ function formatTimestamp(timestamp: number, i18n: LocalizerType): string {
   const time = date.toLocaleTimeString(i18n.getLocale(), {
     hour: 'numeric',
     minute: '2-digit',
-    hour12: true});
+    hour12: true,
+  });
 
   if (isToday) {
     return `Today at ${time}`;

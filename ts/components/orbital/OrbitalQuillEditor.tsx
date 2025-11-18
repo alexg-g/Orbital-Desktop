@@ -1,7 +1,8 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Quill, { Delta } from '@signalapp/quill-cjs';
 import { EmojiBlot } from '../../quill/emoji/blot.dom';
 
@@ -164,7 +165,11 @@ export function OrbitalQuillEditor({
 
         // Remove the toolbar (Quill inserts it as previousSibling)
         const toolbar = container.previousSibling;
-        if (toolbar && toolbar instanceof Element && toolbar.classList.contains('ql-toolbar')) {
+        if (
+          toolbar &&
+          toolbar instanceof Element &&
+          toolbar.classList.contains('ql-toolbar')
+        ) {
           toolbar.parentNode?.removeChild(toolbar);
         }
 
@@ -174,7 +179,10 @@ export function OrbitalQuillEditor({
         }
 
         // Remove all Quill classes from the container
-        container.className = container.className.split(' ').filter(c => !c.startsWith('ql-')).join(' ');
+        container.className = container.className
+          .split(' ')
+          .filter(c => !c.startsWith('ql-'))
+          .join(' ');
       }
     };
     // Empty dependency array = only run once on mount
@@ -188,7 +196,11 @@ export function OrbitalQuillEditor({
 
     const quill = quillRef.current;
 
-    const handleTextChange = (delta: Delta, oldDelta: Delta, source: string) => {
+    const handleTextChange = (
+      _delta: Delta,
+      oldDelta: Delta,
+      source: string
+    ) => {
       if (source === 'user') {
         const text = quill.getText().trim();
         if (text.length > maxLength) {
@@ -205,19 +217,20 @@ export function OrbitalQuillEditor({
     };
   }, [maxLength]);
 
-  const getMarkdown = useCallback((): string => {
-    if (!quillRef.current) {
-      return '';
-    }
-    return deltaToMarkdown(quillRef.current.getContents());
-  }, []);
+  // TODO: Expose getMarkdown and getText via useImperativeHandle for parent components
+  // const getMarkdown = useCallback((): string => {
+  //   if (!quillRef.current) {
+  //     return '';
+  //   }
+  //   return deltaToMarkdown(quillRef.current.getContents());
+  // }, []);
 
-  const getText = useCallback((): string => {
-    if (!quillRef.current) {
-      return '';
-    }
-    return quillRef.current.getText().trim();
-  }, []);
+  // const getText = useCallback((): string => {
+  //   if (!quillRef.current) {
+  //     return '';
+  //   }
+  //   return quillRef.current.getText().trim();
+  // }, []);
 
   return (
     <div className={`OrbitalQuillEditor ${className}`}>
@@ -355,14 +368,19 @@ function markdownToDelta(markdown: string): Delta {
     }
 
     // Inline formatting (bold, italic, underline)
-    let processedLine = line;
-    const segments: Array<{ text: string; bold?: boolean; italic?: boolean; underline?: boolean }> = [];
+    const segments: Array<{
+      text: string;
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+    }> = [];
 
     // Simple regex-based parsing (not perfect, but good enough for MVP)
     // TODO: Use a proper markdown parser for production
     const boldRegex = /\*\*(.+?)\*\*/g;
-    const italicRegex = /\*(.+?)\*/g;
-    const underlineRegex = /<u>(.+?)<\/u>/g;
+    // TODO: Implement italic and underline parsing
+    // const italicRegex = /\*(.+?)\*/g;
+    // const underlineRegex = /<u>(.+?)<\/u>/g;
 
     let lastIndex = 0;
     let match;
@@ -383,11 +401,20 @@ function markdownToDelta(markdown: string): Delta {
     // Insert segments
     for (const segment of segments) {
       const attrs: Record<string, boolean> = {};
-      if (segment.bold) attrs.bold = true;
-      if (segment.italic) attrs.italic = true;
-      if (segment.underline) attrs.underline = true;
+      if (segment.bold) {
+        attrs.bold = true;
+      }
+      if (segment.italic) {
+        attrs.italic = true;
+      }
+      if (segment.underline) {
+        attrs.underline = true;
+      }
 
-      delta.insert(segment.text, Object.keys(attrs).length > 0 ? attrs : undefined);
+      delta.insert(
+        segment.text,
+        Object.keys(attrs).length > 0 ? attrs : undefined
+      );
     }
 
     delta.insert('\n');

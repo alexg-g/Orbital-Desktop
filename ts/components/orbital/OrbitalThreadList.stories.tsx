@@ -1,7 +1,6 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
 import { OrbitalThreadList } from './OrbitalThreadList';

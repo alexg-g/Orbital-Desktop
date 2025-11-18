@@ -1,5 +1,6 @@
-// Copyright 2025 Orbital
+// Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
+// Copyright 2025 Orbital
 
 /**
  * Orbital Media Upload Service
@@ -21,9 +22,12 @@
  * - Keys shared with orbit members via Signal Protocol encrypted messages
  */
 
-import { open, unlink, stat } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+// TODO: Add streaming support for large files
+// import { createReadStream } from 'node:fs';
+// TODO: Add file metadata validation
+// import { stat } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import * as https from 'node:https';
@@ -40,7 +44,7 @@ import {
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import { strictAssert } from '../util/assert.std.js';
-import { toBase64, toHex } from '../Bytes.std.js';
+import { toBase64 } from '../Bytes.std.js';
 import { DataWriter } from '../sql/Client.preload.js';
 
 const log = createLogger('OrbitalMediaUpload');
@@ -400,7 +404,7 @@ async function uploadChunkWithRetry(params: {
 
       // Exponential backoff
       if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+        const delay = INITIAL_RETRY_DELAY * 2 ** attempt;
         log.info(
           `uploadChunkWithRetry(${id}, chunk ${chunkIndex}): Retrying in ${delay}ms`
         );
@@ -491,7 +495,7 @@ function buildMultipartFormData(fields: {
   [key: string]: string | Uint8Array;
 }): { body: Buffer; boundary: string } {
   const boundary = `----OrbitalFormBoundary${randomBytes(16).toString('hex')}`;
-  const parts: Buffer[] = [];
+  const parts: Array<Buffer> = [];
 
   Object.entries(fields).forEach(([name, value]) => {
     // Add boundary
@@ -508,7 +512,7 @@ function buildMultipartFormData(fields: {
       parts.push(
         Buffer.from(
           `Content-Disposition: form-data; name="${name}"; filename="chunk"\r\n` +
-            `Content-Type: application/octet-stream\r\n\r\n`
+            'Content-Type: application/octet-stream\r\n\r\n'
         )
       );
       parts.push(Buffer.from(value));
