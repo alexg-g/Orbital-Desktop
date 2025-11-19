@@ -6,10 +6,14 @@ import type { LocalizerType } from '../../types/Util.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
 import { OrbitalLogin } from './OrbitalLogin';
-import { isAuthenticated } from '../../services/orbitalAuth.preload';
+
+// Browser-compatible type for authentication check
+export type IsAuthenticatedFunction = () => Promise<boolean>;
 
 export type OrbitalInboxProps = {
   i18n: LocalizerType;
+  // Dependency injection for Node.js operations (allows Storybook mocking)
+  isAuthenticated: IsAuthenticatedFunction;
 };
 
 /**
@@ -25,7 +29,7 @@ export type OrbitalInboxProps = {
  * - Reddit-style threading
  * - 2000s forum aesthetic
  */
-export function OrbitalInbox({ i18n }: OrbitalInboxProps): JSX.Element {
+export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<OrbitalThread[]>([]);
   const [messages, setMessages] = useState<OrbitalMessageType[]>([]);
@@ -47,7 +51,7 @@ export function OrbitalInbox({ i18n }: OrbitalInboxProps): JSX.Element {
     }
 
     checkLoginStatus();
-  }, []);
+  }, [isAuthenticated]);
 
   // Fetch threads when logged in
   useEffect(() => {

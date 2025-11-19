@@ -8,6 +8,8 @@ import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews.std'
 import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
 import { OrbitalMessage } from './OrbitalMessage';
 import { OrbitalComposer } from './OrbitalComposer';
+import type { UploadCheckResult } from './OrbitalMediaPicker';
+import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 
 export type OrbitalMessageType = {
   id: string;
@@ -37,6 +39,16 @@ export type OrbitalThreadDetailProps = {
   i18n: LocalizerType;
   onReply: (parentId: string, body: string) => void;
   onSendMessage: (body: string, mediaIds: string[]) => void;
+  // Dependency injection for OrbitalComposer (allows Storybook mocking)
+  getQuotaInfo: (groupId: string) => Promise<QuotaInfo>;
+  checkUploadAllowed: (groupId: string, fileSizeBytes: number) => Promise<UploadCheckResult>;
+  formatBytes: (bytes: number) => string;
+  uploadMedia: (params: any) => Promise<any>;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+  // Dependency injection for OrbitalMediaViewer (allows Storybook mocking)
+  downloadMedia: (params: any) => Promise<string>;
+  getMediaDownloadStatus: (mediaId: string) => Promise<any>;
+  deleteMedia: (mediaId: string) => Promise<void>;
 };
 
 /**
@@ -60,6 +72,14 @@ export function OrbitalThreadDetail({
   currentUserId,
   i18n,
   onSendMessage,
+  getQuotaInfo,
+  checkUploadAllowed,
+  formatBytes,
+  uploadMedia,
+  getAbsoluteAttachmentPath,
+  downloadMedia,
+  getMediaDownloadStatus,
+  deleteMedia,
 }: OrbitalThreadDetailProps): JSX.Element {
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
   const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaAttachment>>(
@@ -116,12 +136,7 @@ export function OrbitalThreadDetail({
     []
   );
 
-  // Helper to get absolute attachment path
-  const getAbsoluteAttachmentPath = useCallback((relativePath: string): string => {
-    // Use window.Signal.getPath to get the userData directory
-    const userDataPath = window.SignalContext?.getPath('userData') || '';
-    return `${userDataPath}/attachments.noindex/${relativePath}`;
-  }, []);
+  // Note: getAbsoluteAttachmentPath is now passed as a prop via dependency injection
 
   return (
     <div className="OrbitalThreadDetail">
@@ -150,6 +165,10 @@ export function OrbitalThreadDetail({
             currentUserId={currentUserId}
             onDeleteMedia={handleDeleteMedia}
             getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+            downloadMedia={downloadMedia}
+            getMediaDownloadStatus={getMediaDownloadStatus}
+            deleteMedia={deleteMedia}
+            formatBytes={formatBytes}
           />
         ))}
 
@@ -186,6 +205,11 @@ export function OrbitalThreadDetail({
             threadId={threadId}
             onSubmit={handleSubmitReply}
             i18n={i18n}
+            getQuotaInfo={getQuotaInfo}
+            checkUploadAllowed={checkUploadAllowed}
+            formatBytes={formatBytes}
+            uploadMedia={uploadMedia}
+            getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
           />
         </div>
       )}

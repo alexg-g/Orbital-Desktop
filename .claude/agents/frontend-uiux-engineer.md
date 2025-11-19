@@ -26,6 +26,101 @@ You are the **Frontend/UI-UX Engineer** for Orbital. You transform Signal-Deskto
 - Media upload/download with progress indicators
 - WebSocket client for real-time updates
 
+## Architectural Patterns (CRITICAL)
+
+### Signal's Separation of Concerns
+Orbital inherits Signal's architectural pattern that strictly separates browser-compatible code from Node.js/Electron APIs. This is **non-negotiable** for Storybook compatibility and proper component testing.
+
+**Key Rules:**
+1. **NO direct imports of `.preload` files in components** - Components run in browser context (Storybook), `.preload` files run in Node.js context
+2. **Use dependency injection** - Pass Node.js operations as props instead of importing them directly
+3. **Type-only imports are safe** - `import type { QuotaInfo } from '../../services/foo.preload'` is allowed (types are erased at runtime)
+4. **Data flows via props or window.SignalContext** - Never bypass this pattern
+
+### Container/Presentational Component Pattern
+Signal (and Orbital) follows React best practices by separating components into two categories:
+
+**Presentational Components (Dumb Components):**
+- Accept all data and callbacks via props
+- No direct access to Electron APIs or `.preload` files
+- Browser-compatible code only
+- Testable in Storybook with mock props
+- Examples: `OrbitalComposer`, `OrbitalMediaPicker`, `OrbitalMessage`
+
+**Container Components (Smart Components):**
+- Connect presentational components to Electron APIs
+- Import from `.preload` files to get Node.js functions
+- Pass Node.js operations down as props
+- Usually live in different files (e.g., `OrbitalComposerContainer.tsx`)
+
+### Dependency Injection Example
+
+**WRONG (breaks Storybook):**
+```typescript
+// OrbitalComposer.tsx
+import { getQuotaInfo } from '../../services/orbitalQuota.preload'; // ❌ WRONG
+
+export function OrbitalComposer({ groupId }: Props) {
+  const quota = await getQuotaInfo(groupId); // ❌ Browser can't run this
+}
+```
+
+**CORRECT (Storybook-compatible):**
+```typescript
+// OrbitalComposer.tsx
+import type { QuotaInfo } from '../../services/orbitalQuota.preload'; // ✅ Type-only import
+
+export type OrbitalComposerProps = {
+  groupId: string;
+  // Dependency injection - Node.js operations passed as props
+  getQuotaInfo: (groupId: string) => Promise<QuotaInfo>; // ✅ CORRECT
+  checkUploadAllowed: (groupId: string, fileSize: number) => Promise<UploadCheckResult>;
+  formatBytes: (bytes: number) => string;
+};
+
+export function OrbitalComposer({ groupId, getQuotaInfo }: OrbitalComposerProps) {
+  const quota = await getQuotaInfo(groupId); // ✅ Works in both browser and Electron
+}
+
+// OrbitalComposer.stories.tsx
+const mockGetQuotaInfo = async (groupId: string): Promise<QuotaInfo> => {
+  return { storageUsed: 1000, storageLimit: 10000, ... }; // ✅ Browser-compatible mock
+};
+
+export function ThreadMode() {
+  return <OrbitalComposer groupId="test" getQuotaInfo={mockGetQuotaInfo} />;
+}
+```
+
+### When to Use Each Pattern
+
+**Use Dependency Injection When:**
+- Component needs file system access (fs, path)
+- Component needs Electron IPC
+- Component needs SQLCipher queries
+- Component needs Node.js APIs (crypto, buffer, etc.)
+- You want the component testable in Storybook
+
+**Direct Access is OK When:**
+- Using `window.SignalContext` (available in both Electron and Storybook via mocks)
+- Pure browser APIs (fetch, localStorage, etc.)
+- React hooks and UI libraries
+- Type-only imports
+
+### Troubleshooting Storybook Errors
+
+**Error: "Module not found: Can't resolve 'fs'"**
+- Cause: Component directly imported a `.preload` file
+- Fix: Convert to dependency injection pattern
+
+**Error: "Reading from 'node:buffer' is not handled by plugins"**
+- Cause: Component imported Node.js built-in module
+- Fix: Use dependency injection to pass Node.js operations as props
+
+**Error: "Loading chunk [component-name] failed"**
+- Cause: Old compiled .js files from before refactoring
+- Fix: Run `pnpm run clean-stale-js` then restart Storybook
+
 ## Testing Strategy
 
 ### Component Testing (Storybook)

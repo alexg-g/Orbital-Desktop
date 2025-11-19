@@ -17,11 +17,13 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
-import {
-  getQuotaInfo,
-  checkUploadAllowed,
-  formatBytes,
-} from '../../services/orbitalQuota.preload';
+
+// Browser-compatible types for quota checking
+export type UploadCheckResult = {
+  allowed: boolean;
+  reason?: string;
+  quotaInfo: QuotaInfo;
+};
 
 export type SelectedFile = {
   file: File;
@@ -37,6 +39,10 @@ export type OrbitalMediaPickerProps = {
   onCancel?: () => void;
   maxFiles?: number;
   acceptedTypes?: string; // e.g., "image/*,video/*"
+  // Dependency injection for Node.js operations (allows Storybook mocking)
+  getQuotaInfo: (groupId: string) => Promise<QuotaInfo>;
+  checkUploadAllowed: (groupId: string, fileSizeBytes: number) => Promise<UploadCheckResult>;
+  formatBytes: (bytes: number) => string;
 };
 
 /**
@@ -50,6 +56,9 @@ export function OrbitalMediaPicker({
   onCancel,
   maxFiles = 10,
   acceptedTypes = 'image/*,video/*',
+  getQuotaInfo,
+  checkUploadAllowed,
+  formatBytes,
 }: OrbitalMediaPickerProps): JSX.Element {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
@@ -146,7 +155,7 @@ export function OrbitalMediaPicker({
         fileInputRef.current.value = '';
       }
     },
-    [groupId, selectedFiles, maxFiles]
+    [groupId, selectedFiles, maxFiles, checkUploadAllowed, getQuotaInfo]
   );
 
   // Remove selected file

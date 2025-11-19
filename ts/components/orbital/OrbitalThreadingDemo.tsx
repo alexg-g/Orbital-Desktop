@@ -10,6 +10,75 @@ import { FunProvider } from '../fun/FunProvider.dom';
 import { packs, recentStickers } from '../stickers/mocks.std';
 import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
 import { EmojiSkinTone } from '../fun/data/emojis.std';
+import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+
+// =============================================================================
+// MOCK IMPLEMENTATIONS (for Storybook compatibility)
+// =============================================================================
+
+const mockGetQuotaInfo = async (_groupId: string): Promise<QuotaInfo> => {
+  await new Promise(resolve => setTimeout(resolve, 100));
+  return {
+    groupId: _groupId,
+    storageUsed: 2.5 * 1024 * 1024 * 1024,
+    storageLimit: 10 * 1024 * 1024 * 1024,
+    filesUsed: 25,
+    filesLimit: 100,
+    storagePercentUsed: 25,
+    filesPercentUsed: 25,
+    isNearLimit: false,
+    canUpload: true,
+  };
+};
+
+const mockCheckUploadAllowed = async (_groupId: string, _fileSizeBytes: number) => {
+  await new Promise(resolve => setTimeout(resolve, 50));
+  return {
+    allowed: true,
+    quotaInfo: await mockGetQuotaInfo(_groupId),
+  };
+};
+
+const mockFormatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
+};
+
+const mockUploadMedia = async ({ onProgress }: any) => {
+  for (let progress = 0; progress <= 100; progress += 10) {
+    onProgress(progress);
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return { mediaId: `mock-media-${Date.now()}` };
+};
+
+const mockGetAbsoluteAttachmentPath = (relativePath: string): string => {
+  return `/mock/attachments/path/${relativePath}`;
+};
+
+const mockDownloadMedia = async ({ onProgress }: any): Promise<string> => {
+  for (let progress = 0; progress <= 100; progress += 10) {
+    onProgress(progress);
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return `/mock/downloaded/media-${Date.now()}.mp4`;
+};
+
+const mockGetMediaDownloadStatus = async (_mediaId: string) => {
+  return {
+    isDownloaded: true,
+    isAvailableOnServer: true,
+    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days from now
+    localPath: `/mock/media/${_mediaId}.mp4`,
+  };
+};
+
+const mockDeleteMedia = async (_mediaId: string): Promise<void> => {
+  console.log('Mock delete media:', _mediaId);
+};
 
 /**
  * OrbitalThreadingDemo - Demo page showcasing the threaded UI
@@ -86,6 +155,7 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
           {activeThread ? (
             <OrbitalThreadDetail
               threadId={activeThread.id}
+              groupId="mock-group-id"
               threadTitle={activeThread.title}
               threadAuthor={activeThread.author}
               threadTimestamp={activeThread.timestamp}
@@ -94,6 +164,16 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
               i18n={i18n}
               onReply={handleReply}
               onSendMessage={handleSendMessage}
+              // Dependency injection for OrbitalComposer
+              getQuotaInfo={mockGetQuotaInfo}
+              checkUploadAllowed={mockCheckUploadAllowed}
+              formatBytes={mockFormatBytes}
+              uploadMedia={mockUploadMedia}
+              getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+              // Dependency injection for OrbitalMediaViewer
+              downloadMedia={mockDownloadMedia}
+              getMediaDownloadStatus={mockGetMediaDownloadStatus}
+              deleteMedia={mockDeleteMedia}
             />
           ) : (
             <div style={{ padding: '32px', textAlign: 'center' }}>

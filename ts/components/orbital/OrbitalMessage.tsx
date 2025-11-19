@@ -22,6 +22,11 @@ export type OrbitalMessageProps = {
   mediaMap: Map<string, OrbitalMediaAttachment>;
   currentUserId?: string;
   onDeleteMedia?: (mediaId: string) => void;
+  // Dependency injection for OrbitalMediaViewer (allows Storybook mocking)
+  downloadMedia: (params: any) => Promise<string>;
+  getMediaDownloadStatus: (mediaId: string) => Promise<any>;
+  deleteMedia: (mediaId: string) => Promise<void>;
+  formatBytes: (bytes: number) => string;
   getAbsoluteAttachmentPath: (relativePath: string) => string;
 };
 
@@ -58,6 +63,10 @@ export function OrbitalMessage({
   i18n,
   threadId,
   mediaMap,
+  downloadMedia,
+  getMediaDownloadStatus,
+  deleteMedia,
+  formatBytes,
   currentUserId,
   onDeleteMedia,
   getAbsoluteAttachmentPath,
@@ -208,11 +217,15 @@ export function OrbitalMessage({
                     blurHash={mediaItems[0].blurHash}
                     width={mediaItems[0].width}
                     height={mediaItems[0].height}
-                    getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
                     uploadedBy={mediaItems[0].uploadedBy}
                     currentUserId={currentUserId}
                     onDelete={onDeleteMedia}
                     onOpenFullscreen={() => openLightbox(0)}
+                    downloadMedia={downloadMedia}
+                    getMediaDownloadStatus={getMediaDownloadStatus}
+                    deleteMedia={deleteMedia}
+                    formatBytes={formatBytes}
+                    getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
                   />
                 </div>
               )}

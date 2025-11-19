@@ -13,13 +13,31 @@ import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom';
 import { getEmojiVariantByKey } from '../fun/data/emojis.std';
 import { OrbitalQuillEditor } from './OrbitalQuillEditor';
 import { OrbitalMediaPicker } from './OrbitalMediaPicker';
-import type { SelectedFile } from './OrbitalMediaPicker';
+import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
-import { getQuotaInfo } from '../../services/orbitalQuota.preload';
-import { uploadMediaToOrbital } from '../../services/orbitalMediaUpload.preload';
-import { getAbsoluteAttachmentPath } from '../../util/migrations.preload';
 
 export type OrbitalComposerMode = 'thread' | 'reply';
+
+// Type for attachment data (browser-compatible representation)
+export type AttachmentData = {
+  contentType: string;
+  data: Uint8Array;
+  size: number;
+  fileName: string;
+};
+
+// Type for media upload result
+export type UploadedMedia = {
+  mediaId: string;
+};
+
+// Type for upload media function
+export type UploadMediaFunction = (params: {
+  attachment: AttachmentData;
+  groupId: string;
+  onProgress: (progress: number) => void;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+}) => Promise<UploadedMedia>;
 
 export type OrbitalComposerProps = {
   mode: OrbitalComposerMode;
@@ -41,6 +59,12 @@ export type OrbitalComposerProps = {
   onSelectGif?: (gif: FunGifSelection) => void;
   onSelectSticker?: (sticker: FunStickerSelection) => void;
   i18n: LocalizerType;
+  // Dependency injection for Node.js operations (allows Storybook mocking)
+  getQuotaInfo: (groupId: string) => Promise<QuotaInfo>;
+  checkUploadAllowed: (groupId: string, fileSizeBytes: number) => Promise<UploadCheckResult>;
+  formatBytes: (bytes: number) => string;
+  uploadMedia: UploadMediaFunction;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
 };
 
 /**
@@ -67,6 +91,11 @@ export function OrbitalComposer({
   onSelectGif,
   onSelectSticker,
   i18n,
+  getQuotaInfo,
+  checkUploadAllowed,
+  formatBytes,
+  uploadMedia,
+  getAbsoluteAttachmentPath,
 }: OrbitalComposerProps): JSX.Element {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -288,7 +317,7 @@ export function OrbitalComposer({
           };
 
           // Upload with progress tracking
-          const media = await uploadMediaToOrbital({
+          const media = await uploadMedia({
             attachment,
             groupId, // Changed from threadId to groupId for backend compatibility
             onProgress: (progress: number) => {
@@ -317,7 +346,7 @@ export function OrbitalComposer({
       setUploadErrors(errors);
       return mediaIds;
     },
-    [selectedFiles, providedThreadId, groupId]
+    [selectedFiles, providedThreadId, groupId, uploadMedia, getAbsoluteAttachmentPath]
   );
 
   // Remove uploaded media attachment
@@ -523,6 +552,9 @@ export function OrbitalComposer({
               groupId={groupId}
               onFilesSelected={handleFilesSelected}
               onCancel={() => setShowMediaPicker(false)}
+              getQuotaInfo={getQuotaInfo}
+              checkUploadAllowed={checkUploadAllowed}
+              formatBytes={formatBytes}
             />
           </div>
         </div>

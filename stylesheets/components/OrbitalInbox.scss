@@ -7,19 +7,19 @@
 .OrbitalInbox {
   display: flex;
   height: 100vh;
-  background: $orbital-bg-primary;
-  font-family: $orbital-font-family;
+  background: $orbital-bg;
+  font-family: $orbital-font-body;
 
   &__sidebar {
     width: 320px;
-    border-right: 2px solid $orbital-border-primary;
-    background: $orbital-bg-secondary;
+    border-right: 2px solid $orbital-border-strong;
+    background: $orbital-surface;
     flex-shrink: 0;
     overflow-y: auto;
 
     @include mixins.dark-theme {
-      background: $orbital-dark-bg-secondary;
-      border-right-color: $orbital-dark-border-primary;
+      background: $orbital-dark-surface;
+      border-right-color: $orbital-dark-border-strong;
     }
   }
 
@@ -39,10 +39,10 @@
     height: 100%;
     padding: 48px;
     text-align: center;
-    background: $orbital-bg-primary;
+    background: $orbital-bg;
 
     @include mixins.dark-theme {
-      background: $orbital-dark-bg-primary;
+      background: $orbital-dark-bg;
     }
   }
 
@@ -81,10 +81,10 @@
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background: $orbital-bg-primary;
+    background: $orbital-bg;
 
     @include mixins.dark-theme {
-      background: $orbital-dark-bg-primary;
+      background: $orbital-dark-bg;
     }
   }
 
@@ -92,21 +92,21 @@
     width: 48px;
     height: 48px;
     border: 4px solid $orbital-border-subtle;
-    border-top-color: $orbital-accent-blue;
+    border-top-color: $orbital-blue;
     border-radius: 50%;
     animation: orbitalSpin 1s linear infinite;
     margin-bottom: 16px;
 
     @include mixins.dark-theme {
       border-color: $orbital-dark-border-subtle;
-      border-top-color: $orbital-accent-blue;
+      border-top-color: $orbital-blue;
     }
   }
 
   &__loading-text {
     font-size: 14px;
     color: $orbital-text-secondary;
-    font-family: $orbital-font-family;
+    font-family: $orbital-font-body;
 
     @include mixins.dark-theme {
       color: $orbital-dark-text-secondary;
@@ -119,10 +119,10 @@
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background: $orbital-bg-primary;
+    background: $orbital-bg;
 
     @include mixins.dark-theme {
-      background: $orbital-dark-bg-primary;
+      background: $orbital-dark-bg;
     }
   }
 }

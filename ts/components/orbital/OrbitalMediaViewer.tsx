@@ -16,14 +16,25 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-// Type import for future use
-// import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
-import {
-  downloadMediaFromOrbital,
-  getMediaDownloadStatus,
-  createDownloadController,
-} from '../../services/orbitalMediaDownload.preload';
-import { deleteMedia, formatBytes } from '../../services/orbitalQuota.preload';
+
+// Browser-compatible types for media download
+export type DownloadMediaParams = {
+  mediaId: string;
+  onProgress: (progress: number) => void;
+  signal: AbortSignal;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+};
+
+export type MediaDownloadStatus = {
+  isDownloaded: boolean;
+  isAvailableOnServer: boolean;
+  expiresAt: number;
+  localPath: string | null;
+};
+
+export type DownloadMediaFunction = (params: DownloadMediaParams) => Promise<string>;
+export type GetMediaDownloadStatusFunction = (mediaId: string) => Promise<MediaDownloadStatus>;
+export type DeleteMediaFunction = (mediaId: string) => Promise<void>;
 
 export type OrbitalMediaViewerProps = {
   mediaId: string;
@@ -35,11 +46,16 @@ export type OrbitalMediaViewerProps = {
   blurHash?: string;
   width?: number;
   height?: number;
-  getAbsoluteAttachmentPath: (relativePath: string) => string;
   onOpenFullscreen?: () => void;
   uploadedBy?: string; // Member ID of uploader
   currentUserId?: string; // Current user's member ID
   onDelete?: (mediaId: string) => void; // Callback when media is deleted
+  // Dependency injection for Node.js operations (allows Storybook mocking)
+  downloadMedia: DownloadMediaFunction;
+  getMediaDownloadStatus: GetMediaDownloadStatusFunction;
+  deleteMedia: DeleteMediaFunction;
+  formatBytes: (bytes: number) => string;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
 };
 
 /**
@@ -56,11 +72,15 @@ export function OrbitalMediaViewer({
   blurHash,
   width,
   height,
-  getAbsoluteAttachmentPath,
   onOpenFullscreen,
   uploadedBy,
   currentUserId,
   onDelete,
+  downloadMedia,
+  getMediaDownloadStatus,
+  deleteMedia,
+  formatBytes,
+  getAbsoluteAttachmentPath,
 }: OrbitalMediaViewerProps): JSX.Element {
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [localPath, setLocalPath] = useState<string | null>(null);
@@ -79,10 +99,10 @@ export function OrbitalMediaViewer({
     setDownloadProgress(0);
     setError(null);
 
-    const abortController = createDownloadController();
+    const abortController = new AbortController();
 
     try {
-      const path = await downloadMediaFromOrbital({
+      const path = await downloadMedia({
         mediaId,
         onProgress: progress => {
           setDownloadProgress(progress);
@@ -100,7 +120,7 @@ export function OrbitalMediaViewer({
       setError(errorMessage);
       setDownloadProgress(null);
     }
-  }, [mediaId, isDownloaded, downloadProgress, getAbsoluteAttachmentPath]);
+  }, [mediaId, isDownloaded, downloadProgress, downloadMedia, getAbsoluteAttachmentPath]);
 
   // Check if media is downloaded and expiring soon, trigger auto-download if needed
   useEffect(() => {
@@ -127,7 +147,7 @@ export function OrbitalMediaViewer({
     }
 
     checkStatus();
-  }, [mediaId, downloadProgress, error, handleDownload]);
+  }, [mediaId, downloadProgress, error, handleDownload, getMediaDownloadStatus]);
 
   const isImage = contentType.startsWith('image/');
   const isVideo = contentType.startsWith('video/');

@@ -13,14 +13,15 @@ export default {
 } satisfies Meta;
 
 /**
- * Orbital Threading UI Demo
+ * Full Demo - Complete threaded forum UI
  *
- * Showcases the complete threaded discussion interface with:
- * - Thread list sidebar with day separators
- * - Color-coded reply depth system (Blue → Purple → Blue → Purple)
- * - Early 2000s internet aesthetic (Verdana, retro styling)
- * - ASCII art separators
- * - Reply levels 0-4+ with increasing color saturation
+ * Shows the entire Orbital threading system with:
+ * - Thread list sidebar
+ * - Thread detail view with nested replies
+ * - Color-coded reply depth
+ * - Media attachments (videos, images)
+ * - URL previews
+ * - Composer with emoji/sticker/GIF pickers
  */
 export function FullDemo(): JSX.Element {
   return (
@@ -44,9 +45,9 @@ export function FullDemo(): JSX.Element {
 }
 
 /**
- * Thread List Only
+ * Thread List Only - Sidebar view
  *
- * Shows just the thread list sidebar with day separators
+ * Shows just the thread list component with day separators.
  */
 export function ThreadListOnly(): JSX.Element {
   return (

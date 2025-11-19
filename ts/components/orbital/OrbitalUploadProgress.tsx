@@ -18,8 +18,21 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { SelectedFile } from './OrbitalMediaPicker';
 import type { AttachmentWithHydratedData } from '../../types/Attachment.std';
 import type { MIMEType } from '../../types/MIME.std';
-import { uploadMediaToOrbital } from '../../services/orbitalMediaUpload.preload';
-import { formatBytes } from '../../services/orbitalQuota.preload';
+
+// Browser-compatible types for media upload
+export type UploadMediaParams = {
+  attachment: AttachmentWithHydratedData;
+  threadId: string;
+  onProgress: (progress: number) => void;
+  signal: AbortSignal;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+};
+
+export type UploadMediaResult = {
+  mediaId: string;
+};
+
+export type UploadMediaFunction = (params: UploadMediaParams) => Promise<UploadMediaResult>;
 
 export type UploadFile = {
   file: SelectedFile;
@@ -35,6 +48,9 @@ export type OrbitalUploadProgressProps = {
   groupId: string;
   onComplete: (uploadedMediaIds: string[]) => void;
   onCancel: () => void;
+  // Dependency injection for Node.js operations (allows Storybook mocking)
+  uploadMedia: UploadMediaFunction;
+  formatBytes: (bytes: number) => string;
   getAbsoluteAttachmentPath: (relativePath: string) => string;
 };
 
@@ -49,6 +65,8 @@ export function OrbitalUploadProgress({
   groupId: _groupId, // Reserved for future quota checks
   onComplete,
   onCancel,
+  uploadMedia,
+  formatBytes,
   getAbsoluteAttachmentPath,
 }: OrbitalUploadProgressProps): JSX.Element {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>(() =>
@@ -103,7 +121,7 @@ export function OrbitalUploadProgress({
         };
 
         // Upload using orbital service
-        const result = await uploadMediaToOrbital({
+        const result = await uploadMedia({
           attachment,
           threadId,
           onProgress: progress => {
@@ -150,7 +168,7 @@ export function OrbitalUploadProgress({
         setAbortController(null);
       }
     },
-    [uploadFiles, threadId, getAbsoluteAttachmentPath]
+    [uploadFiles, threadId, uploadMedia, getAbsoluteAttachmentPath]
   );
 
   // Upload next file in sequence
