@@ -30,6 +30,76 @@ Specialized agent for Signal-Desktop cleanup sprint (Days 1-4). Expert in automa
 - **Pattern Recognition**: Regex and AST-based code pattern matching
 - **Automation**: Node.js scripting for repetitive tasks
 
+## ⚠️ CRITICAL: Signal Architecture Constraints
+
+### Database Migrations - NEVER Delete, Always Stub
+
+**Lesson learned from Issue #37:** Removing migration source files breaks the build even if the feature is "removed."
+
+**Why migrations can't be deleted:**
+1. **Sequential version chain** - `index.node.ts` imports all migrations; missing files cause runtime crashes
+2. **Cross-migration dependencies** - Later migrations reference earlier tables (e.g., `storyReads` used in delete triggers)
+3. **Schema integrity** - Database version numbers must remain monotonic
+
+**Correct approach for feature removal:**
+```typescript
+// BAD: Delete 67-add-story-to-unprocessed.std.ts
+// GOOD: Create stub migration
+export default function updateToSchemaVersion67(
+  currentVersion: number,
+  db: Database,
+  logger: LoggerType
+): void {
+  if (currentVersion >= 67) return;
+
+  db.transaction(() => {
+    // Stub - original functionality removed
+    db.pragma('user_version = 67');
+  })();
+
+  logger.info('updateToSchemaVersion67: success (stub migration)');
+}
+```
+
+**Migration files that MUST be stubbed (not deleted) for Stories removal:**
+- `67-add-story-to-unprocessed.std.ts`
+- `70-story-reply-index.std.ts`
+- `86-story-replies-index.std.ts`
+- `90-delete-story-reply-screenshot.std.ts`
+- `1130-isStory-index.std.ts`
+
+### File Suffix Security Model
+
+Signal enforces process isolation through file naming conventions. **NEVER mix these contexts:**
+
+| Suffix | Context | Has Access To |
+|--------|---------|---------------|
+| `.main.ts` | Main Electron process | Full Node.js, system APIs |
+| `.node.ts` | Node.js worker | Database, file system |
+| `.preload.ts` | Preload bridge | Controlled IPC exposure |
+| `.std.ts` | Universal | No Node.js or DOM specifics |
+| `.dom.ts` | Renderer only | DOM APIs, no Node.js |
+
+**Critical rule:** Code in `.dom.ts` must NEVER import from `.node.ts` or `.main.ts`. This breaks Electron's security sandbox.
+
+### Hidden Dependencies to Check Before Removal
+
+Before removing any feature, verify these aren't affected:
+
+1. **Database triggers** - Check `ts/sql/migrations/` for `CREATE TRIGGER` referencing your tables
+2. **Foreign key constraints** - Tables may reference "removed" features
+3. **Index dependencies** - Indexes may span multiple feature areas
+4. **Preload IPC handlers** - Check `ts/windows/*/preload.ts` for exposed APIs
+5. **State ducks** - Redux slices in `ts/state/ducks/` may cross-reference
+
+### Environment Variables
+
+**Never assume clean environment.** Key issue discovered:
+- `ELECTRON_RUN_AS_NODE=1` causes Electron to run as plain Node.js
+- This breaks all `electron` module imports
+- Can be set by VSCode extensions or shell profiles
+- Always `unset ELECTRON_RUN_AS_NODE` before testing
+
 ## Tools to Create
 
 ### 1. Component Usage Analyzer (`scripts/analyze-components.js`)
@@ -114,8 +184,11 @@ Specialized agent for Signal-Desktop cleanup sprint (Days 1-4). Expert in automa
 
 ### Day 1: Quick Wins
 - Remove `/sticker-creator/` directory
-- Remove Stories components (`ts/components/Stories*.tsx`)
-- Remove Payment components
+- **Stub Stories migrations** and remove UI components (`ts/components/Stories*.tsx`)
+  - Keep database tables (referenced by triggers)
+  - Stub migration files (don't delete)
+  - Remove Redux ducks and selectors
+- Remove Payment UI components
 - Remove Calling UI components
 - Expected: 10-15% reduction
 
