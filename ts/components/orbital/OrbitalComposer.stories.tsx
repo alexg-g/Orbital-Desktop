@@ -7,10 +7,13 @@ import { action } from '@storybook/addon-actions';
 import { OrbitalComposer } from './OrbitalComposer';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import type { UploadMediaFunction } from './OrbitalComposer';
-import { FunProvider } from '../fun/FunProvider.dom';
-import { packs, recentStickers } from '../stickers/mocks.std';
-import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
-import { EmojiSkinTone } from '../fun/data/emojis.std';
+import { FunProvider } from '../fun/FunProvider.dom.js';
+import { packs, recentStickers } from '../stickers/mocks.std.js';
+import {
+  MOCK_GIFS_PAGINATED_ONE_PAGE,
+  MOCK_RECENT_EMOJIS,
+} from '../fun/mocks.dom.js';
+import { EmojiSkinTone } from '../fun/data/emojis.std.js';
 
 const { i18n } = window.SignalContext;
 
@@ -75,41 +78,20 @@ export default {
  * Thread Mode - Create new threads
  */
 export function ThreadMode(): JSX.Element {
-  const [skinTone, setSkinTone] = React.useState(EmojiSkinTone.None);
-
   return (
-    <FunProvider
-      i18n={i18n}
-      recentEmojis={MOCK_RECENT_EMOJIS}
-      recentStickers={recentStickers}
-      recentGifs={[]}
-      emojiSkinToneDefault={skinTone}
-      onEmojiSkinToneDefaultChange={setSkinTone}
-      onOpenCustomizePreferredReactionsModal={() => null}
-      onSelectEmoji={action('onSelectEmoji')}
-      installedStickerPacks={packs}
-      showStickerPickerHint={false}
-      onClearStickerPickerHint={() => null}
-      onSelectSticker={action('onSelectSticker')}
-      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
-      onSelectGif={action('onSelectGif')}
-    >
-      <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <OrbitalComposer
-          mode="thread"
-          groupId="mock-group-id"
-          onSubmit={action('onSubmit')}
-          i18n={i18n}
-          getQuotaInfo={mockGetQuotaInfo}
-          checkUploadAllowed={mockCheckUploadAllowed}
-          formatBytes={mockFormatBytes}
-          uploadMedia={mockUploadMedia}
-          getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-        />
-      </div>
-    </FunProvider>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <OrbitalComposer
+        mode="thread"
+        groupId="mock-group-id"
+        onSubmit={action('onSubmit')}
+        i18n={i18n}
+        getQuotaInfo={mockGetQuotaInfo}
+        checkUploadAllowed={mockCheckUploadAllowed}
+        formatBytes={mockFormatBytes}
+        uploadMedia={mockUploadMedia}
+        getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+      />
+    </div>
   );
 }
 
@@ -117,45 +99,24 @@ export function ThreadMode(): JSX.Element {
  * Reply Mode - Reply to posts
  */
 export function ReplyMode(): JSX.Element {
-  const [skinTone, setSkinTone] = React.useState(EmojiSkinTone.None);
-
   return (
-    <FunProvider
-      i18n={i18n}
-      recentEmojis={MOCK_RECENT_EMOJIS}
-      recentStickers={recentStickers}
-      recentGifs={[]}
-      emojiSkinToneDefault={skinTone}
-      onEmojiSkinToneDefaultChange={setSkinTone}
-      onOpenCustomizePreferredReactionsModal={() => null}
-      onSelectEmoji={action('onSelectEmoji')}
-      installedStickerPacks={packs}
-      showStickerPickerHint={false}
-      onClearStickerPickerHint={() => null}
-      onSelectSticker={action('onSelectSticker')}
-      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
-      onSelectGif={action('onSelectGif')}
-    >
-      <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <OrbitalComposer
-          mode="reply"
-          groupId="mock-group-id"
-          threadId="mock-thread-id"
-          replyContext={{
-            author: 'Mom',
-            body: 'Emma took her first steps today! So proud! 🎉',
-          }}
-          onSubmit={action('onSubmit')}
-          i18n={i18n}
-          getQuotaInfo={mockGetQuotaInfo}
-          checkUploadAllowed={mockCheckUploadAllowed}
-          formatBytes={mockFormatBytes}
-          uploadMedia={mockUploadMedia}
-          getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-        />
-      </div>
-    </FunProvider>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <OrbitalComposer
+        mode="reply"
+        groupId="mock-group-id"
+        threadId="mock-thread-id"
+        replyContext={{
+          author: 'Mom',
+          body: 'Emma took her first steps today! So proud! 🎉',
+        }}
+        onSubmit={action('onSubmit')}
+        i18n={i18n}
+        getQuotaInfo={mockGetQuotaInfo}
+        checkUploadAllowed={mockCheckUploadAllowed}
+        formatBytes={mockFormatBytes}
+        uploadMedia={mockUploadMedia}
+        getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+      />
+    </div>
   );
 }

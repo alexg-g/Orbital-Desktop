@@ -20,6 +20,7 @@ type TemplateProps = Omit<FunPickerProps, 'open' | 'onOpenChange' | 'children'>;
 
 function Template(props: TemplateProps) {
   const [open, setOpen] = useState(true);
+  const [skinTone, setSkinTone] = useState(EmojiSkinTone.None);
 
   const handleOpenChange = useCallback((openState: boolean) => {
     setOpen(openState);
@@ -33,8 +34,8 @@ function Template(props: TemplateProps) {
       recentStickers={recentStickers}
       recentGifs={[]}
       // Emojis
-      emojiSkinToneDefault={EmojiSkinTone.None}
-      onEmojiSkinToneDefaultChange={() => null}
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
       onOpenCustomizePreferredReactionsModal={() => null}
       onSelectEmoji={() => null}
       // Stickers
@@ -49,7 +50,7 @@ function Template(props: TemplateProps) {
       onSelectGif={() => null}
     >
       <FunPicker {...props} open={open} onOpenChange={handleOpenChange}>
-        <Button>Open FunPicker</Button>
+        <Button onPress={() => setOpen(true)}>Open FunPicker</Button>
       </FunPicker>
     </FunProvider>
   );

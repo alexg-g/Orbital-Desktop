@@ -807,6 +807,7 @@ function SectionSkinToneHeaderPopover(
     <DialogTrigger isOpen={props.open} onOpenChange={props.onOpenChange}>
       <FunGridHeaderButton
         label={i18n('icu:FunPanelEmojis__ChangeSkinToneButtonLabel')}
+        onPress={() => props.onOpenChange(true)}
       >
         <FunGridHeaderIcon iconClassName="FunGrid__HeaderIcon--More" />
       </FunGridHeaderButton>

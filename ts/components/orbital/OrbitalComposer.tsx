@@ -4,17 +4,17 @@
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { LocalizerType } from '../../types/Util.std';
-import { FunPicker } from '../fun/FunPicker.dom';
-import { FunPickerButton } from '../fun/FunButton.dom';
-import type { FunEmojiSelection } from '../fun/panels/FunPanelEmojis.dom';
-import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom';
-import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom';
-import { getEmojiVariantByKey } from '../fun/data/emojis.std';
-import { OrbitalQuillEditor } from './OrbitalQuillEditor';
-import { OrbitalMediaPicker } from './OrbitalMediaPicker';
-import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker';
-import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+import { Button } from 'react-aria-components';
+import type { LocalizerType } from '../../types/Util.std.js';
+import { FunPicker } from '../fun/FunPicker.dom.js';
+import type { FunEmojiSelection } from '../fun/panels/FunPanelEmojis.dom.js';
+import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom.js';
+import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom.js';
+import { getEmojiVariantByKey } from '../fun/data/emojis.std.js';
+import { OrbitalQuillEditor } from './OrbitalQuillEditor.js';
+import { OrbitalMediaPicker } from './OrbitalMediaPicker.js';
+import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker.js';
+import type { QuotaInfo } from '../../services/orbitalQuota.preload.js';
 
 export type OrbitalComposerMode = 'thread' | 'reply';
 
@@ -602,7 +602,13 @@ export function OrbitalComposer({
             onSelectSticker={handleSelectSticker}
             onAddStickerPack={null}
           >
-            <FunPickerButton i18n={i18n} />
+            <Button
+              className="OrbitalComposer__icon-btn"
+              aria-label="Open emoji picker"
+              onPress={() => setPickerOpen(true)}
+            >
+              😀
+            </Button>
           </FunPicker>
         </div>
 

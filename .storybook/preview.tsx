@@ -7,7 +7,7 @@ import React, { StrictMode } from 'react';
 
 import '../stylesheets/manifest.scss';
 import '../stylesheets/tailwind-config.css';
-import * as styles from './styles.scss';
+import './styles.scss';
 import messages from '../_locales/en/messages.json';
 
 import { Provider } from 'react-redux';
@@ -211,7 +211,7 @@ const withGlobalTypesProvider = (Story, context) => {
   document.documentElement.setAttribute('dir', direction);
 
   return (
-    <div className={styles.container}>
+    <div className="container">
       <StorybookThemeContext.Provider value={theme}>
         <Story {...context} />
       </StorybookThemeContext.Provider>
@@ -238,14 +238,16 @@ function withScrollLockProvider(Story, context) {
 }
 
 function withFunProvider(Story, context) {
+  const [skinTone, setSkinTone] = React.useState(EmojiSkinTone.None);
+
   return (
     <FunProvider
       i18n={window.SignalContext.i18n}
       recentEmojis={[]}
       recentStickers={[]}
       recentGifs={[]}
-      emojiSkinToneDefault={EmojiSkinTone.None}
-      onEmojiSkinToneDefaultChange={noop}
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
       installedStickerPacks={[]}
       showStickerPickerHint={false}
       onClearStickerPickerHint={noop}

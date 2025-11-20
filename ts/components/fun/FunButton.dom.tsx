@@ -1,8 +1,9 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import React, { useMemo } from 'react';
+import React, { forwardRef, useMemo } from 'react';
 import { VisuallyHidden } from 'react-aria';
 import { Button } from 'react-aria-components';
+import type { ButtonProps } from 'react-aria-components';
 import type { LocalizerType } from '../../types/I18N.std.js';
 import {
   type EmojiVariantKey,
@@ -17,25 +18,27 @@ import { useFunEmojiLocalizer } from './useFunEmojiLocalizer.dom.js';
 
 export type FunPickerButtonProps = Readonly<{
   i18n: LocalizerType;
-}>;
+}> & Omit<ButtonProps, 'children' | 'className'>;
 
-export function FunPickerButton(props: FunPickerButtonProps): JSX.Element {
-  const { i18n } = props;
-  // Use a grinning face emoji (😀) as the colored icon
-  const defaultEmoji = getEmojiVariantByKey('1F600');
+export const FunPickerButton = forwardRef<HTMLButtonElement, FunPickerButtonProps>(
+  function FunPickerButton(props, ref): JSX.Element {
+    const { i18n, ...buttonProps } = props;
+    // Use a grinning face emoji (😀) as the colored icon
+    const defaultEmoji = getEmojiVariantByKey('1F600');
 
-  return (
-    <Button className="FunButton">
-      <FunStaticEmoji
-        role="img"
-        size={20}
-        aria-label="Emoji picker"
-        emoji={defaultEmoji}
-      />
-      <VisuallyHidden>{i18n('icu:FunButton__Label--FunPicker')}</VisuallyHidden>
-    </Button>
-  );
-}
+    return (
+      <Button ref={ref} className="FunButton" {...buttonProps}>
+        <FunStaticEmoji
+          role="img"
+          size={20}
+          aria-label="Emoji picker"
+          emoji={defaultEmoji}
+        />
+        <VisuallyHidden>{i18n('icu:FunButton__Label--FunPicker')}</VisuallyHidden>
+      </Button>
+    );
+  }
+);
 
 /**
  * Emoji Picker Button
