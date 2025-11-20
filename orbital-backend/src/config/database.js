@@ -1,15 +1,21 @@
-// Load environment variables (.env.local takes priority for local dev)
+// Load environment variables (.env.test for tests, .env.local for dev, .env as fallback)
 const fs = require('fs');
 const path = require('path');
+const backendEnvTestPath = path.join(__dirname, '../../.env.test');
 const backendEnvLocalPath = path.join(__dirname, '../../.env.local');
 const backendEnvPath = path.join(__dirname, '../../.env');
 
 // Debug: Log DATABASE_URL before loading env files
+console.log('[DB CONFIG DEBUG] NODE_ENV:', process.env.NODE_ENV);
 console.log('[DB CONFIG DEBUG] DATABASE_URL before dotenv:', process.env.DATABASE_URL);
-console.log('[DB CONFIG DEBUG] Checking for .env.local at:', backendEnvLocalPath);
-console.log('[DB CONFIG DEBUG] .env.local exists:', fs.existsSync(backendEnvLocalPath));
 
-if (fs.existsSync(backendEnvLocalPath)) {
+// For tests, always use .env.test (highest priority)
+if (process.env.NODE_ENV === 'test' && fs.existsSync(backendEnvTestPath)) {
+  console.log('[DB CONFIG DEBUG] Loading .env.test for test environment');
+  delete process.env.DATABASE_URL;
+  require('dotenv').config({ path: backendEnvTestPath, override: true });
+  console.log('[DB CONFIG DEBUG] DATABASE_URL after loading .env.test:', process.env.DATABASE_URL);
+} else if (fs.existsSync(backendEnvLocalPath)) {
   console.log('[DB CONFIG DEBUG] Loading .env.local with override: true');
   // Explicitly unset DATABASE_URL to prevent shell environment conflicts
   delete process.env.DATABASE_URL;

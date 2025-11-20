@@ -101,10 +101,8 @@ exports.up = (pgm) => {
     name: 'idx_temp_uploads_group_user',
   });
 
-  // Add comment to table
-  pgm.addComment('temp_uploads',
-    'Tracks chunked upload progress for large files. Cleaned up after finalization or after 24 hours of inactivity.'
-  );
+  // Add comment to table (use sql method for comments)
+  pgm.sql(`COMMENT ON TABLE temp_uploads IS 'Tracks chunked upload progress for large files. Cleaned up after finalization or after 24 hours of inactivity.';`);
 };
 
 exports.down = (pgm) => {

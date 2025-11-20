@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --coverage",
+    "test": "NODE_ENV=test jest --coverage",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:integration": "NODE_ENV=test jest tests/quota.test.js",
+    "test:unit": "NODE_ENV=test jest tests/quota.unit.test.js",
+    "test:setup": "node scripts/setup-test-db.js",
     "lint": "eslint src/**/*.js",
     "migrate": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down"

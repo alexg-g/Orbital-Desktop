@@ -14,6 +14,7 @@ const db = require('../src/config/database');
 
 describe('Quota Service', () => {
   let testGroupId;
+  let testUserId;
 
   beforeAll(async () => {
     // Ensure database connection
@@ -21,23 +22,35 @@ describe('Quota Service', () => {
   });
 
   beforeEach(async () => {
-    // Create test group and initialize quota
+    // Create test user and group with proper foreign key setup
     const { v4: uuidv4 } = require('uuid');
+    testUserId = uuidv4();
     testGroupId = uuidv4();
 
+    // Create test user first
+    await db.query(
+      `INSERT INTO users (id, username, password_hash, public_key)
+       VALUES ($1, $2, $3, $4)`,
+      [testUserId, `testuser_${Date.now()}`, 'hash_placeholder', '{}']
+    );
+
+    // Create test group
     await db.query(
       `INSERT INTO groups (id, encrypted_name, created_by, invite_code)
-       VALUES ($1, 'test_group', $1, 'TEST1234')`,
-      [testGroupId]
+       VALUES ($1, 'test_group', $2, 'TEST1234')`,
+      [testGroupId, testUserId]
     );
 
     await quotaService.initializeQuota(testGroupId);
   });
 
   afterEach(async () => {
-    // Clean up test data
+    // Clean up test data (cascade will delete related records)
     if (testGroupId) {
       await db.query('DELETE FROM groups WHERE id = $1', [testGroupId]);
+    }
+    if (testUserId) {
+      await db.query('DELETE FROM users WHERE id = $1', [testUserId]);
     }
   });
 
@@ -101,13 +114,21 @@ describe('Quota Service', () => {
 
     test('should initialize missing quota automatically', async () => {
       const { v4: uuidv4 } = require('uuid');
+      const newUserId = uuidv4();
       const newGroupId = uuidv4();
+
+      // Create new test user
+      await db.query(
+        `INSERT INTO users (id, username, password_hash, public_key)
+         VALUES ($1, $2, $3, $4)`,
+        [newUserId, `testuser_auto_${Date.now()}`, 'hash_placeholder', '{}']
+      );
 
       // Create group without quota
       await db.query(
         `INSERT INTO groups (id, encrypted_name, created_by, invite_code)
-         VALUES ($1, 'test_group_2', $1, 'TEST5678')`,
-        [newGroupId]
+         VALUES ($1, 'test_group_2', $2, 'TEST5678')`,
+        [newGroupId, newUserId]
       );
 
       // Check quota (should auto-initialize)
@@ -118,6 +139,7 @@ describe('Quota Service', () => {
 
       // Cleanup
       await db.query('DELETE FROM groups WHERE id = $1', [newGroupId]);
+      await db.query('DELETE FROM users WHERE id = $1', [newUserId]);
     });
   });
 

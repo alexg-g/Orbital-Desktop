@@ -7,5 +7,9 @@ module.exports = {
     '!src/server.js'
   ],
   testMatch: ['**/tests/**/*.test.js'],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  // Ensure NODE_ENV=test for all tests
+  testEnvironmentOptions: {
+    NODE_ENV: 'test'
+  }
 };
