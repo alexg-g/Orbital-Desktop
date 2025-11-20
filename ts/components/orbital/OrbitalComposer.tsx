@@ -593,23 +593,25 @@ export function OrbitalComposer({
           </button>
 
           {/* Fun Picker: Emojis, GIFs, and Stickers */}
-          <FunPicker
-            open={pickerOpen}
-            onOpenChange={setPickerOpen}
-            placement="top"
-            onSelectEmoji={handleSelectEmoji}
-            onSelectGif={handleSelectGif}
-            onSelectSticker={handleSelectSticker}
-            onAddStickerPack={null}
-          >
-            <Button
-              className="OrbitalComposer__icon-btn"
-              aria-label="Open emoji picker"
-              onPress={() => setPickerOpen(true)}
+          <div style={{ position: 'relative' }}>
+            <FunPicker
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
+              placement="top start"
+              onSelectEmoji={handleSelectEmoji}
+              onSelectGif={handleSelectGif}
+              onSelectSticker={handleSelectSticker}
+              onAddStickerPack={null}
             >
-              😀
-            </Button>
-          </FunPicker>
+              <Button
+                className="OrbitalComposer__icon-btn"
+                aria-label="Open emoji picker"
+                onPress={() => setPickerOpen(true)}
+              >
+                😀
+              </Button>
+            </FunPicker>
+          </div>
         </div>
 
         <button

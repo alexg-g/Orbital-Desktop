@@ -1,7 +1,7 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ReactNode } from 'react';
-import React, { memo, useCallback, useEffect } from 'react';
+import type { ReactNode, RefObject } from 'react';
+import React, { memo, useCallback, useEffect, useRef } from 'react';
 import type { Placement } from 'react-aria';
 import { DialogTrigger } from 'react-aria-components';
 import { createKeybindingsHandler } from 'tinykeys';
@@ -45,6 +45,7 @@ export const FunPicker = memo(function FunPicker(
   const { onOpenChange } = props;
   const fun = useFunContext();
   const { i18n, onOpenChange: onFunOpenChange, onChangeTab } = fun;
+  const triggerRef = useRef<Element>(null);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -81,8 +82,14 @@ export const FunPicker = memo(function FunPicker(
 
   return (
     <DialogTrigger isOpen={props.open} onOpenChange={handleOpenChange}>
-      {props.children}
-      <FunPopover placement={props.placement} theme={props.theme}>
+      {React.cloneElement(props.children as React.ReactElement, {
+        ref: triggerRef,
+      })}
+      <FunPopover
+        placement={props.placement}
+        theme={props.theme}
+        triggerRef={triggerRef}
+      >
         <FunTabs value={fun.tab} onChange={fun.onChangeTab}>
           <FunTabList>
             <FunPickerTab id={FunPickerTabKey.Emoji}>

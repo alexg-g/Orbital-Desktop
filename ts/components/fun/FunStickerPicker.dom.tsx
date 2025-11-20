@@ -1,7 +1,7 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ReactNode } from 'react';
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import type { Placement } from 'react-aria';
 import { DialogTrigger } from 'react-aria-components';
 import { FunPopover } from './base/FunPopover.dom.js';
@@ -29,6 +29,7 @@ export const FunStickerPicker = memo(function FunStickerPicker(
   const { onOpenChange } = props;
   const fun = useFunContext();
   const { onOpenChange: onFunOpenChange } = fun;
+  const triggerRef = useRef<Element>(null);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -44,8 +45,14 @@ export const FunStickerPicker = memo(function FunStickerPicker(
 
   return (
     <DialogTrigger isOpen={props.open} onOpenChange={handleOpenChange}>
-      {props.children}
-      <FunPopover placement={props.placement} theme={props.theme}>
+      {React.cloneElement(props.children as React.ReactElement, {
+        ref: triggerRef,
+      })}
+      <FunPopover
+        placement={props.placement}
+        theme={props.theme}
+        triggerRef={triggerRef}
+      >
         <FunErrorBoundary>
           <FunPanelStickers
             showTimeStickers={props.showTimeStickers}

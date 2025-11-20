@@ -1,7 +1,7 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { CSSProperties, ReactNode } from 'react';
-import React from 'react';
+import type { CSSProperties, ReactNode, RefObject, Ref } from 'react';
+import React, { forwardRef } from 'react';
 import { FocusScope } from 'react-aria';
 import classNames from 'classnames';
 import { Button, Dialog, Header, Popover } from 'react-aria-components';
@@ -119,11 +119,13 @@ export type FunGridHeaderButtonProps = Readonly<{
   children: ReactNode;
 }>;
 
-export function FunGridHeaderButton(
-  props: FunGridHeaderButtonProps
+export const FunGridHeaderButton = forwardRef(function FunGridHeaderButton(
+  props: FunGridHeaderButtonProps,
+  ref: Ref<Element>
 ): JSX.Element {
   return (
     <Button
+      ref={ref}
       type="button"
       aria-label={props.label}
       className="FunGrid__HeaderButton"
@@ -132,7 +134,7 @@ export function FunGridHeaderButton(
       {props.children}
     </Button>
   );
-}
+});
 
 /**
  * Grid Header Button
@@ -153,6 +155,7 @@ export function FunGridHeaderIcon(props: FunGridHeaderIconProps): JSX.Element {
  */
 
 export type FunGridHeaderPopoverProps = Readonly<{
+  triggerRef?: RefObject<Element | null>;
   children: ReactNode;
 }>;
 
@@ -165,6 +168,7 @@ export function FunGridHeaderPopover(
       className="FunGrid__HeaderPopover"
       placement="bottom end"
       offset={6}
+      triggerRef={props.triggerRef}
     >
       <Dialog className="FunGrid__HeaderPopoverDialog">{props.children}</Dialog>
     </Popover>

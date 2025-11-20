@@ -271,6 +271,16 @@ function deltaToMarkdown(delta: Delta): string {
 
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
+
+    // Handle emoji blots (inserted as objects)
+    if (typeof op.insert === 'object' && op.insert !== null) {
+      const insert = op.insert as { emoji?: { value: string } };
+      if (insert.emoji?.value) {
+        markdown += insert.emoji.value;
+      }
+      continue;
+    }
+
     if (typeof op.insert !== 'string') {
       continue;
     }

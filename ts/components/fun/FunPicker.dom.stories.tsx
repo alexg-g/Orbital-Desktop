@@ -19,7 +19,9 @@ const { i18n } = window.SignalContext;
 type TemplateProps = Omit<FunPickerProps, 'open' | 'onOpenChange' | 'children'>;
 
 function Template(props: TemplateProps) {
-  const [open, setOpen] = useState(true);
+  // Start closed - opening immediately on mount causes positioning issues
+  // because the trigger element hasn't been laid out yet
+  const [open, setOpen] = useState(false);
   const [skinTone, setSkinTone] = useState(EmojiSkinTone.None);
 
   const handleOpenChange = useCallback((openState: boolean) => {

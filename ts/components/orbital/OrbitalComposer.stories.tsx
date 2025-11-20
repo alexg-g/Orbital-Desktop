@@ -1,7 +1,7 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { Meta } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
 import { OrbitalComposer } from './OrbitalComposer';
@@ -16,6 +16,38 @@ import {
 import { EmojiSkinTone } from '../fun/data/emojis.std.js';
 
 const { i18n } = window.SignalContext;
+
+// Wrapper component that provides FunProvider context
+function WithFunProvider({ children }: { children: React.ReactNode }) {
+  const [skinTone, setSkinTone] = useState(EmojiSkinTone.None);
+
+  return (
+    <FunProvider
+      i18n={i18n}
+      // Recents
+      recentEmojis={MOCK_RECENT_EMOJIS}
+      recentStickers={recentStickers}
+      recentGifs={[]}
+      // Emojis
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
+      onOpenCustomizePreferredReactionsModal={() => null}
+      onSelectEmoji={() => null}
+      // Stickers
+      installedStickerPacks={packs}
+      showStickerPickerHint={false}
+      onClearStickerPickerHint={() => null}
+      onSelectSticker={() => null}
+      // Gifs
+      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
+      onSelectGif={() => null}
+    >
+      {children}
+    </FunProvider>
+  );
+}
 
 // Mock implementations for Node.js dependencies
 const mockGetQuotaInfo = async (_groupId: string): Promise<QuotaInfo> => {
@@ -79,19 +111,21 @@ export default {
  */
 export function ThreadMode(): JSX.Element {
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <OrbitalComposer
-        mode="thread"
-        groupId="mock-group-id"
-        onSubmit={action('onSubmit')}
-        i18n={i18n}
-        getQuotaInfo={mockGetQuotaInfo}
-        checkUploadAllowed={mockCheckUploadAllowed}
-        formatBytes={mockFormatBytes}
-        uploadMedia={mockUploadMedia}
-        getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-      />
-    </div>
+    <WithFunProvider>
+      <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+        <OrbitalComposer
+          mode="thread"
+          groupId="mock-group-id"
+          onSubmit={action('onSubmit')}
+          i18n={i18n}
+          getQuotaInfo={mockGetQuotaInfo}
+          checkUploadAllowed={mockCheckUploadAllowed}
+          formatBytes={mockFormatBytes}
+          uploadMedia={mockUploadMedia}
+          getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+        />
+      </div>
+    </WithFunProvider>
   );
 }
 
@@ -100,23 +134,25 @@ export function ThreadMode(): JSX.Element {
  */
 export function ReplyMode(): JSX.Element {
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <OrbitalComposer
-        mode="reply"
-        groupId="mock-group-id"
-        threadId="mock-thread-id"
-        replyContext={{
-          author: 'Mom',
-          body: 'Emma took her first steps today! So proud! 🎉',
-        }}
-        onSubmit={action('onSubmit')}
-        i18n={i18n}
-        getQuotaInfo={mockGetQuotaInfo}
-        checkUploadAllowed={mockCheckUploadAllowed}
-        formatBytes={mockFormatBytes}
-        uploadMedia={mockUploadMedia}
-        getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-      />
-    </div>
+    <WithFunProvider>
+      <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+        <OrbitalComposer
+          mode="reply"
+          groupId="mock-group-id"
+          threadId="mock-thread-id"
+          replyContext={{
+            author: 'Mom',
+            body: 'Emma took her first steps today! So proud! 🎉',
+          }}
+          onSubmit={action('onSubmit')}
+          i18n={i18n}
+          getQuotaInfo={mockGetQuotaInfo}
+          checkUploadAllowed={mockCheckUploadAllowed}
+          formatBytes={mockFormatBytes}
+          uploadMedia={mockUploadMedia}
+          getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+        />
+      </div>
+    </WithFunProvider>
   );
 }

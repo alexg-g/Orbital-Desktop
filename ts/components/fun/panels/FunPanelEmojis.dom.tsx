@@ -794,6 +794,7 @@ function SectionSkinToneHeaderPopover(
   props: SectionSkinToneHeaderPopoverProps
 ): JSX.Element {
   const { i18n, onOpenChange, onSelectSkinTone } = props;
+  const triggerRef = useRef<Element>(null);
 
   const handleSelectSkinTone = useCallback(
     (emojiSkinTone: EmojiSkinTone) => {
@@ -806,12 +807,13 @@ function SectionSkinToneHeaderPopover(
   return (
     <DialogTrigger isOpen={props.open} onOpenChange={props.onOpenChange}>
       <FunGridHeaderButton
+        ref={triggerRef}
         label={i18n('icu:FunPanelEmojis__ChangeSkinToneButtonLabel')}
         onPress={() => props.onOpenChange(true)}
       >
         <FunGridHeaderIcon iconClassName="FunGrid__HeaderIcon--More" />
       </FunGridHeaderButton>
-      <FunGridHeaderPopover>
+      <FunGridHeaderPopover triggerRef={triggerRef}>
         <FunGridHeaderPopoverHeader>
           {i18n('icu:FunPanelEmojis__SkinTonePicker__ChooseDefaultLabel')}
         </FunGridHeaderPopoverHeader>
