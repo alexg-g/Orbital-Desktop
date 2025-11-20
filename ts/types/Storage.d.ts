@@ -263,6 +263,13 @@ export type StorageAccessType = {
   orbitalUserId: string | undefined;
   orbitalUsername: string | undefined;
 
+  // Orbital-specific media settings
+  /**
+   * Auto-download media when on WiFi
+   * Default: true
+   */
+  orbitalAutoDownloadOnWifi: boolean;
+
   // Deprecated
   'challenge:retry-message-ids': never;
   nextSignedKeyRotationTime: number;

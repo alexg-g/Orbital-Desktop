@@ -506,6 +506,7 @@ export const DataReader: ServerReadableInterface = {
   getOrbitalMedia,
   getThreadMedia,
   getStorageStats,
+  getPendingDownloads,
 
   __dangerouslyRunAbitraryReadOnlySqlQuery};
 
@@ -728,7 +729,8 @@ export const DataWriter: ServerWritableInterface = {
 
   // Orbital Media
   saveOrbitalMedia,
-  updateMediaDownloadStatus};
+  updateMediaDownloadStatus,
+  deleteOrbitalMedia};
 
 const MESSAGE_COLUMNS_FRAGMENTS = MESSAGE_COLUMNS.map(
   column => new QueryFragment(column, [])
@@ -9023,4 +9025,55 @@ function updateMediaDownloadStatus(
     mediaId,
     localPath,
   });
+}
+
+function getPendingDownloads(
+  db: ReadableDB
+): Array<OrbitalMediaAttachment> {
+  const now = Date.now();
+  const rows = db
+    .prepare<{ now: number }>(
+      `
+      SELECT
+        id,
+        media_id,
+        thread_id,
+        attachment_keys,
+        plaintext_hash,
+        digest,
+        incremental_mac,
+        chunk_size,
+        size,
+        content_type,
+        file_name,
+        blur_hash,
+        width,
+        height,
+        duration,
+        expires_at,
+        local_path,
+        downloaded,
+        created_at,
+        caption,
+        uploaded_by
+      FROM orbital_media
+      WHERE downloaded = 0 AND expires_at > $now
+      ORDER BY created_at ASC
+    `
+    )
+    .all({ now });
+
+  return rows.map(row => orbitalMediaRowToAttachment(row as OrbitalMediaRow));
+}
+
+function deleteOrbitalMedia(
+  db: WritableDB,
+  mediaId: string
+): void {
+  db.prepare(
+    `
+    DELETE FROM orbital_media
+    WHERE media_id = $mediaId
+  `
+  ).run({ mediaId });
 }

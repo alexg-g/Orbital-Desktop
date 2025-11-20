@@ -963,6 +963,7 @@ type ReadableInterface = {
   getOrbitalMedia: (mediaId: string) => OrbitalMediaAttachment | null;
   getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
   getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
+  getPendingDownloads: () => Array<OrbitalMediaAttachment>;
 };
 
 type WritableInterface = {

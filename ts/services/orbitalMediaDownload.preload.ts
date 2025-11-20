@@ -25,22 +25,15 @@
  * - Attachment keys retrieved from SQLCipher (encrypted at rest)
  */
 
-// TODO: Add streaming support for large files
-// import { createWriteStream } from 'node:fs';
-// import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { URL } from 'node:url';
 import { fromBase64 } from '../Bytes.std.js';
 
-// TODO: Use OrbitalMediaAttachment type for better type safety
-// import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
 import {
   decryptAttachmentV2,
   safeUnlink,
-  // TODO: Add file size validation
-  // measureSize,
 } from '../AttachmentCrypto.node.js';
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
@@ -147,8 +140,6 @@ export async function downloadMediaFromOrbital(
   }
 
   // Step 3: Download encrypted blob with retry
-  // TODO: Save temp encrypted file for resume capability
-  // let tempEncryptedPath: string | undefined;
   let decryptedPath: string | undefined;
 
   try {
@@ -443,4 +434,148 @@ export async function getMediaDownloadStatus(mediaId: string): Promise<{
  */
 export function createDownloadController(): AbortController {
   return new AbortController();
+}
+
+/**
+ * Download all pending media
+ *
+ * Downloads all media that hasn't been downloaded yet but is still available
+ * on the server (not expired). Useful for initial sync or background sync.
+ *
+ * @param options Configuration options
+ * @returns Summary of download results
+ */
+export async function downloadAllPendingMedia(options: {
+  /**
+   * Maximum number of concurrent downloads
+   */
+  concurrency?: number;
+
+  /**
+   * Progress callback for overall progress (0-100)
+   */
+  onProgress?: (progress: number, current: number, total: number) => void;
+
+  /**
+   * Abort signal to cancel all pending downloads
+   */
+  signal?: AbortSignal;
+
+  /**
+   * Function to get absolute attachment path from relative path
+   */
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+}): Promise<{
+  successful: number;
+  failed: number;
+  skipped: number;
+  errors: Array<{ mediaId: string; error: string }>;
+}> {
+  const logId = 'downloadAllPendingMedia';
+  const { concurrency = 3, onProgress, signal, getAbsoluteAttachmentPath } = options;
+
+  // Get all pending downloads
+  const pendingMedia = await DataReader.getPendingDownloads();
+
+  if (pendingMedia.length === 0) {
+    log.info(`${logId}: No pending downloads`);
+    return { successful: 0, failed: 0, skipped: 0, errors: [] };
+  }
+
+  log.info(`${logId}: Starting download of ${pendingMedia.length} media items`);
+
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  const errors: Array<{ mediaId: string; error: string }> = [];
+
+  // Process downloads with limited concurrency
+  const queue = [...pendingMedia];
+  const inProgress: Array<Promise<void>> = [];
+
+  async function processOne(): Promise<void> {
+    while (queue.length > 0) {
+      // Check abort signal
+      if (signal?.aborted) {
+        log.info(`${logId}: Download aborted by user`);
+        return;
+      }
+
+      const media = queue.shift();
+      if (!media) {
+        break;
+      }
+
+      const mediaId = media.mediaId;
+
+      // Skip expired media
+      if (media.expiresAt < Date.now()) {
+        log.warn(`${logId}: Skipping expired media ${mediaId}`);
+        skipped += 1;
+        updateProgress();
+        continue;
+      }
+
+      try {
+        await downloadMediaFromOrbital({
+          mediaId,
+          getAbsoluteAttachmentPath,
+          signal,
+        });
+
+        successful += 1;
+        log.info(`${logId}: Downloaded ${mediaId} (${successful}/${pendingMedia.length})`);
+      } catch (error) {
+        failed += 1;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push({ mediaId, error: errorMessage });
+        log.error(`${logId}: Failed to download ${mediaId}`, Errors.toLogFormat(error));
+      }
+
+      updateProgress();
+    }
+  }
+
+  function updateProgress(): void {
+    const completed = successful + failed + skipped;
+    const progress = Math.round((completed / pendingMedia.length) * 100);
+    onProgress?.(progress, completed, pendingMedia.length);
+  }
+
+  // Start concurrent downloads
+  for (let i = 0; i < concurrency; i++) {
+    inProgress.push(processOne());
+  }
+
+  // Wait for all downloads to complete
+  await Promise.all(inProgress);
+
+  log.info(
+    `${logId}: Complete. Successful: ${successful}, Failed: ${failed}, Skipped: ${skipped}`
+  );
+
+  return { successful, failed, skipped, errors };
+}
+
+/**
+ * Get count of pending downloads
+ *
+ * @returns Number of media items waiting to be downloaded
+ */
+export async function getPendingDownloadCount(): Promise<number> {
+  const pendingMedia = await DataReader.getPendingDownloads();
+  return pendingMedia.length;
+}
+
+/**
+ * Check if there are any expired media that need recovery
+ *
+ * @returns Array of media IDs that have expired but aren't downloaded
+ */
+export async function getExpiredUndownloadedMedia(): Promise<string[]> {
+  // getPendingDownloads returns media where expiresAt > now, so we need to
+  // query all non-downloaded media and filter for expired ones
+  // For now, return empty array - this needs a separate DAL method
+  // TODO: Add getExpiredUndownloadedMedia to DAL
+  return [];
 }
