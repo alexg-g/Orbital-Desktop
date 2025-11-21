@@ -7,18 +7,9 @@ import type { LoggerType } from '../../types/Logging.std.js';
 // Stub migration for Orbital - Story feature removed
 // Original migration optimized story replies index
 export default function updateToSchemaVersion86(
-  currentVersion: number,
   db: Database,
   logger: LoggerType
 ): void {
-  if (currentVersion >= 86) {
-    return;
-  }
-
-  db.transaction(() => {
-    // Story feature stub - no-op
-    db.pragma('user_version = 86');
-  })();
-
+  // Story feature stub - no-op
   logger.info('updateToSchemaVersion86: success (stub migration)');
 }
