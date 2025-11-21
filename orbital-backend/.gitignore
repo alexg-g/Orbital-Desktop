@@ -7,6 +7,7 @@ yarn.lock
 .env
 .env.local
 .env.production
+.env.test
 
 # Logs
 logs/
@@ -23,6 +24,7 @@ pids/
 
 # Media uploads
 uploads/
+uploads-test/
 media/
 
 # Testing

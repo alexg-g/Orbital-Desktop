@@ -8,7 +8,12 @@ const logger = require('../utils/logger');
  * Required for all protected API endpoints.
  */
 
-const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-change-in-production';
+// SECURITY: JWT_SECRET must be set in environment - no fallback allowed
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required. Server cannot start without it.');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || '30d';
 
 /**

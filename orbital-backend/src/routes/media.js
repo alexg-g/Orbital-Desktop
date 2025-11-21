@@ -552,13 +552,27 @@ router.get('/:mediaId/download', authenticate, asyncHandler(async (req, res) => 
     throw forbiddenError('Not a member of this group');
   }
 
+  // SECURITY: Validate storage path to prevent path traversal attacks
+  const baseUploadDir = path.resolve(process.env.MEDIA_STORAGE_PATH || './uploads');
+  const resolvedPath = path.resolve(media.storage_url);
+
+  if (!resolvedPath.startsWith(baseUploadDir)) {
+    logger.error('Path traversal attempt detected', {
+      mediaId,
+      storagePath: media.storage_url,
+      resolvedPath,
+      baseUploadDir
+    });
+    throw forbiddenError('Invalid file path');
+  }
+
   // Check if file exists
   try {
-    await fs.access(media.storage_url);
+    await fs.access(resolvedPath);
   } catch (error) {
     logger.error('Media file not found on disk', {
       mediaId,
-      storagePath: media.storage_url
+      storagePath: resolvedPath
     });
     throw notFoundError('Media file not found');
   }
@@ -583,8 +597,8 @@ router.get('/:mediaId/download', authenticate, asyncHandler(async (req, res) => 
   res.setHeader('X-Encryption-IV', media.encryption_iv);
   res.setHeader('X-Expires-At', media.expires_at);
 
-  // Stream file to response
-  const fileStream = require('fs').createReadStream(media.storage_url);
+  // Stream file to response (using validated resolvedPath)
+  const fileStream = require('fs').createReadStream(resolvedPath);
   fileStream.pipe(res);
 }));
 

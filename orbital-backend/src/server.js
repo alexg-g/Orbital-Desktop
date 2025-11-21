@@ -1,24 +1,19 @@
 // Load environment variables (.env.local takes priority for local dev)
+// Skip if NODE_ENV=test - test environment is configured by jest.setup.js
 const fs = require('fs');
 const path = require('path');
-const envLocalPath = path.join(__dirname, '../.env.local');
-const envPath = path.join(__dirname, '../.env');
 
-// Debug: Log DATABASE_URL before loading env files
-console.log('[ENV DEBUG] DATABASE_URL before dotenv:', process.env.DATABASE_URL);
-console.log('[ENV DEBUG] Checking for .env.local at:', envLocalPath);
-console.log('[ENV DEBUG] .env.local exists:', fs.existsSync(envLocalPath));
+if (process.env.NODE_ENV !== 'test') {
+  const envLocalPath = path.join(__dirname, '../.env.local');
+  const envPath = path.join(__dirname, '../.env');
 
-if (fs.existsSync(envLocalPath)) {
-  console.log('[ENV DEBUG] Loading .env.local with override: true');
-  // Explicitly unset DATABASE_URL to prevent shell environment conflicts
-  delete process.env.DATABASE_URL;
-  require('dotenv').config({ path: envLocalPath, override: true });
-  console.log('[ENV DEBUG] DATABASE_URL after loading .env.local:', process.env.DATABASE_URL);
-} else {
-  console.log('[ENV DEBUG] Loading .env (fallback)');
-  require('dotenv').config({ path: envPath });
-  console.log('[ENV DEBUG] DATABASE_URL after loading .env:', process.env.DATABASE_URL);
+  if (fs.existsSync(envLocalPath)) {
+    // Explicitly unset DATABASE_URL to prevent shell environment conflicts
+    delete process.env.DATABASE_URL;
+    require('dotenv').config({ path: envLocalPath, override: true });
+  } else {
+    require('dotenv').config({ path: envPath });
+  }
 }
 const express = require('express');
 const helmet = require('helmet');
@@ -77,29 +72,31 @@ app.use(helmet({
 // CORS configuration
 app.use(corsMiddleware);
 
-// Rate limiting
+// Rate limiting (disabled in test environment)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'test' ? 0 : 100, // Disable in test, 100 requests per windowMs in production
   message: {
     error: 'TOO_MANY_REQUESTS',
     message: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test' // Skip rate limiting in test environment
 });
 
 // Apply rate limiting to API routes
 app.use('/api/', limiter);
 
-// Stricter rate limiting for auth endpoints
+// Stricter rate limiting for auth endpoints (disabled in test environment)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: process.env.NODE_ENV === 'test' ? 0 : 10,
   message: {
     error: 'TOO_MANY_REQUESTS',
     message: 'Too many authentication attempts, please try again later.'
-  }
+  },
+  skip: () => process.env.NODE_ENV === 'test' // Skip rate limiting in test environment
 });
 
 // Body parsing middleware
