@@ -42,10 +42,12 @@ const onMessage = (
     if (request.type === 'init') {
       isPrimary = request.isPrimary;
       isRemoved = false;
+      logger.info(`Worker init starting (isPrimary: ${isPrimary})`);
       db = initialize({
         ...request.options,
         isPrimary,
       });
+      logger.info(`Worker init completed (isPrimary: ${isPrimary})`);
 
       respond(seq, undefined);
       return;

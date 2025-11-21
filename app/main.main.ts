@@ -2302,7 +2302,10 @@ app.on('ready', async () => {
 
   const { error: sqlError } = await sqlInitPromise;
   if (sqlError) {
-    log.error('sql.initialize was unsuccessful; returning early');
+    log.error(
+      'sql.initialize was unsuccessful; returning early',
+      Errors.toLogFormat(sqlError)
+    );
 
     await onDatabaseInitializationError(sqlError);
 

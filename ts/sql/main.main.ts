@@ -170,21 +170,27 @@ export class MainSQL {
       const primary = this.#pool[0];
       const rest = this.#pool.slice(1);
 
+      logger.info('MainSQL: initializing primary worker');
       await this.#send(primary, {
         type: 'init',
         options: { appVersion, configDir, key },
         isPrimary: true,
       });
+      logger.info('MainSQL: primary worker initialized successfully');
 
+      logger.info(`MainSQL: initializing ${rest.length} secondary workers`);
       await Promise.all(
-        rest.map(worker =>
+        rest.map((worker, index) =>
           this.#send(worker, {
             type: 'init',
             options: { appVersion, configDir, key },
             isPrimary: false,
+          }).then(() => {
+            logger.info(`MainSQL: secondary worker ${index + 1} initialized`);
           })
         )
       );
+      logger.info('MainSQL: all workers initialized successfully');
     })();
 
     await this.#onReady;

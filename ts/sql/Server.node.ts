@@ -853,6 +853,10 @@ function openAndSetUpSQLCipher(filePath: string, { key }: { key: string }) {
   const db = openAndMigrateDatabase(filePath, key);
 
   try {
+    // Set busy timeout to handle concurrent access from multiple workers
+    // 10 seconds should be sufficient for most operations
+    db.pragma('busy_timeout = 10000');
+
     // Because foreign key support is not enabled by default!
     db.pragma('foreign_keys = ON');
   } catch (error) {
