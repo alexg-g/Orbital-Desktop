@@ -212,7 +212,7 @@
     "description": "Application menu command to show all application windows"
   },
   "icu:appMenuQuit": {
-    "messageformat": "Quit Signal",
+    "messageformat": "Quit Orbital",
     "description": "Application menu command to close the application"
   },
   "icu:editMenuUndo": {

@@ -1,16 +1,16 @@
 {
   "$schema": "./package.schema.json",
   "packageManager": "pnpm@10.18.1",
-  "name": "signal-desktop",
-  "productName": "Signal",
-  "description": "Private messaging from your desktop",
-  "desktopName": "signal.desktop",
-  "repository": "https://github.com/signalapp/Signal-Desktop.git",
+  "name": "orbital-desktop",
+  "productName": "Orbital",
+  "description": "Private family social network with end-to-end encryption",
+  "desktopName": "orbital.desktop",
+  "repository": "https://github.com/alexg-g/Orbital-Desktop.git",
   "version": "7.80.0-alpha.1",
   "license": "AGPL-3.0-only",
   "author": {
-    "name": "Signal Messenger, LLC",
-    "email": "support@signal.org"
+    "name": "Orbital",
+    "email": "support@orbitl.org"
   },
   "browserslist": "last 1 chrome versions",
   "main": "app/main.main.js",
@@ -442,7 +442,7 @@
     "node": "22.20.0"
   },
   "build": {
-    "appId": "org.whispersystems.signal-desktop",
+    "appId": "org.orbitl.orbital-desktop",
     "nativeRebuilder": "parallel",
     "mac": {
       "artifactName": "${name}-mac-${arch}-${version}.${ext}",
@@ -535,7 +535,7 @@
       }
     },
     "linux": {
-      "executableName": "signal-desktop",
+      "executableName": "orbital-desktop",
       "category": "Network;InstantMessaging;Chat",
       "desktop": {
         "entry": {

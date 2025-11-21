@@ -627,7 +627,7 @@ let windowIcon: string;
 if (OS.isWindows()) {
   windowIcon = join(__dirname, '../build/icons/win/icon.ico');
 } else if (OS.isLinux()) {
-  windowIcon = join(__dirname, '../images/signal-logo-desktop-linux.png');
+  windowIcon = join(__dirname, '../images/orbital/orbital-logo-light.png');
 } else {
   windowIcon = join(__dirname, '../build/icons/png/512x512.png');
 }

@@ -43,13 +43,13 @@
 
   @include mixins.light-theme {
     @include mixins.color-svg(
-      '../images/signal-logo.svg',
+      '../images/orbital/orbital-logo-light-lg.svg',
       variables.$color-ultramarine-logo
     );
   }
   @include mixins.dark-theme {
     @include mixins.color-svg(
-      '../images/signal-logo.svg',
+      '../images/orbital/orbital-logo-darkmode-lg.svg',
       variables.$color-white
     );
   }
