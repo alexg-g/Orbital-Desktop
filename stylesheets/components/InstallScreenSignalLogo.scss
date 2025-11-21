@@ -14,16 +14,20 @@
   inset-inline-start: 32px;
 
   &::before {
-    @include mixins.color-svg-themed(
-      '../images/signal-logo-and-wordmark.svg',
-      variables.$color-ultramarine-logo,
-      variables.$color-white
-    );
-    & {
-      content: '';
-      display: block;
-      height: 32px;
-      width: 112px;
+    content: '';
+    display: block;
+    height: 48px;
+    width: 168px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    @include mixins.light-theme {
+      background-image: url('../images/orbital/orbital-logo-light-lg.svg');
+    }
+
+    @include mixins.dark-theme {
+      background-image: url('../images/orbital/orbital-logo-darkmode-lg.svg');
     }
   }
 }

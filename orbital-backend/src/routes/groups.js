@@ -4,6 +4,7 @@ const { asyncHandler, validationError, forbiddenError, notFoundError, conflictEr
 const db = require('../config/database');
 const logger = require('../utils/logger');
 const quotaService = require('../services/quotaService');
+const groupService = require('../services/groupService');
 
 const router = express.Router();
 
@@ -11,23 +12,25 @@ const router = express.Router();
  * Group Management API Endpoints
  *
  * Handles group creation, joining via invite codes, and member management.
+ * Features:
+ * - Single-use invite codes with 7-day expiration
+ * - Max 10 members per group
+ * - Regeneratable invite codes (creator only)
  */
-
-/**
- * Generate random 8-character alphanumeric invite code
- */
-function generateInviteCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
 
 /**
  * POST /api/groups
  * Create new group with invite code
+ *
+ * Request body:
+ * - encrypted_name: string (client-side encrypted)
+ * - encrypted_group_key: string (encrypted key for creator)
+ *
+ * Response:
+ * - group_id: string (UUID)
+ * - invite_code: string (8-char alphanumeric)
+ * - expires_at: string (ISO timestamp)
+ * - created_at: string (ISO timestamp)
  */
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   const { encrypted_name, encrypted_group_key } = req.body;
@@ -36,72 +39,80 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     throw validationError('Missing required fields: encrypted_name, encrypted_group_key');
   }
 
-  const client = await db.getClient();
+  const result = await groupService.createGroup(
+    req.user.userId,
+    encrypted_name,
+    encrypted_group_key
+  );
+
+  res.status(201).json(result);
+}));
+
+/**
+ * POST /api/groups/:groupId/invite-codes
+ * Generate new invite code for existing group
+ * Only group creator can generate new codes
+ *
+ * Response:
+ * - invite_code: string (8-char alphanumeric)
+ * - expires_at: string (ISO timestamp)
+ * - created_at: string (ISO timestamp)
+ */
+router.post('/:groupId/invite-codes', authenticate, asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
 
   try {
-    await client.query('BEGIN');
-
-    // Generate unique invite code
-    let inviteCode;
-    let attempts = 0;
-    while (attempts < 10) {
-      inviteCode = generateInviteCode();
-      const existing = await client.query(
-        'SELECT 1 FROM groups WHERE invite_code = $1',
-        [inviteCode]
-      );
-      if (existing.rowCount === 0) break;
-      attempts++;
-    }
-
-    if (attempts === 10) {
-      throw new Error('Failed to generate unique invite code');
-    }
-
-    // Create group
-    const groupResult = await client.query(
-      `INSERT INTO groups (encrypted_name, created_by, invite_code)
-       VALUES ($1, $2, $3)
-       RETURNING id, created_at`,
-      [encrypted_name, req.user.userId, inviteCode]
-    );
-
-    const group = groupResult.rows[0];
-
-    // Add creator as first member
-    await client.query(
-      `INSERT INTO members (group_id, user_id, encrypted_group_key)
-       VALUES ($1, $2, $3)`,
-      [group.id, req.user.userId, encrypted_group_key]
-    );
-
-    // Initialize group quota using quotaService
-    await quotaService.initializeQuota(group.id, client);
-
-    await client.query('COMMIT');
-
-    logger.info('Group created', {
-      groupId: group.id,
-      creatorId: req.user.userId,
-      inviteCode
-    });
-
-    res.status(201).json({
-      group_id: group.id,
-      invite_code: inviteCode,
-      created_at: group.created_at
-    });
+    const result = await groupService.regenerateInviteCode(groupId, req.user.userId);
+    res.status(201).json(result);
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (error.message === 'GROUP_NOT_FOUND') {
+      throw notFoundError('Group not found');
+    }
+    if (error.message === 'FORBIDDEN_NOT_CREATOR') {
+      throw forbiddenError('Only group creator can generate new invite codes');
+    }
     throw error;
-  } finally {
-    client.release();
+  }
+}));
+
+/**
+ * GET /api/groups/:groupId/invite-codes
+ * Get active (unused, unexpired) invite codes for a group
+ * Only group creator can view codes
+ *
+ * Response:
+ * - invite_codes: Array of { id, code, created_at, expires_at }
+ */
+router.get('/:groupId/invite-codes', authenticate, asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
+
+  try {
+    const codes = await groupService.getActiveInviteCodes(groupId, req.user.userId);
+    res.status(200).json({ invite_codes: codes });
+  } catch (error) {
+    if (error.message === 'GROUP_NOT_FOUND') {
+      throw notFoundError('Group not found');
+    }
+    if (error.message === 'FORBIDDEN_NOT_CREATOR') {
+      throw forbiddenError('Only group creator can view invite codes');
+    }
+    throw error;
   }
 }));
 
 /**
  * POST /api/groups/join
  * Join existing group via invite code
+ *
+ * Request body:
+ * - invite_code: string (8-char alphanumeric)
+ * - encrypted_group_key: string (encrypted key for this user)
+ *
+ * Response:
+ * - group_id: string (UUID)
+ * - encrypted_name: string (client-side encrypted)
+ * - member_count: number
+ * - joined_at: string (ISO timestamp)
  */
 router.post('/join', authenticate, asyncHandler(async (req, res) => {
   const { invite_code, encrypted_group_key } = req.body;
@@ -110,125 +121,72 @@ router.post('/join', authenticate, asyncHandler(async (req, res) => {
     throw validationError('Missing required fields: invite_code, encrypted_group_key');
   }
 
-  // Find group by invite code
-  const groupResult = await db.query(
-    'SELECT id, encrypted_name FROM groups WHERE invite_code = $1',
-    [invite_code]
-  );
-
-  if (groupResult.rowCount === 0) {
-    throw notFoundError('Invalid invite code');
+  try {
+    const result = await groupService.joinGroup(
+      req.user.userId,
+      invite_code,
+      encrypted_group_key
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    switch (error.message) {
+      case 'INVALID_INVITE_CODE':
+        throw notFoundError('Invalid invite code');
+      case 'INVITE_CODE_ALREADY_USED':
+        throw validationError('This invite code has already been used');
+      case 'INVITE_CODE_EXPIRED':
+        throw validationError('This invite code has expired');
+      case 'ALREADY_MEMBER':
+        throw conflictError('Already a member of this group');
+      case 'GROUP_FULL':
+        throw validationError(`Group has reached maximum capacity of ${groupService.MAX_MEMBERS} members`);
+      default:
+        throw error;
+    }
   }
-
-  const group = groupResult.rows[0];
-
-  // Check if already member
-  const memberCheck = await db.query(
-    'SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2',
-    [group.id, req.user.userId]
-  );
-
-  if (memberCheck.rowCount > 0) {
-    throw conflictError('Already a member of this group');
-  }
-
-  // Add user as member
-  await db.query(
-    `INSERT INTO members (group_id, user_id, encrypted_group_key)
-     VALUES ($1, $2, $3)`,
-    [group.id, req.user.userId, encrypted_group_key]
-  );
-
-  // Get member count
-  const countResult = await db.query(
-    'SELECT COUNT(*) as count FROM members WHERE group_id = $1',
-    [group.id]
-  );
-
-  logger.info('User joined group', {
-    groupId: group.id,
-    userId: req.user.userId,
-    inviteCode: invite_code
-  });
-
-  res.status(200).json({
-    group_id: group.id,
-    encrypted_name: group.encrypted_name,
-    member_count: parseInt(countResult.rows[0].count, 10),
-    joined_at: new Date().toISOString()
-  });
 }));
 
 /**
  * GET /api/groups
  * List user's groups
+ *
+ * Response:
+ * - groups: Array of group objects with member counts
  */
 router.get('/', authenticate, asyncHandler(async (req, res) => {
-  const result = await db.query(
-    `SELECT g.id, g.encrypted_name, g.invite_code, m.joined_at,
-            m.encrypted_group_key,
-            COUNT(m2.user_id) as member_count
-     FROM groups g
-     INNER JOIN members m ON m.group_id = g.id
-     LEFT JOIN members m2 ON m2.group_id = g.id
-     WHERE m.user_id = $1
-     GROUP BY g.id, m.joined_at, m.encrypted_group_key
-     ORDER BY m.joined_at DESC`,
-    [req.user.userId]
-  );
-
-  const groups = result.rows.map(row => ({
-    group_id: row.id,
-    encrypted_name: row.encrypted_name,
-    encrypted_group_key: row.encrypted_group_key,
-    member_count: parseInt(row.member_count, 10),
-    invite_code: row.invite_code,
-    joined_at: row.joined_at
-  }));
-
+  const groups = await groupService.getUserGroups(req.user.userId);
   res.status(200).json({ groups });
 }));
 
 /**
  * GET /api/groups/:groupId/members
  * List group members
+ *
+ * Response:
+ * - members: Array of member objects
  */
 router.get('/:groupId/members', authenticate, asyncHandler(async (req, res) => {
   const { groupId } = req.params;
 
-  // Verify user is member
-  const memberCheck = await db.query(
-    'SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2',
-    [groupId, req.user.userId]
-  );
-
-  if (memberCheck.rowCount === 0) {
-    throw forbiddenError('Not a member of this group');
+  try {
+    const members = await groupService.getGroupMembers(groupId, req.user.userId);
+    res.status(200).json({ members });
+  } catch (error) {
+    if (error.message === 'FORBIDDEN_NOT_MEMBER') {
+      throw forbiddenError('Not a member of this group');
+    }
+    throw error;
   }
-
-  // Fetch members
-  const result = await db.query(
-    `SELECT u.id, u.username, u.public_key, m.joined_at
-     FROM members m
-     INNER JOIN users u ON u.id = m.user_id
-     WHERE m.group_id = $1
-     ORDER BY m.joined_at ASC`,
-    [groupId]
-  );
-
-  const members = result.rows.map(row => ({
-    user_id: row.id,
-    username: row.username,
-    public_key: row.public_key,
-    joined_at: row.joined_at
-  }));
-
-  res.status(200).json({ members });
 }));
 
 /**
  * GET /api/groups/:groupId/quota
  * Get group storage quota status
+ *
+ * Response:
+ * - group_id: string
+ * - storage: { used, limit, percentage, warning }
+ * - files: { count, limit, percentage, warning }
  */
 router.get('/:groupId/quota', authenticate, asyncHandler(async (req, res) => {
   const { groupId } = req.params;

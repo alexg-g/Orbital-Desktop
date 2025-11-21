@@ -1,0 +1,894 @@
+// Copyright 2025 Orbital
+// SPDX-License-Identifier: AGPL-3.0-only
+
+@use '../mixins';
+@use '../orbital-variables' as *;
+
+// =============================================================================
+// GROUP SELECTOR
+// =============================================================================
+
+.GroupSelector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: $orbital-font-body;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $orbital-space-md;
+    border-bottom: 1px solid $orbital-border-subtle;
+
+    @include mixins.dark-theme {
+      border-bottom-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__title {
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    margin: 0;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: $orbital-space-sm;
+  }
+
+  &__action-btn {
+    padding: $orbital-space-xs $orbital-space-sm;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    border: $orbital-btn-border-width solid;
+    border-radius: $orbital-btn-border-radius;
+    cursor: pointer;
+    transition: $orbital-btn-transition;
+
+    &--create {
+      background-color: $orbital-blue;
+      border-color: $orbital-blue-dark;
+      color: white;
+
+      &:hover {
+        background-color: $orbital-blue-hover;
+      }
+
+      @include mixins.dark-theme {
+        background-color: $orbital-dark-blue;
+        border-color: $orbital-dark-blue;
+      }
+    }
+
+    &--join {
+      background-color: $orbital-surface;
+      border-color: $orbital-border-strong;
+      color: $orbital-text-primary;
+
+      &:hover {
+        background-color: $orbital-border-subtle;
+      }
+
+      @include mixins.dark-theme {
+        background-color: $orbital-dark-surface;
+        border-color: $orbital-dark-border-strong;
+        color: $orbital-dark-text-primary;
+
+        &:hover {
+          background-color: $orbital-dark-surface-elevated;
+        }
+      }
+    }
+  }
+
+  &__error {
+    margin: $orbital-space-md;
+    padding: $orbital-space-md;
+    background-color: rgba($orbital-error, 0.1);
+    border: 1px solid $orbital-error;
+    border-radius: $orbital-radius-base;
+    color: $orbital-error;
+    font-size: $orbital-font-size-sm;
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-xl;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid $orbital-border-subtle;
+    border-top-color: $orbital-blue;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-subtle;
+      border-top-color: $orbital-dark-blue;
+    }
+  }
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-xl;
+    text-align: center;
+  }
+
+  &__empty-icon {
+    font-size: 32px;
+    color: $orbital-text-tertiary;
+    margin-bottom: $orbital-space-md;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__empty-text {
+    margin: 0 0 $orbital-space-sm;
+    color: $orbital-text-primary;
+    font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__empty-hint {
+    margin: 0;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__list {
+    flex: 1;
+    overflow-y: auto;
+    padding: $orbital-space-sm;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: $orbital-space-md;
+    margin-bottom: $orbital-space-xs;
+    background-color: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+    text-align: left;
+
+    &:hover {
+      background-color: $orbital-border-subtle;
+    }
+
+    &--selected {
+      background-color: $orbital-blue-tint-light;
+      border-color: $orbital-blue;
+      border-left-width: 3px;
+
+      @include mixins.dark-theme {
+        background-color: rgba($orbital-dark-blue, 0.15);
+        border-color: $orbital-dark-blue;
+      }
+    }
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+
+      &:hover {
+        background-color: $orbital-dark-surface-elevated;
+      }
+    }
+  }
+
+  &__item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__item-name {
+    font-size: $orbital-font-size-base;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__item-owner-badge {
+    color: $orbital-yellow;
+    margin-left: $orbital-space-xs;
+  }
+
+  &__item-meta {
+    margin-top: $orbital-space-xs;
+  }
+
+  &__item-members {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__item-selected-indicator {
+    color: $orbital-blue;
+    font-weight: bold;
+    margin-left: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-blue;
+    }
+  }
+}
+
+// =============================================================================
+// CREATE GROUP MODAL
+// =============================================================================
+
+.CreateGroupModal {
+  &__description {
+    margin-bottom: $orbital-space-lg;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-base;
+    line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__field {
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__label {
+    display: block;
+    margin-bottom: $orbital-space-sm;
+    font-size: $orbital-font-size-base;
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__input {
+    width: 100%;
+    padding: $orbital-input-padding-y $orbital-input-padding-x;
+    font-family: $orbital-font-body;
+    font-size: $orbital-input-font-size;
+    border: $orbital-input-border-width solid $orbital-border-strong;
+    border-radius: $orbital-input-border-radius;
+    background-color: $orbital-surface-elevated;
+    color: $orbital-text-primary;
+    transition: $orbital-input-transition;
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+    }
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+    }
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+
+      &:focus {
+        border-color: $orbital-dark-blue;
+      }
+
+      &::placeholder {
+        color: $orbital-dark-text-tertiary;
+      }
+    }
+  }
+
+  &__char-count {
+    margin-top: $orbital-space-xs;
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+    text-align: right;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__error {
+    margin-top: $orbital-space-md;
+    padding: $orbital-space-md;
+    background-color: rgba($orbital-error, 0.1);
+    border: 1px solid $orbital-error;
+    border-radius: $orbital-radius-base;
+    color: $orbital-error;
+    font-size: $orbital-font-size-sm;
+  }
+
+  &--loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-xl;
+    text-align: center;
+  }
+
+  // Orbital loader spinner
+  &__spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__spinner-ring {
+    position: relative;
+    height: 32px;
+    width: 32px;
+    transform: rotate(-45deg);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 1.5px solid $orbital-text-primary;
+      border-radius: 50%;
+      transform: scaleY(0.95);
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__spinner-dot {
+    position: absolute;
+    height: 40px;
+    width: 8px;
+    top: -3px;
+    left: 50%;
+    margin-left: -4px;
+    transform-origin: center 18px;
+  }
+
+  &__spinner-dot span {
+    display: block;
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    border: 1.5px solid black;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+
+    @include mixins.dark-theme {
+      border-color: white;
+    }
+  }
+
+  &__spinner-dot--one {
+    animation: orbitOne 4s linear infinite;
+    span { background: $orbital-blue; }
+  }
+
+  &__spinner-dot--two {
+    animation: orbitTwo 2s linear infinite;
+    span { background: $orbital-purple; }
+  }
+
+  &__spinner-dot--three {
+    animation: orbitThree 7s linear infinite;
+    span { background: $orbital-yellow; }
+  }
+
+  &--success {
+    text-align: center;
+  }
+
+  &__success-icon {
+    font-size: 48px;
+    color: $orbital-success;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__success-message {
+    margin-bottom: $orbital-space-lg;
+    font-size: $orbital-font-size-md;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__invite-section {
+    background-color: $orbital-surface;
+    padding: $orbital-space-lg;
+    border-radius: $orbital-radius-md;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface;
+    }
+  }
+
+  &__invite-label {
+    margin: 0 0 $orbital-space-md;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__invite-code-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $orbital-space-md;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__invite-code {
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-2xl;
+    font-weight: bold;
+    color: $orbital-blue;
+    letter-spacing: $orbital-letter-spacing-wider;
+    padding: $orbital-space-sm $orbital-space-md;
+    background-color: $orbital-surface-elevated;
+    border: 2px solid $orbital-blue;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-blue;
+      background-color: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-blue;
+    }
+  }
+
+  &__copy-btn {
+    padding: $orbital-space-sm $orbital-space-md;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    background-color: $orbital-purple;
+    border: 1px solid $orbital-purple-dark;
+    border-radius: $orbital-btn-border-radius;
+    color: white;
+    cursor: pointer;
+    transition: $orbital-btn-transition;
+
+    &:hover {
+      background-color: $orbital-purple-hover;
+    }
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-purple;
+      border-color: $orbital-dark-purple;
+    }
+  }
+
+  &__invite-expiry {
+    margin: 0 0 $orbital-space-sm;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__invite-note {
+    margin: 0;
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+}
+
+// =============================================================================
+// JOIN GROUP MODAL
+// =============================================================================
+
+.JoinGroupModal {
+  &__description {
+    margin-bottom: $orbital-space-lg;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-base;
+    line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__field {
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__label {
+    display: block;
+    margin-bottom: $orbital-space-sm;
+    font-size: $orbital-font-size-base;
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__input {
+    width: 100%;
+    padding: $orbital-input-padding-y $orbital-input-padding-x;
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-xl;
+    font-weight: bold;
+    letter-spacing: $orbital-letter-spacing-wider;
+    text-align: center;
+    text-transform: uppercase;
+    border: $orbital-input-border-width solid $orbital-border-strong;
+    border-radius: $orbital-input-border-radius;
+    background-color: $orbital-surface-elevated;
+    color: $orbital-text-primary;
+    transition: $orbital-input-transition;
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+    }
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+      font-weight: normal;
+    }
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+
+      &:focus {
+        border-color: $orbital-dark-blue;
+      }
+
+      &::placeholder {
+        color: $orbital-dark-text-tertiary;
+      }
+    }
+  }
+
+  &__help {
+    margin-top: $orbital-space-xs;
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__error {
+    margin-top: $orbital-space-md;
+    padding: $orbital-space-md;
+    background-color: rgba($orbital-error, 0.1);
+    border: 1px solid $orbital-error;
+    border-radius: $orbital-radius-base;
+    color: $orbital-error;
+    font-size: $orbital-font-size-sm;
+  }
+
+  &--loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-xl;
+    text-align: center;
+  }
+
+  // Orbital loader spinner
+  &__spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__spinner-ring {
+    position: relative;
+    height: 32px;
+    width: 32px;
+    transform: rotate(-45deg);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 1.5px solid $orbital-text-primary;
+      border-radius: 50%;
+      transform: scaleY(0.95);
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__spinner-dot {
+    position: absolute;
+    height: 40px;
+    width: 8px;
+    top: -3px;
+    left: 50%;
+    margin-left: -4px;
+    transform-origin: center 18px;
+  }
+
+  &__spinner-dot span {
+    display: block;
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    border: 1.5px solid black;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+
+    @include mixins.dark-theme {
+      border-color: white;
+    }
+  }
+
+  &__spinner-dot--one {
+    animation: orbitOne 4s linear infinite;
+    span { background: $orbital-blue; }
+  }
+
+  &__spinner-dot--two {
+    animation: orbitTwo 2s linear infinite;
+    span { background: $orbital-purple; }
+  }
+
+  &__spinner-dot--three {
+    animation: orbitThree 7s linear infinite;
+    span { background: $orbital-yellow; }
+  }
+
+  &--success {
+    text-align: center;
+  }
+
+  &__success-icon {
+    font-size: 48px;
+    color: $orbital-success;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__success-message {
+    margin-bottom: $orbital-space-md;
+    font-size: $orbital-font-size-md;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__success-hint {
+    margin: 0;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+    line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &--error {
+    text-align: center;
+  }
+
+  &__error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+    font-weight: bold;
+    background-color: rgba($orbital-error, 0.1);
+    border: 2px solid $orbital-error;
+    border-radius: 50%;
+    color: $orbital-error;
+    margin-bottom: $orbital-space-md;
+  }
+
+  &__error-message {
+    margin: 0;
+    color: $orbital-text-primary;
+    font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+}
+
+// =============================================================================
+// ANIMATIONS
+// =============================================================================
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// =============================================================================
+// ORBITAL LOADER ANIMATION
+// =============================================================================
+
+.orbital-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: $orbital-space-md;
+}
+
+.orbital-loader__ring {
+  position: relative;
+  height: 32px;
+  width: 32px;
+  transform: rotate(-45deg);
+
+  // Ellipse ring using pseudo-element so dots aren't scaled
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 1.5px solid $orbital-text-primary;
+    border-radius: 50%;
+    transform: scaleY(0.95);
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-text-primary;
+    }
+  }
+}
+
+.orbital-loader__dot {
+  position: absolute;
+  height: 40px;
+  width: 8px;
+  top: -3px;
+  left: 50%;
+  margin-left: -4px;
+  transform-origin: center 18px;
+}
+
+.orbital-loader__dot span {
+  display: block;
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  border: 1.5px solid black;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+
+  @include mixins.dark-theme {
+    border-color: white;
+  }
+}
+
+.orbital-loader__dot--one {
+  animation: orbitOne 4s linear infinite;
+
+  span {
+    background: $orbital-blue;
+  }
+}
+
+.orbital-loader__dot--two {
+  animation: orbitTwo 2s linear infinite;
+
+  span {
+    background: $orbital-purple;
+  }
+}
+
+.orbital-loader__dot--three {
+  animation: orbitThree 7s linear infinite;
+
+  span {
+    background: $orbital-yellow;
+  }
+}
+
+@keyframes orbitOne {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(180deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orbitTwo {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-180deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes orbitThree {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-180deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+}

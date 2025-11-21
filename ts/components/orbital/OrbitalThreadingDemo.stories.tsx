@@ -33,9 +33,16 @@ export function FullDemo(): JSX.Element {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         fontWeight: 'bold',
-        borderBottom: '2px solid #3D7BC4'
+        borderBottom: '2px solid #3D7BC4',
+        display: 'flex',
+        alignItems: 'center'
       }}>
-        🌐 Orbital Threading Demo
+        <img
+          src="images/orbital/orbital-logo-light-lg.svg"
+          alt="Orbital"
+          style={{ height: '32px', width: 'auto', marginRight: '12px' }}
+        />
+        Orbital Threading Demo
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <OrbitalThreadingDemo i18n={i18n} />

@@ -40,26 +40,40 @@ export function About({
   return (
     <div className="About">
       <div className="module-splash-screen">
-        <div className="module-splash-screen__logo module-splash-screen__logo--128" />
+        <img
+          src="images/orbital/orbital-logo-light-lg.svg"
+          alt="Orbital"
+          style={{ width: '128px', height: 'auto', marginBottom: '0px' }}
+        />
 
-        <h1 className="About__Title">{i18n('icu:signalDesktop')}</h1>
+        <h1
+          className="About__Title"
+          style={{
+            fontFamily: 'Trebuchet MS, sans-serif',
+            fontWeight: 'bold',
+            fontSize: '24px',
+            letterSpacing: '0.1em',
+          }}
+        >
+          ORBITAL
+        </h1>
         <div className="version">{version}</div>
         <div className="environment">{env}</div>
         <br />
         <div>
-          <a href="https://signal.org">signal.org</a>
+          <a href="https://orbitl.org">orbitl.org</a>
         </div>
         <br />
         <div>
           <a
             className="acknowledgments"
-            href="https://github.com/signalapp/Signal-Desktop/blob/main/ACKNOWLEDGMENTS.md"
+            href="https://github.com/alexg-g/Orbital-Desktop/blob/main/ACKNOWLEDGMENTS.md"
           >
             {i18n('icu:softwareAcknowledgments')}
           </a>
         </div>
         <div>
-          <a className="privacy" href="https://signal.org/legal">
+          <a className="privacy" href="https://orbitl.org/legal">
             {i18n('icu:privacyPolicy')}
           </a>
         </div>

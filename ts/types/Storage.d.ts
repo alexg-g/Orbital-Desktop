@@ -263,6 +263,9 @@ export type StorageAccessType = {
   orbitalUserId: string | undefined;
   orbitalUsername: string | undefined;
 
+  // Orbital group keys (groupId -> base64 encoded key)
+  orbitalGroupKeys: Record<string, string> | undefined;
+
   // Orbital-specific media settings
   /**
    * Auto-download media when on WiFi

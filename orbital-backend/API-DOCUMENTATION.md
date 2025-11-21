@@ -16,6 +16,264 @@ Tokens are obtained via the `/api/auth/login` endpoint and expire after 30 days 
 
 ---
 
+## Group API Endpoints
+
+### 1. Create Group
+
+Create a new group (orbit) with an invite code.
+
+**Endpoint:** `POST /api/groups`
+**Authentication:** Required
+**Content-Type:** `application/json`
+
+**Request Body:**
+```json
+{
+  "encrypted_name": "string (client-side encrypted)",
+  "encrypted_group_key": "string (encrypted key for creator)"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "group_id": "uuid",
+  "invite_code": "A3B7C9D2",
+  "expires_at": "2024-11-14T12:00:00.000Z",
+  "created_at": "2024-11-07T12:00:00.000Z"
+}
+```
+
+**Errors:**
+- `400` - Missing required fields
+- `401` - Unauthorized
+
+**Features:**
+- 8-character alphanumeric invite code (crypto-secure random)
+- 7-day expiration on invite codes
+- Creator automatically becomes first member
+- Group quota initialized (10GB / 100 files)
+
+---
+
+### 2. Join Group
+
+Join an existing group using an invite code.
+
+**Endpoint:** `POST /api/groups/join`
+**Authentication:** Required
+**Content-Type:** `application/json`
+
+**Request Body:**
+```json
+{
+  "invite_code": "A3B7C9D2",
+  "encrypted_group_key": "string (encrypted key for joining user)"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "group_id": "uuid",
+  "encrypted_name": "string (encrypted)",
+  "member_count": 5,
+  "joined_at": "2024-11-07T12:00:00.000Z"
+}
+```
+
+**Errors:**
+- `400` - Missing required fields
+- `400` - `This invite code has already been used`
+- `400` - `This invite code has expired`
+- `400` - `Group has reached maximum capacity of 10 members`
+- `401` - Unauthorized
+- `404` - Invalid invite code
+- `409` - Already a member of this group
+
+**Features:**
+- Single-use invite codes
+- 7-day expiration validation
+- Max 10 members enforcement
+- Case-insensitive code matching
+
+---
+
+### 3. Generate New Invite Code
+
+Generate a new invite code for an existing group. Only the group creator can generate new codes.
+
+**Endpoint:** `POST /api/groups/:groupId/invite-codes`
+**Authentication:** Required
+
+**Response:** `201 Created`
+```json
+{
+  "invite_code": "X7Y8Z9A1",
+  "expires_at": "2024-11-14T12:00:00.000Z",
+  "created_at": "2024-11-07T12:00:00.000Z"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Only group creator can generate new invite codes
+- `404` - Group not found
+
+**Features:**
+- New 8-character crypto-secure code
+- 7-day expiration from creation
+- Previous unused codes remain valid
+
+---
+
+### 4. Get Active Invite Codes
+
+Get all active (unused, unexpired) invite codes for a group. Only the group creator can view codes.
+
+**Endpoint:** `GET /api/groups/:groupId/invite-codes`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "invite_codes": [
+    {
+      "id": "uuid",
+      "code": "X7Y8Z9A1",
+      "created_at": "2024-11-07T12:00:00.000Z",
+      "expires_at": "2024-11-14T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Only group creator can view invite codes
+- `404` - Group not found
+
+---
+
+### 5. List User's Groups
+
+Get all groups the user is a member of.
+
+**Endpoint:** `GET /api/groups`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "groups": [
+    {
+      "group_id": "uuid",
+      "encrypted_name": "string (encrypted)",
+      "encrypted_group_key": "string (encrypted)",
+      "member_count": 5,
+      "max_members": 10,
+      "is_creator": true,
+      "active_invite_code": "A3B7C9D2",
+      "joined_at": "2024-11-07T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+
+**Features:**
+- Returns all groups user is member of
+- Includes member count and max members
+- Indicates if user is creator
+- Shows active invite code (for creators)
+
+---
+
+### 6. List Group Members
+
+Get all members of a group.
+
+**Endpoint:** `GET /api/groups/:groupId/members`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "members": [
+    {
+      "user_id": "uuid",
+      "username": "string",
+      "public_key": {},
+      "joined_at": "2024-11-07T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Not a member of this group
+
+---
+
+### 7. Get Group Quota
+
+Get storage quota status for a group.
+
+**Endpoint:** `GET /api/groups/:groupId/quota`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "group_id": "uuid",
+  "storage": {
+    "used": 5368709120,
+    "limit": 10737418240,
+    "percentage": 50.0,
+    "warning": false
+  },
+  "files": {
+    "count": 45,
+    "limit": 100,
+    "percentage": 45.0,
+    "warning": false
+  },
+  "last_updated": "2024-11-07T12:00:00.000Z"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Not a member of this group
+
+**Features:**
+- Storage quota: 10GB per group
+- File count quota: 100 files per group
+- Warning flag at 80% threshold
+
+---
+
+### 8. Remove Group Member
+
+Remove a member from a group. Only the group creator can remove members.
+
+**Endpoint:** `DELETE /api/groups/:groupId/members/:userId`
+**Authentication:** Required
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `400` - Cannot remove group creator
+- `401` - Unauthorized
+- `403` - Only group creator can remove members
+- `404` - Group not found
+- `404` - Member not found in group
+
+---
+
 ## Thread API Endpoints
 
 ### 1. Create Thread
@@ -292,11 +550,27 @@ Page 3: ?limit=50&offset=100 (items 101-150)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **Group Management** | | |
+| POST /api/groups | ✅ Complete | Create group with invite code |
+| POST /api/groups/join | ✅ Complete | Join group via single-use invite code |
+| POST /api/groups/:groupId/invite-codes | ✅ Complete | Regenerate invite code (creator only) |
+| GET /api/groups/:groupId/invite-codes | ✅ Complete | View active invite codes |
+| GET /api/groups | ✅ Complete | List user's groups |
+| GET /api/groups/:groupId/members | ✅ Complete | List group members |
+| GET /api/groups/:groupId/quota | ✅ Complete | Get storage quota status |
+| DELETE /api/groups/:groupId/members/:userId | ✅ Complete | Remove member (creator only) |
+| **Invite Code System** | | |
+| 8-char alphanumeric codes | ✅ Complete | Crypto-secure random generation |
+| Single-use enforcement | ✅ Complete | Code marked as used on join |
+| 7-day expiration | ✅ Complete | Automatic expiration check |
+| Max 10 members limit | ✅ Complete | Enforced on join |
+| **Thread Management** | | |
 | POST /api/threads | ✅ Complete | Create thread with Signal message linking |
 | GET /api/groups/:groupId/threads | ✅ Complete | Paginated thread listing |
 | GET /api/threads/:threadId | ✅ Complete | Single thread details |
 | GET /api/threads/:threadId/replies | ✅ Complete | Paginated reply listing |
 | POST /api/threads/:threadId/replies | ✅ Complete | Reply creation |
+| **Infrastructure** | | |
 | Authentication | ✅ Complete | JWT with 30-day expiration |
 | Authorization | ✅ Complete | Group membership checks |
 | Input Validation | ✅ Complete | Required fields validated |
@@ -304,7 +578,8 @@ Page 3: ?limit=50&offset=100 (items 101-150)
 | Error Handling | ✅ Complete | Consistent JSON responses |
 | Rate Limiting | ✅ Complete | 100 req/15min (API), 10 req/15min (auth) |
 | Logging | ✅ Complete | Winston logger with request tracking |
-| API Tests | ⏳ Pending | Jest + Supertest tests needed |
+| API Tests - Groups | ✅ Complete | 29 passing tests |
+| API Tests - Quotas | ✅ Complete | Comprehensive quota tests |
 | API Documentation | ✅ Complete | This file |
 
 ---
@@ -457,5 +732,5 @@ created_at    TIMESTAMPTZ
 
 ---
 
-**Last Updated:** November 7, 2024
+**Last Updated:** November 20, 2024
 **Maintained By:** Orbital Team
