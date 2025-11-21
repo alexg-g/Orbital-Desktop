@@ -250,7 +250,7 @@ export function InstallScreenUpdateDialog({
       >
         <I18n
           components={{
-            app: <strong key="app">Signal.app</strong>,
+            app: <strong key="app">Orbital.app</strong>,
             folder: <strong key="folder">/Applications</strong>,
           }}
           i18n={i18n}

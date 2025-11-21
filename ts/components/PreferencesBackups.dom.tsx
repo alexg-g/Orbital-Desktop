@@ -390,12 +390,12 @@ export function getOSAuthErrorString(
 
   // TODO: DESKTOP-8895
   if (authError === 'unauthorized') {
-    return 'This action could not be completed because system authentication failed. Please try again or open the Signal app on your mobile device and go to Backup Settings to view your backup key.';
+    return 'This action could not be completed because system authentication failed. Please try again or open the Orbital app on your mobile device and go to Backup Settings to view your backup key.';
   }
 
   if (authError === 'unauthorized-no-windows-ucv') {
-    return 'This action could not be completed because Windows Hello is not enabled on your computer. Please set up Windows Hello and try again, or open the Signal app on your mobile device and go to Backup Settings to view your backup key.';
+    return 'This action could not be completed because Windows Hello is not enabled on your computer. Please set up Windows Hello and try again, or open the Orbital app on your mobile device and go to Backup Settings to view your backup key.';
   }
 
-  return 'The action could not be completed because authentication is not available on this computer. Please open the Signal app on your mobile device and go to Backup Settings to view your backup key.';
+  return 'The action could not be completed because authentication is not available on this computer. Please open the Orbital app on your mobile device and go to Backup Settings to view your backup key.';
 }
