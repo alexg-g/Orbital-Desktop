@@ -37,6 +37,7 @@ import { ServerAlert } from '../types/ServerAlert.std.js';
 import { LeftPaneChatFolders } from './leftPane/LeftPaneChatFolders.dom.js';
 import { LeftPaneConversationListItemContextMenu } from './leftPane/LeftPaneConversationListItemContextMenu.dom.js';
 import { CurrentChatFolders } from '../types/CurrentChatFolders.std.js';
+import { DisplayMode } from '../types/Nav.std.js';
 
 const { i18n } = window.SignalContext;
 
@@ -158,6 +159,10 @@ const useProps = (overrideProps: OverridePropsType = {}): PropsType => {
       totalBytes: 0,
       downloadedBytes: 0,
     },
+    displayMode: DisplayMode.Chats,
+    setDisplayMode: action('setDisplayMode'),
+    selectedThreadId: undefined,
+    selectThread: action('selectThread'),
     changeLocation: action('changeLocation'),
     clearConversationSearch: action('clearConversationSearch'),
     clearGroupCreationError: action('clearGroupCreationError'),

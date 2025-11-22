@@ -16,8 +16,8 @@
 .OrbitalThreadList {
   display: flex;
   flex-direction: column;
-  // Match ConversationView height constraint (subtract header + title bar drag area)
-  height: calc(100% - 52px - var(--title-bar-drag-area-height));
+  // Fill available height in parent container
+  height: 100%;
   background: $orbital-bg;
   font-family: $orbital-font-body;
   font-size: $orbital-font-size-base;
@@ -1512,6 +1512,121 @@ button img.emoji,
         color: $orbital-purple-hover;
       }
     }
+  }
+}
+
+// =============================================================================
+// CHATS/THREADS TOGGLE
+// =============================================================================
+
+.ChatsThreadsToggle {
+  display: flex;
+  gap: 0;
+  padding: $orbital-space-sm $orbital-space-base;
+  background: $orbital-surface-elevated;
+  border-top: 2px solid $orbital-border-strong;
+  // Prevent being squished by flex-grow siblings
+  flex-shrink: 0;
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface-elevated;
+    border-top-color: $orbital-dark-border-strong;
+  }
+
+  &__button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $orbital-space-xs;
+    padding: $orbital-space-sm $orbital-space-base;
+    border: 2px solid $orbital-border-strong;
+    background: $orbital-surface;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    color: $orbital-text-secondary;
+    cursor: pointer;
+    transition: all $orbital-duration-fast;
+
+    &:first-child {
+      border-radius: $orbital-radius-base 0 0 $orbital-radius-base;
+      border-right: 1px solid $orbital-border-strong;
+    }
+
+    &:last-child {
+      border-radius: 0 $orbital-radius-base $orbital-radius-base 0;
+      border-left: 1px solid $orbital-border-strong;
+    }
+
+    &:hover:not(&--active) {
+      background: $orbital-surface-elevated;
+      color: $orbital-text-primary;
+    }
+
+    &--active {
+      background: $orbital-blue;
+      border-color: $orbital-blue;
+      color: white;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-secondary;
+
+      &:first-child {
+        border-right-color: $orbital-dark-border-strong;
+      }
+
+      &:last-child {
+        border-left-color: $orbital-dark-border-strong;
+      }
+
+      &:hover:not(&--active) {
+        background: $orbital-dark-surface-elevated;
+        color: $orbital-dark-text-primary;
+      }
+
+      &--active {
+        background: $orbital-blue;
+        border-color: $orbital-blue;
+        color: white;
+      }
+    }
+  }
+
+  &__icon {
+    width: 16px;
+    height: 16px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    &--chats {
+      // Chat bubble icon
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>');
+      filter: brightness(0) saturate(100%) invert(40%);
+
+      .ChatsThreadsToggle__button--active & {
+        filter: brightness(0) invert(1);
+      }
+    }
+
+    &--threads {
+      // Threaded discussion icon
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/></svg>');
+      filter: brightness(0) saturate(100%) invert(40%);
+
+      .ChatsThreadsToggle__button--active & {
+        filter: brightness(0) invert(1);
+      }
+    }
+  }
+
+  &__label {
+    line-height: 1;
   }
 }
 

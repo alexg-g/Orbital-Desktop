@@ -104,7 +104,7 @@ import {
   dismissBackupMediaDownloadBanner,
   pauseBackupMediaDownload,
   resumeBackupMediaDownload} from '../../util/backupMediaDownload.preload.js';
-import { useNavActions } from '../ducks/nav.std.js';
+import { useNavActions, getDisplayMode, getSelectedThreadId } from '../ducks/nav.std.js';
 import { SmartLeftPaneChatFolders } from './LeftPaneChatFolders.preload.js';
 import { SmartLeftPaneConversationListItemContextMenu } from './LeftPaneConversationListItemContextMenu.preload.js';
 import type { RenderConversationListItemContextMenuProps } from '../../components/conversationList/BaseConversationListItem.dom.js';
@@ -315,6 +315,10 @@ export const SmartLeftPane = memo(function SmartLeftPane({
 
   const serverAlerts = useSelector(getServerAlerts);
 
+  // Orbital: Display mode for chats/threads toggle
+  const displayMode = useSelector(getDisplayMode);
+  const selectedThreadId = useSelector(getSelectedThreadId);
+
   const {
     blockConversation,
     clearGroupCreationError,
@@ -358,7 +362,7 @@ export const SmartLeftPane = memo(function SmartLeftPane({
     useItemsActions();
   const { setChallengeStatus } = useNetworkActions();
   const { showUserNotFoundModal } = useGlobalModalActions();
-  const { changeLocation } = useNavActions();
+  const { changeLocation, setDisplayMode, selectThread } = useNavActions();
 
   const handleChatFolderOpenSettings = useCallback(() => {
     changeLocation({
@@ -410,6 +414,10 @@ export const SmartLeftPane = memo(function SmartLeftPane({
   return (
     <LeftPane
       backupMediaDownloadProgress={backupMediaDownloadProgress}
+      displayMode={displayMode}
+      setDisplayMode={setDisplayMode}
+      selectedThreadId={selectedThreadId}
+      selectThread={selectThread}
       blockConversation={blockConversation}
       cancelBackupMediaDownload={cancelBackupMediaDownload}
       challengeStatus={challengeStatus}

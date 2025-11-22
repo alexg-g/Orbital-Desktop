@@ -56,8 +56,11 @@ import type {
   ServerAlertsType,
   ServerAlert} from '../types/ServerAlert.std.js';
 import { getServerAlertDialog } from './ServerAlerts.dom.js';
-import { NavTab, SettingsPage, ProfileEditorPage } from '../types/Nav.std.js';
+import { NavTab, SettingsPage, ProfileEditorPage, DisplayMode } from '../types/Nav.std.js';
 import type { Location } from '../types/Nav.std.js';
+import { ChatsThreadsToggle } from './ChatsThreadsToggle.dom.js';
+import { OrbitalThreadList } from './orbital/OrbitalThreadList.js';
+import { MOCK_THREADS } from './orbital/mockThreadData.js';
 import type { RenderConversationListItemContextMenuProps } from './conversationList/BaseConversationListItem.dom.js';
 import { AxoDropdownMenu } from '../axo/AxoDropdownMenu.dom.js';
 import type { ChatFolder } from '../types/ChatFolder.std.js';
@@ -75,6 +78,11 @@ export type PropsType = {
     isPaused: boolean;
     downloadBannerDismissed: boolean;
   };
+  // Orbital: Display mode for switching between chats and threads
+  displayMode: DisplayMode;
+  setDisplayMode: (mode: DisplayMode) => void;
+  selectedThreadId: string | undefined;
+  selectThread: (threadId: string | undefined) => void;
   otherTabsUnreadStats: UnreadStats;
   hasAnyCurrentCustomChatFolders: boolean;
   hasExpiredDialog: boolean;
@@ -209,6 +217,10 @@ export type PropsType = {
 
 export function LeftPane({
   backupMediaDownloadProgress,
+  displayMode,
+  setDisplayMode,
+  selectedThreadId,
+  selectThread,
   otherTabsUnreadStats,
   blockConversation,
   cancelBackupMediaDownload,
@@ -880,84 +892,111 @@ export function LeftPane({
         ) : null}
         {preRowsNode && <React.Fragment key={0}>{preRowsNode}</React.Fragment>}
         <div className="module-left-pane__list--measure" ref={measureRef}>
-          {isEmpty &&
-            helper.getEmptyViewNode({
-              i18n,
-              selectedChatFolder,
-              changeLocation})}
-          {!isEmpty && (
-            <div className="module-left-pane__list--wrapper">
-              <div
-                aria-live="polite"
-                className="module-left-pane__list"
-                data-supertab
-                key={listKey}
-                role="presentation"
-                tabIndex={-1}
-              >
-                <ConversationList
-                  key={modeSpecificProps.mode}
-                  dimensions={measureSize ?? undefined}
-                  getPreferredBadge={getPreferredBadge}
-                  getRow={getRow}
-                  i18n={i18n}
-                  hasDialogPadding={hasDialogs}
-                  onClickArchiveButton={showArchivedConversations}
-                  onClickContactCheckbox={(
-                    conversationId: string,
-                    disabledReason: undefined | ContactCheckboxDisabledReason
-                  ) => {
-                    switch (disabledReason) {
-                      case undefined:
-                        toggleConversationInChooseMembers(conversationId);
-                        break;
-                      case ContactCheckboxDisabledReason.AlreadyAdded:
-                      case ContactCheckboxDisabledReason.MaximumContactsSelected:
-                        // These are no-ops.
-                        break;
-                      default:
-                        throw missingCaseError(disabledReason);
-                    }
-                  }}
-                  onClickClearFilterButton={() => {
-                    updateFilterByUnread(false);
-                  }}
-                  showUserNotFoundModal={showUserNotFoundModal}
-                  setIsFetchingUUID={setIsFetchingUUID}
-                  lookupConversationWithoutServiceId={
-                    lookupConversationWithoutServiceId
-                  }
-                  showConversation={showConversation}
-                  blockConversation={blockConversation}
-                  onPreloadConversation={preloadConversation}
-                  onSelectConversation={onSelectConversation}
-                  onOutgoingAudioCallInConversation={
-                    onOutgoingAudioCallInConversation
-                  }
-                  onOutgoingVideoCallInConversation={
-                    onOutgoingVideoCallInConversation
-                  }
-                  removeConversation={removeConversation}
-                  renderMessageSearchResult={renderMessageSearchResult}
-                  renderConversationListItemContextMenu={
-                    renderConversationListItemContextMenu
-                  }
-                  rowCount={helper.getRowCount()}
-                  scrollBehavior={scrollBehavior}
-                  scrollToRowIndex={rowIndexToScrollTo}
-                  scrollable={isScrollable}
-                  shouldRecomputeRowHeights={shouldRecomputeRowHeights}
-                  showChooseGroupMembers={showChooseGroupMembers}
-                  showFindByUsername={showFindByUsername}
-                  showFindByPhoneNumber={showFindByPhoneNumber}
-                  theme={theme}
-                />
-              </div>
-            </div>
+          {/* Orbital: Show OrbitalThreadList when in Threads mode */}
+          {modeSpecificProps.mode === LeftPaneMode.Inbox &&
+          displayMode === DisplayMode.Threads ? (
+            <OrbitalThreadList
+              threads={MOCK_THREADS}
+              activeThreadId={selectedThreadId}
+              i18n={i18n}
+              onThreadClick={(threadId: string) => {
+                selectThread(threadId);
+              }}
+              onCreateThread={() => {
+                // TODO: Open create thread modal
+                console.log('Create thread clicked');
+              }}
+            />
+          ) : (
+            <>
+              {isEmpty &&
+                helper.getEmptyViewNode({
+                  i18n,
+                  selectedChatFolder,
+                  changeLocation})}
+              {!isEmpty && (
+                <div className="module-left-pane__list--wrapper">
+                  <div
+                    aria-live="polite"
+                    className="module-left-pane__list"
+                    data-supertab
+                    key={listKey}
+                    role="presentation"
+                    tabIndex={-1}
+                  >
+                    <ConversationList
+                      key={modeSpecificProps.mode}
+                      dimensions={measureSize ?? undefined}
+                      getPreferredBadge={getPreferredBadge}
+                      getRow={getRow}
+                      i18n={i18n}
+                      hasDialogPadding={hasDialogs}
+                      onClickArchiveButton={showArchivedConversations}
+                      onClickContactCheckbox={(
+                        conversationId: string,
+                        disabledReason: undefined | ContactCheckboxDisabledReason
+                      ) => {
+                        switch (disabledReason) {
+                          case undefined:
+                            toggleConversationInChooseMembers(conversationId);
+                            break;
+                          case ContactCheckboxDisabledReason.AlreadyAdded:
+                          case ContactCheckboxDisabledReason.MaximumContactsSelected:
+                            // These are no-ops.
+                            break;
+                          default:
+                            throw missingCaseError(disabledReason);
+                        }
+                      }}
+                      onClickClearFilterButton={() => {
+                        updateFilterByUnread(false);
+                      }}
+                      showUserNotFoundModal={showUserNotFoundModal}
+                      setIsFetchingUUID={setIsFetchingUUID}
+                      lookupConversationWithoutServiceId={
+                        lookupConversationWithoutServiceId
+                      }
+                      showConversation={showConversation}
+                      blockConversation={blockConversation}
+                      onPreloadConversation={preloadConversation}
+                      onSelectConversation={onSelectConversation}
+                      onOutgoingAudioCallInConversation={
+                        onOutgoingAudioCallInConversation
+                      }
+                      onOutgoingVideoCallInConversation={
+                        onOutgoingVideoCallInConversation
+                      }
+                      removeConversation={removeConversation}
+                      renderMessageSearchResult={renderMessageSearchResult}
+                      renderConversationListItemContextMenu={
+                        renderConversationListItemContextMenu
+                      }
+                      rowCount={helper.getRowCount()}
+                      scrollBehavior={scrollBehavior}
+                      scrollToRowIndex={rowIndexToScrollTo}
+                      scrollable={isScrollable}
+                      shouldRecomputeRowHeights={shouldRecomputeRowHeights}
+                      showChooseGroupMembers={showChooseGroupMembers}
+                      showFindByUsername={showFindByUsername}
+                      showFindByPhoneNumber={showFindByPhoneNumber}
+                      theme={theme}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
         {footerContents && (
           <div className="module-left-pane__footer">{footerContents}</div>
+        )}
+
+        {/* Orbital: Chats/Threads toggle - only show in Inbox mode */}
+        {modeSpecificProps.mode === LeftPaneMode.Inbox && (
+          <ChatsThreadsToggle
+            displayMode={displayMode}
+            onSetDisplayMode={setDisplayMode}
+          />
         )}
 
         {challengeStatus !== 'idle' &&

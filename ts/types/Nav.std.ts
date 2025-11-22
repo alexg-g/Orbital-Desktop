@@ -44,6 +44,12 @@ export enum NavTab {
   Settings = 'Settings',
 }
 
+// Orbital: Display mode for switching between Signal chats and Orbital threads
+export enum DisplayMode {
+  Chats = 'chats',
+  Threads = 'threads',
+}
+
 export enum SettingsPage {
   // Accessible through left nav
   Profile = 'Profile',

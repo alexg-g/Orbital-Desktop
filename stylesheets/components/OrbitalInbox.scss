@@ -15,11 +15,25 @@
     border-right: 2px solid $orbital-border-strong;
     background: $orbital-surface;
     flex-shrink: 0;
-    overflow-y: auto;
+    // Flex container for thread list + toggle at bottom
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 
     @include mixins.dark-theme {
       background: $orbital-dark-surface;
       border-right-color: $orbital-dark-border-strong;
+    }
+
+    // Thread list takes remaining space and scrolls
+    .OrbitalThreadList {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    // Toggle stays at bottom
+    .ChatsThreadsToggle {
+      flex-shrink: 0;
     }
   }
 

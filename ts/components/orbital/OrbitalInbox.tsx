@@ -6,6 +6,11 @@ import type { LocalizerType } from '../../types/Util.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
 import { OrbitalLogin } from './OrbitalLogin';
+import { MOCK_THREADS, MOCK_MESSAGES } from './mockThreadData';
+import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
+import { DisplayMode } from '../../types/Nav.std';
+import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+import type { UploadCheckResult } from './OrbitalMediaPicker';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -35,6 +40,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [messages, setMessages] = useState<OrbitalMessageType[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
 
   // Check if user is logged in to Orbital
   useEffect(() => {
@@ -65,8 +71,8 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
         // const response = await window.Signal.OrbitalAPI.getThreads();
         // setThreads(response.threads);
 
-        // For now, use empty state
-        setThreads([]);
+        // For now, use mock data
+        setThreads([...MOCK_THREADS]);
       } catch (err) {
         console.error('Failed to fetch threads:', err);
       }
@@ -77,6 +83,9 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
 
   const handleThreadClick = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
+    // Load messages for the selected thread
+    const threadMessages = MOCK_MESSAGES[threadId] || [];
+    setMessages([...threadMessages]);
   }, []);
 
   const handleCreateThread = useCallback(() => {
@@ -109,6 +118,34 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const handleLoginSuccess = useCallback(() => {
     setIsLoggedIn(true);
   }, []);
+
+  // Mock functions for dependency injection
+  const mockGetQuotaInfo = useCallback(async (_groupId: string): Promise<QuotaInfo> => ({
+    storageUsedBytes: 0,
+    storageLimitBytes: 1024 * 1024 * 1024,
+    bandwidthUsedBytes: 0,
+    bandwidthLimitBytes: 5 * 1024 * 1024 * 1024,
+    bandwidthResetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    mediaCount: 0,
+    mediaLimit: 1000,
+  }), []);
+
+  const mockCheckUploadAllowed = useCallback(async (_groupId: string, _fileSizeBytes: number): Promise<UploadCheckResult> => ({
+    allowed: true,
+    reason: undefined,
+  }), []);
+
+  const mockFormatBytes = useCallback((bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }, []);
+
+  const mockUploadMedia = useCallback(async () => ({ mediaId: 'mock-id' }), []);
+  const mockGetAbsoluteAttachmentPath = useCallback((path: string) => path, []);
+  const mockDownloadMedia = useCallback(async () => '/mock/path', []);
+  const mockGetMediaDownloadStatus = useCallback(async () => ({ status: 'complete' }), []);
+  const mockDeleteMedia = useCallback(async () => {}, []);
 
   // Show loading state
   if (isLoading) {
@@ -146,6 +183,10 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
           onThreadClick={handleThreadClick}
           onCreateThread={handleCreateThread}
         />
+        <ChatsThreadsToggle
+          displayMode={displayMode}
+          onSetDisplayMode={setDisplayMode}
+        />
       </div>
 
       {/* Main Content - Thread Detail */}
@@ -153,14 +194,23 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
         {activeThread ? (
           <OrbitalThreadDetail
             threadId={activeThread.id}
+            groupId="mock-group-id"
             threadTitle={activeThread.title}
             threadAuthor={activeThread.author}
             threadTimestamp={activeThread.timestamp}
             messages={messages}
-            currentUserId="TODO_CURRENT_USER_ID"
+            currentUserId="testuser"
             i18n={i18n}
             onReply={handleReply}
             onSendMessage={handleSendMessage}
+            getQuotaInfo={mockGetQuotaInfo}
+            checkUploadAllowed={mockCheckUploadAllowed}
+            formatBytes={mockFormatBytes}
+            uploadMedia={mockUploadMedia}
+            getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+            downloadMedia={mockDownloadMedia}
+            getMediaDownloadStatus={mockGetMediaDownloadStatus}
+            deleteMedia={mockDeleteMedia}
           />
         ) : (
           <div className="OrbitalInbox__empty-state">

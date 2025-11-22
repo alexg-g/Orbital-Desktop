@@ -22,8 +22,6 @@ export type OrbitalThread = {
   avatarUrl?: string;
 };
 
-export type OrbitalViewMode = 'threads' | 'chats';
-
 export type OrbitalThreadListProps = {
   threads: ReadonlyArray<OrbitalThread>;
   activeThreadId?: string;
@@ -51,7 +49,6 @@ export function OrbitalThreadList({
   onThreadClick,
   onCreateThread,
 }: OrbitalThreadListProps): JSX.Element {
-  const [viewMode, setViewMode] = useState<OrbitalViewMode>('threads');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleThreadClick = useCallback(
@@ -64,11 +61,6 @@ export function OrbitalThreadList({
   const handleCreateThread = useCallback(() => {
     onCreateThread();
   }, [onCreateThread]);
-
-  const handleViewModeChange = useCallback((mode: OrbitalViewMode) => {
-    setViewMode(mode);
-    setSearchQuery(''); // Clear search when switching modes
-  }, []);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -133,14 +125,10 @@ export function OrbitalThreadList({
         <input
           type="text"
           className="OrbitalThreadList__search-input"
-          placeholder={
-            viewMode === 'threads' ? 'Search threads...' : 'Search chats...'
-          }
+          placeholder="Search threads..."
           value={searchQuery}
           onChange={handleSearchChange}
-          aria-label={
-            viewMode === 'threads' ? 'Search threads' : 'Search chats'
-          }
+          aria-label="Search threads"
         />
         {searchQuery && (
           <button
@@ -176,36 +164,6 @@ export function OrbitalThreadList({
             </React.Fragment>
           ))
         )}
-      </div>
-
-      {/* Toggle Buttons */}
-      <div className="OrbitalThreadList__toggle">
-        <button
-          type="button"
-          className={`OrbitalThreadList__toggle-button ${
-            viewMode === 'threads'
-              ? 'OrbitalThreadList__toggle-button--active'
-              : ''
-          }`}
-          onClick={() => handleViewModeChange('threads')}
-          aria-label="View threads"
-          aria-pressed={viewMode === 'threads'}
-        >
-          Threads
-        </button>
-        <button
-          type="button"
-          className={`OrbitalThreadList__toggle-button ${
-            viewMode === 'chats'
-              ? 'OrbitalThreadList__toggle-button--active'
-              : ''
-          }`}
-          onClick={() => handleViewModeChange('chats')}
-          aria-label="View chats"
-          aria-pressed={viewMode === 'chats'}
-        >
-          Chats
-        </button>
       </div>
     </div>
   );
