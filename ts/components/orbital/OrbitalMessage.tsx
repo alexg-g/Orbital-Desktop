@@ -11,6 +11,7 @@ import { StagedLinkPreview } from '../conversation/StagedLinkPreview.dom';
 import { OrbitalPhotoGallery } from './OrbitalPhotoGallery';
 import { OrbitalMediaViewer } from './OrbitalMediaViewer';
 import { OrbitalPhotoLightbox } from './OrbitalPhotoLightbox';
+import { resolveStaticAssetUrl } from '../../util/resolveStaticAsset.std';
 
 export type OrbitalMessageProps = {
   message: OrbitalMessageType;
@@ -130,9 +131,13 @@ export function OrbitalMessage({
           )}
         >
           <img
-            src={message.avatarUrl}
+            src={resolveStaticAssetUrl(message.avatarUrl)}
             alt={`${message.author}'s avatar`}
             className="OrbitalMessage__avatar-image"
+            onError={(e) => {
+              // Hide broken image so placeholder shows
+              e.currentTarget.style.display = 'none';
+            }}
           />
         </div>
       ) : (
@@ -179,24 +184,19 @@ export function OrbitalMessage({
           {message.linkPreviews && message.linkPreviews.length > 0 && (
             <div className="OrbitalMessage__link-previews">
               {message.linkPreviews.map((preview, index) => (
-                <div
+                <a
                   key={index}
+                  href={preview.url}
+                  target="_blank"
+                  rel="noreferrer"
                   className="OrbitalMessage__link-preview-card"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => window.open(preview.url, '_blank')}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      window.open(preview.url, '_blank');
-                    }
-                  }}
                 >
                   <StagedLinkPreview
                     {...preview}
                     i18n={i18n}
                     moduleClassName="OrbitalMessage__link-preview"
                   />
-                </div>
+                </a>
               ))}
             </div>
           )}
@@ -356,7 +356,7 @@ export function OrbitalMessage({
                 message.mediaUrl &&
                 message.mediaType === 'image' && (
                   <img
-                    src={message.mediaUrl}
+                    src={resolveStaticAssetUrl(message.mediaUrl)}
                     alt="Attached image"
                     style={{ maxWidth: '100%', borderRadius: '3px' }}
                   />
@@ -367,7 +367,7 @@ export function OrbitalMessage({
                 message.mediaUrl &&
                 message.mediaType === 'video' && (
                   <video
-                    src={message.mediaUrl}
+                    src={resolveStaticAssetUrl(message.mediaUrl)}
                     controls
                     style={{ maxWidth: '100%', borderRadius: '3px' }}
                   >

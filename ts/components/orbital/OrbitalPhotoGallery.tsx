@@ -1,8 +1,9 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { OrbitalPhotoLightbox } from './OrbitalPhotoLightbox';
+import { resolveStaticAssetUrl } from '../../util/resolveStaticAsset.std';
 
 export type OrbitalPhotoGalleryProps = {
   photos: ReadonlyArray<string>;
@@ -29,6 +30,12 @@ export function OrbitalPhotoGallery({
 }: OrbitalPhotoGalleryProps): JSX.Element {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Resolve all photo URLs for Electron/Storybook compatibility
+  const resolvedPhotos = useMemo(
+    () => photos.map(url => resolveStaticAssetUrl(url) || url),
+    [photos]
+  );
 
   if (photos.length === 0) {
     return <></>;
@@ -66,7 +73,7 @@ export function OrbitalPhotoGallery({
           tabIndex={0}
         >
           <img
-            src={photos[0]}
+            src={resolvedPhotos[0]}
             alt="Photo 1"
             style={{
               width: '100%',
@@ -79,7 +86,7 @@ export function OrbitalPhotoGallery({
         {/* Lightbox */}
         {lightboxOpen && (
           <OrbitalPhotoLightbox
-            photos={photos}
+            photos={resolvedPhotos}
             currentIndex={currentIndex}
             onClose={handleCloseLightbox}
             onNavigate={handleNavigate}
@@ -103,7 +110,7 @@ export function OrbitalPhotoGallery({
             overflow: 'hidden',
           }}
         >
-          {photos.map((photo, index) => (
+          {resolvedPhotos.map((photo, index) => (
             <div
               key={index}
               style={{
@@ -132,7 +139,7 @@ export function OrbitalPhotoGallery({
         {/* Lightbox */}
         {lightboxOpen && (
           <OrbitalPhotoLightbox
-            photos={photos}
+            photos={resolvedPhotos}
             currentIndex={currentIndex}
             onClose={handleCloseLightbox}
             onNavigate={handleNavigate}
@@ -171,7 +178,7 @@ export function OrbitalPhotoGallery({
             tabIndex={0}
           >
             <img
-              src={photos[0]}
+              src={resolvedPhotos[0]}
               alt="Photo 1"
               style={{
                 width: '100%',
@@ -183,7 +190,7 @@ export function OrbitalPhotoGallery({
           </div>
 
           {/* Second and third photos - stacked on right */}
-          {photos.slice(1).map((photo, index) => (
+          {resolvedPhotos.slice(1).map((photo, index) => (
             <div
               key={index + 1}
               style={{
@@ -212,7 +219,7 @@ export function OrbitalPhotoGallery({
         {/* Lightbox */}
         {lightboxOpen && (
           <OrbitalPhotoLightbox
-            photos={photos}
+            photos={resolvedPhotos}
             currentIndex={currentIndex}
             onClose={handleCloseLightbox}
             onNavigate={handleNavigate}
@@ -223,7 +230,7 @@ export function OrbitalPhotoGallery({
   }
 
   // Four or more photos - 2x2 grid
-  const visiblePhotos = photos.slice(0, 4);
+  const visiblePhotos = resolvedPhotos.slice(0, 4);
   const remainingCount = photos.length - 4;
 
   return (
@@ -289,7 +296,7 @@ export function OrbitalPhotoGallery({
       {/* Lightbox */}
       {lightboxOpen && (
         <OrbitalPhotoLightbox
-          photos={photos}
+          photos={resolvedPhotos}
           currentIndex={currentIndex}
           onClose={handleCloseLightbox}
           onNavigate={handleNavigate}

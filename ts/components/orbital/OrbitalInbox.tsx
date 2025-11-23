@@ -11,6 +11,10 @@ import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
 import { DisplayMode } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import type { UploadCheckResult } from './OrbitalMediaPicker';
+import { FunProvider } from '../fun/FunProvider.dom';
+import { packs, recentStickers } from '../stickers/mocks.std';
+import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
+import { EmojiSkinTone } from '../fun/data/emojis.std';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -41,6 +45,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
+  const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
 
   // Check if user is logged in to Orbital
   useEffect(() => {
@@ -173,57 +178,80 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const activeThread = threads.find(t => t.id === activeThreadId);
 
   return (
-    <div className="OrbitalInbox">
-      {/* Left Sidebar - Thread List */}
-      <div className="OrbitalInbox__sidebar">
-        <OrbitalThreadList
-          threads={threads}
-          activeThreadId={activeThreadId}
-          i18n={i18n}
-          onThreadClick={handleThreadClick}
-          onCreateThread={handleCreateThread}
-        />
-        <ChatsThreadsToggle
-          displayMode={displayMode}
-          onSetDisplayMode={setDisplayMode}
-        />
-      </div>
-
-      {/* Main Content - Thread Detail */}
-      <div className="OrbitalInbox__main">
-        {activeThread ? (
-          <OrbitalThreadDetail
-            threadId={activeThread.id}
-            groupId="mock-group-id"
-            threadTitle={activeThread.title}
-            threadAuthor={activeThread.author}
-            threadTimestamp={activeThread.timestamp}
-            messages={messages}
-            currentUserId="testuser"
+    <FunProvider
+      i18n={i18n}
+      // Recents
+      recentEmojis={MOCK_RECENT_EMOJIS}
+      recentStickers={recentStickers}
+      recentGifs={[]}
+      // Emojis
+      emojiSkinToneDefault={skinTone}
+      onEmojiSkinToneDefaultChange={setSkinTone}
+      onOpenCustomizePreferredReactionsModal={() => null}
+      onSelectEmoji={() => null}
+      // Stickers
+      installedStickerPacks={packs}
+      showStickerPickerHint={false}
+      onClearStickerPickerHint={() => null}
+      onSelectSticker={() => null}
+      // Gifs
+      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
+      onSelectGif={() => null}
+    >
+      <div className="OrbitalInbox">
+        {/* Left Sidebar - Thread List */}
+        <div className="OrbitalInbox__sidebar">
+          <OrbitalThreadList
+            threads={threads}
+            activeThreadId={activeThreadId}
             i18n={i18n}
-            onReply={handleReply}
-            onSendMessage={handleSendMessage}
-            getQuotaInfo={mockGetQuotaInfo}
-            checkUploadAllowed={mockCheckUploadAllowed}
-            formatBytes={mockFormatBytes}
-            uploadMedia={mockUploadMedia}
-            getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-            downloadMedia={mockDownloadMedia}
-            getMediaDownloadStatus={mockGetMediaDownloadStatus}
-            deleteMedia={mockDeleteMedia}
+            onThreadClick={handleThreadClick}
+            onCreateThread={handleCreateThread}
           />
-        ) : (
-          <div className="OrbitalInbox__empty-state">
-            <div className="OrbitalInbox__empty-state-icon">💬</div>
-            <div className="OrbitalInbox__empty-state-title">
-              Welcome to Orbital
+          <ChatsThreadsToggle
+            displayMode={displayMode}
+            onSetDisplayMode={setDisplayMode}
+          />
+        </div>
+
+        {/* Main Content - Thread Detail */}
+        <div className="OrbitalInbox__main">
+          {activeThread ? (
+            <OrbitalThreadDetail
+              threadId={activeThread.id}
+              groupId="mock-group-id"
+              threadTitle={activeThread.title}
+              threadAuthor={activeThread.author}
+              threadTimestamp={activeThread.timestamp}
+              messages={messages}
+              currentUserId="testuser"
+              i18n={i18n}
+              onReply={handleReply}
+              onSendMessage={handleSendMessage}
+              getQuotaInfo={mockGetQuotaInfo}
+              checkUploadAllowed={mockCheckUploadAllowed}
+              formatBytes={mockFormatBytes}
+              uploadMedia={mockUploadMedia}
+              getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+              downloadMedia={mockDownloadMedia}
+              getMediaDownloadStatus={mockGetMediaDownloadStatus}
+              deleteMedia={mockDeleteMedia}
+            />
+          ) : (
+            <div className="OrbitalInbox__empty-state">
+              <div className="OrbitalInbox__empty-state-icon">💬</div>
+              <div className="OrbitalInbox__empty-state-title">
+                Welcome to Orbital
+              </div>
+              <div className="OrbitalInbox__empty-state-description">
+                Select a thread from the left to start reading, or create a new thread to start a discussion.
+              </div>
             </div>
-            <div className="OrbitalInbox__empty-state-description">
-              Select a thread from the left to start reading, or create a new thread to start a discussion.
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </FunProvider>
   );
 }

@@ -40,6 +40,11 @@ export function ImageOrBlurhash({
   }, [ref]);
 
   const src = imageSrc ?? blurHashUrl;
+
+  // Use eager loading for external URLs (https://) to ensure they load properly in Electron
+  const isExternalUrl = imageSrc?.startsWith('http');
+  const loadingStrategy = isExternalUrl ? 'eager' : (blurHashUrl != null ? 'lazy' : 'eager');
+
   return (
     <img
       {...rest}
@@ -47,6 +52,8 @@ export function ImageOrBlurhash({
       src={src}
       alt={alt}
       onLoad={onLoad}
+      // Use no-referrer for external URLs to avoid rejection from file:// origin
+      referrerPolicy={isExternalUrl ? 'no-referrer' : undefined}
       style={{
         // Use a background image with an data url of the blurhash which should
         // show quickly and  stay visible until the img src is loaded/decoded.
@@ -66,7 +73,7 @@ export function ImageOrBlurhash({
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
-      loading={blurHashUrl != null ? 'lazy' : 'eager'}
+      loading={loadingStrategy}
     />
   );
 }

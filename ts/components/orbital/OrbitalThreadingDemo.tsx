@@ -56,7 +56,9 @@ const mockUploadMedia = async ({ onProgress }: any) => {
 };
 
 const mockGetAbsoluteAttachmentPath = (relativePath: string): string => {
-  return `/mock/attachments/path/${relativePath}`;
+  // For Storybook, paths are already absolute (e.g., '/images/avatars/rocket1.png')
+  // Just return them as-is to work with Storybook's staticDirs
+  return relativePath;
 };
 
 const mockDownloadMedia = async ({ onProgress }: any): Promise<string> => {
@@ -387,7 +389,7 @@ const MOCK_MESSAGES: Record<string, ReadonlyArray<OrbitalMessageType>> = {
           description: 'Learn about the exciting milestone of your baby\'s first steps! This comprehensive guide covers everything from pre-walking signs to safety tips.',
           domain: 'youtube.com',
           image: {
-            url: 'https://img.youtube.com/vi/Gj2nOk8af-o/hqdefault.jpg',
+            url: 'images/orbital/youtube-thumbnail-sample.jpg',
             contentType: 'image/jpeg' as MIMEType,
             width: 480,
             height: 360,

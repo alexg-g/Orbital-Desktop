@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2025 Orbital
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from 'react-aria-components';
 import type { LocalizerType } from '../../types/Util.std.js';
 import { FunPicker } from '../fun/FunPicker.dom.js';
+import { FunStaticEmoji } from '../fun/FunEmoji.dom.js';
 import type { FunEmojiSelection } from '../fun/panels/FunPanelEmojis.dom.js';
 import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom.js';
 import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom.js';
-import { getEmojiVariantByKey } from '../fun/data/emojis.std.js';
+import { getEmojiVariantByKey, type EmojiVariantKey } from '../fun/data/emojis.std.js';
 import { OrbitalQuillEditor } from './OrbitalQuillEditor.js';
 import { OrbitalMediaPicker } from './OrbitalMediaPicker.js';
 import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker.js';
@@ -371,6 +372,12 @@ export function OrbitalComposer({
   // Check if paperclip button should be disabled (quota full)
   const canUploadMedia = quotaInfo?.canUpload !== false;
 
+  // Get the grinning face emoji for the picker button
+  const smileEmoji = useMemo(
+    () => getEmojiVariantByKey('1F600' as EmojiVariantKey),
+    []
+  );
+
   return (
     <div className="OrbitalComposer">
       {/* Reply Context (when replying to a message) */}
@@ -608,7 +615,11 @@ export function OrbitalComposer({
                 aria-label="Open emoji picker"
                 onPress={() => setPickerOpen(true)}
               >
-                😀
+                <FunStaticEmoji
+                  emoji={smileEmoji}
+                  size={20}
+                  role="presentation"
+                />
               </Button>
             </FunPicker>
           </div>

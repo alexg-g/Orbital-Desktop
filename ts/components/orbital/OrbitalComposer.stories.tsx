@@ -98,7 +98,9 @@ const mockUploadMedia: UploadMediaFunction = async ({ onProgress }) => {
 };
 
 const mockGetAbsoluteAttachmentPath = (relativePath: string): string => {
-  return `/mock/attachments/path/${relativePath}`;
+  // For Storybook, paths are already absolute (e.g., '/images/avatars/rocket1.png')
+  // Just return them as-is to work with Storybook's staticDirs
+  return relativePath;
 };
 
 export default {
