@@ -51,6 +51,7 @@ import type { AttachmentType } from '../types/Attachment.std.js';
 import type {
   OrbitalMediaAttachment,
   OrbitalMediaStorageStats} from '../types/OrbitalMedia.std.js';
+import type { DraftType } from '../types/Draft.std.js';
 
 // STUB: BadgeType removed for Orbital
 type BadgeType = { id: string };
@@ -964,6 +965,10 @@ type ReadableInterface = {
   getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
   getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
   getPendingDownloads: () => Array<OrbitalMediaAttachment>;
+
+  // Drafts
+  getDraft: (contextId: string) => DraftType | undefined;
+  getAllDrafts: () => Array<DraftType>;
 };
 
 type WritableInterface = {
@@ -1312,6 +1317,11 @@ type WritableInterface = {
   // Orbital Media
   saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
   updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
+
+  // Drafts
+  saveDraft: (draft: DraftType) => void;
+  deleteDraft: (contextId: string) => void;
+  deleteOldDrafts: (maxAgeMs: number) => number;
 };
 
 // Adds a database argument

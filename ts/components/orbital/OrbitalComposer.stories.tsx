@@ -7,6 +7,7 @@ import { action } from '@storybook/addon-actions';
 import { OrbitalComposer } from './OrbitalComposer';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import type { UploadMediaFunction } from './OrbitalComposer';
+import { createMockDraftOperations } from './useDraft';
 import { FunProvider } from '../fun/FunProvider.dom.js';
 import { packs, recentStickers } from '../stickers/mocks.std.js';
 import {
@@ -103,6 +104,9 @@ const mockGetAbsoluteAttachmentPath = (relativePath: string): string => {
   return relativePath;
 };
 
+// Create mock draft operations for Storybook
+const mockDraftOperations = createMockDraftOperations();
+
 export default {
   title: 'Orbital/Composer',
   component: OrbitalComposer,
@@ -118,6 +122,7 @@ export function ThreadMode(): JSX.Element {
         <OrbitalComposer
           mode="thread"
           groupId="mock-group-id"
+          contextId="mock-group-id"
           onSubmit={action('onSubmit')}
           i18n={i18n}
           getQuotaInfo={mockGetQuotaInfo}
@@ -125,6 +130,7 @@ export function ThreadMode(): JSX.Element {
           formatBytes={mockFormatBytes}
           uploadMedia={mockUploadMedia}
           getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+          draftOperations={mockDraftOperations}
         />
       </div>
     </WithFunProvider>
@@ -142,6 +148,7 @@ export function ReplyMode(): JSX.Element {
           mode="reply"
           groupId="mock-group-id"
           threadId="mock-thread-id"
+          contextId="mock-thread-id"
           replyContext={{
             author: 'Mom',
             body: 'Emma took her first steps today! So proud! 🎉',
@@ -153,6 +160,7 @@ export function ReplyMode(): JSX.Element {
           formatBytes={mockFormatBytes}
           uploadMedia={mockUploadMedia}
           getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+          draftOperations={mockDraftOperations}
         />
       </div>
     </WithFunProvider>

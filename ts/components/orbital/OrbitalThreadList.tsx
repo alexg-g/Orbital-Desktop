@@ -28,6 +28,7 @@ export type OrbitalThreadListProps = {
   i18n: LocalizerType;
   onThreadClick: (threadId: string) => void;
   onCreateThread: () => void;
+  onSettingsClick: () => void;
 };
 
 /**
@@ -48,6 +49,7 @@ export function OrbitalThreadList({
   i18n,
   onThreadClick,
   onCreateThread,
+  onSettingsClick,
 }: OrbitalThreadListProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -61,6 +63,10 @@ export function OrbitalThreadList({
   const handleCreateThread = useCallback(() => {
     onCreateThread();
   }, [onCreateThread]);
+
+  const handleSettingsClick = useCallback(() => {
+    onSettingsClick();
+  }, [onSettingsClick]);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -119,13 +125,28 @@ export function OrbitalThreadList({
     <div className="OrbitalThreadList">
       <div className="OrbitalThreadList__header">
         <h2>Your Orbit</h2>
-        <button
-          type="button"
-          className="OrbitalComposer__button-primary"
-          onClick={handleCreateThread}
-        >
-          Create Thread
-        </button>
+        <div className="OrbitalThreadList__header-actions">
+          <button
+            type="button"
+            className="OrbitalComposer__button-primary"
+            onClick={handleCreateThread}
+          >
+            Create Thread
+          </button>
+          <button
+            type="button"
+            className="OrbitalThreadList__settings-button"
+            onClick={handleSettingsClick}
+            aria-label="Settings"
+          >
+            <img
+              src="images/icons/gear.svg"
+              alt="Settings"
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}

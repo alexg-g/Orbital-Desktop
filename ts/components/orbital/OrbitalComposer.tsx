@@ -16,6 +16,8 @@ import { OrbitalQuillEditor } from './OrbitalQuillEditor.js';
 import { OrbitalMediaPicker } from './OrbitalMediaPicker.js';
 import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker.js';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload.js';
+import { useDraft } from './useDraft.js';
+import type { DraftOperations } from './useDraft.js';
 
 export type OrbitalComposerMode = 'thread' | 'reply';
 
@@ -44,6 +46,11 @@ export type OrbitalComposerProps = {
   mode: OrbitalComposerMode;
   groupId: string;
   threadId?: string; // Optional for replies, will be generated for new threads
+  /**
+   * Context ID for draft persistence (e.g., groupId for threads, threadId for replies)
+   * If not provided, drafts will not be persisted
+   */
+  contextId?: string;
   replyContext?: {
     author: string;
     body: string;
@@ -66,6 +73,10 @@ export type OrbitalComposerProps = {
   formatBytes: (bytes: number) => string;
   uploadMedia: UploadMediaFunction;
   getAbsoluteAttachmentPath: (relativePath: string) => string;
+  /**
+   * Draft operations for persistence (optional - if not provided, drafts won't be saved)
+   */
+  draftOperations?: DraftOperations;
 };
 
 /**
@@ -87,6 +98,7 @@ export function OrbitalComposer({
   mode,
   groupId,
   threadId: providedThreadId,
+  contextId,
   replyContext,
   onSubmit,
   onSelectGif,
@@ -97,6 +109,7 @@ export function OrbitalComposer({
   formatBytes,
   uploadMedia,
   getAbsoluteAttachmentPath,
+  draftOperations,
 }: OrbitalComposerProps): JSX.Element {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -104,6 +117,12 @@ export function OrbitalComposer({
   const [selectedGif, setSelectedGif] = useState<FunGifSelection | null>(null);
   const [selectedSticker, setSelectedSticker] =
     useState<FunStickerSelection | null>(null);
+
+  // Draft management
+  const { getDraft, saveDraft: saveDraftToStorage, clearDraft } = useDraft(draftOperations);
+
+  // Track the last contextId we loaded a draft for
+  const lastLoadedContextRef = useRef<string | null>(null);
 
   // Media attachment state
   const [showMediaPicker, setShowMediaPicker] = useState(false);
@@ -137,6 +156,69 @@ export function OrbitalComposer({
 
     loadQuota();
   }, [groupId]);
+
+  // Load draft when contextId changes
+  useEffect(() => {
+    if (!contextId) {
+      return;
+    }
+
+    // Only process if context actually changed
+    if (lastLoadedContextRef.current === contextId) {
+      return;
+    }
+
+    // Context changed - reset state and load draft for new context
+    lastLoadedContextRef.current = contextId;
+
+    const draft = getDraft(contextId);
+    if (draft) {
+      // Restore draft content
+      if (draft.title !== undefined) {
+        setTitle(draft.title);
+      } else {
+        setTitle('');
+      }
+
+      // Set body state and update Quill editor
+      const draftBody = draft.body || '';
+      setBody(draftBody);
+
+      // Clear Quill and insert draft content if available
+      if (editorApiRef.current) {
+        editorApiRef.current.clear();
+        if (draftBody) {
+          editorApiRef.current.insertText(draftBody);
+        }
+      }
+    } else {
+      // No draft for this context - clear everything
+      setTitle('');
+      setBody('');
+      if (editorApiRef.current) {
+        editorApiRef.current.clear();
+      }
+    }
+  }, [contextId, getDraft]);
+
+  // Save draft when content changes (debounced via hook)
+  useEffect(() => {
+    if (!contextId) {
+      return;
+    }
+
+    // Don't save if we haven't finished loading this context's draft yet
+    if (lastLoadedContextRef.current !== contextId) {
+      return;
+    }
+
+    // Save current content (even if empty - to allow clearing drafts)
+    saveDraftToStorage(contextId, {
+      title: mode === 'thread' ? title : undefined,
+      body,
+      parentMessageId: providedThreadId,
+    });
+  }, [contextId, title, body, mode, providedThreadId, saveDraftToStorage]);
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,7 +291,12 @@ export function OrbitalComposer({
     setUploadedMediaIds([]);
     setUploadProgress({});
     setUploadErrors({});
-  }, [mode, title, body, onSubmit, uploadedMediaIds, selectedFiles]);
+
+    // Clear draft after successful submit
+    if (contextId) {
+      clearDraft(contextId);
+    }
+  }, [mode, title, body, onSubmit, uploadedMediaIds, selectedFiles, contextId, clearDraft]);
 
   const handleSelectEmoji = useCallback((emojiSelection: FunEmojiSelection) => {
     // Get emoji character from selection

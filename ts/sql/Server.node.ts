@@ -179,6 +179,7 @@ import type {
   BackupAttachmentDownloadProgress,
   GetMessagesBetweenOptions,
   MaybeStaleCallHistory} from './Interface.std.js';
+import type { DraftType, DraftDBRow } from '../types/Draft.std.js';
 import {
   AttachmentDownloadSource,
   MESSAGE_COLUMNS,
@@ -508,6 +509,10 @@ export const DataReader: ServerReadableInterface = {
   getStorageStats,
   getPendingDownloads,
 
+  // Drafts
+  getDraft,
+  getAllDrafts,
+
   __dangerouslyRunAbitraryReadOnlySqlQuery};
 
 export const DataWriter: ServerWritableInterface = {
@@ -730,7 +735,12 @@ export const DataWriter: ServerWritableInterface = {
   // Orbital Media
   saveOrbitalMedia,
   updateMediaDownloadStatus,
-  deleteOrbitalMedia};
+  deleteOrbitalMedia,
+
+  // Drafts
+  saveDraft,
+  deleteDraft,
+  deleteOldDrafts};
 
 const MESSAGE_COLUMNS_FRAGMENTS = MESSAGE_COLUMNS.map(
   column => new QueryFragment(column, [])
@@ -9080,4 +9090,118 @@ function deleteOrbitalMedia(
     WHERE media_id = $mediaId
   `
   ).run({ mediaId });
+}
+
+// =============================================================================
+// Drafts
+// =============================================================================
+
+function draftRowToType(row: DraftDBRow): DraftType {
+  return {
+    contextId: row.context_id,
+    contextType: row.context_type as 'thread' | 'chat',
+    title: row.title ?? undefined,
+    body: row.body,
+    parentMessageId: row.parent_message_id ?? undefined,
+    updatedAt: row.updated_at,
+  };
+}
+
+function getDraft(
+  db: ReadableDB,
+  contextId: string
+): DraftType | undefined {
+  const row = db
+    .prepare<{ contextId: string }>(
+      `
+      SELECT
+        context_id,
+        context_type,
+        title,
+        body,
+        parent_message_id,
+        updated_at
+      FROM drafts
+      WHERE context_id = $contextId
+    `
+    )
+    .get({ contextId });
+
+  if (!row) {
+    return undefined;
+  }
+
+  return draftRowToType(row as DraftDBRow);
+}
+
+function getAllDrafts(db: ReadableDB): Array<DraftType> {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        context_id,
+        context_type,
+        title,
+        body,
+        parent_message_id,
+        updated_at
+      FROM drafts
+      ORDER BY updated_at DESC
+    `
+    )
+    .all();
+
+  return rows.map(row => draftRowToType(row as DraftDBRow));
+}
+
+function saveDraft(db: WritableDB, draft: DraftType): void {
+  db.prepare(
+    `
+    INSERT OR REPLACE INTO drafts (
+      context_id,
+      context_type,
+      title,
+      body,
+      parent_message_id,
+      updated_at
+    ) VALUES (
+      $contextId,
+      $contextType,
+      $title,
+      $body,
+      $parentMessageId,
+      $updatedAt
+    )
+  `
+  ).run({
+    contextId: draft.contextId,
+    contextType: draft.contextType,
+    title: draft.title ?? null,
+    body: draft.body,
+    parentMessageId: draft.parentMessageId ?? null,
+    updatedAt: draft.updatedAt,
+  });
+}
+
+function deleteDraft(db: WritableDB, contextId: string): void {
+  db.prepare(
+    `
+    DELETE FROM drafts
+    WHERE context_id = $contextId
+  `
+  ).run({ contextId });
+}
+
+function deleteOldDrafts(db: WritableDB, maxAgeMs: number): number {
+  const cutoff = Date.now() - maxAgeMs;
+  const result = db
+    .prepare<{ cutoff: number }>(
+      `
+      DELETE FROM drafts
+      WHERE updated_at < $cutoff
+    `
+    )
+    .run({ cutoff });
+
+  return result.changes;
 }

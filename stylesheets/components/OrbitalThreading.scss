@@ -6,6 +6,7 @@
 // Threaded discussion forum with early 2000s aesthetic
 // =============================================================================
 
+@use 'sass:color';
 @use '../mixins';
 @use '../orbital-variables' as *;
 
@@ -49,6 +50,48 @@
 
       @include mixins.dark-theme {
         color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+  }
+
+  &__settings-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 2px outset $orbital-border-strong;
+    border-radius: $orbital-radius-base;
+    background: $orbital-surface-elevated;
+    cursor: pointer;
+    transition: all $orbital-duration-fast;
+
+    &:hover {
+      background: color.adjust($orbital-surface-elevated, $lightness: -5%);
+    }
+
+    &:active {
+      border-style: inset;
+    }
+
+    img {
+      width: 20px;
+      height: 20px;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+
+      &:hover {
+        background: color.adjust($orbital-dark-surface-elevated, $lightness: 5%);
       }
     }
   }
@@ -144,6 +187,10 @@
     flex: 1;
     overflow-y: auto;
     padding: $orbital-space-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-bg;
+    }
   }
 
   // Toggle Buttons - Bottom of sidebar (retro solid button style)
@@ -234,19 +281,39 @@
   transition: $orbital-thread-item-transition;
   font-family: $orbital-font-body;
 
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface-elevated;
+    border-color: $orbital-dark-border-strong;
+  }
+
   &:hover {
     background: $orbital-blue-tint-light;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-blue, 0.15);
+    }
   }
 
   &--active {
     border-left-color: $orbital-blue;
     border-color: $orbital-blue;
     background: $orbital-blue-tint-light;
+
+    @include mixins.dark-theme {
+      border-left-color: $orbital-dark-blue;
+      border-color: $orbital-dark-blue;
+      background: rgba($orbital-dark-blue, 0.15);
+    }
   }
 
   &--has-new {
     border-left-color: $orbital-purple;
     border-color: $orbital-purple;
+
+    @include mixins.dark-theme {
+      border-left-color: $orbital-dark-purple;
+      border-color: $orbital-dark-purple;
+    }
   }
 
   &__title {
@@ -255,6 +322,10 @@
     color: $orbital-text-primary;
     margin: 0 0 $orbital-space-xs 0;
     line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &__meta {
@@ -264,17 +335,29 @@
     font-size: $orbital-font-size-sm;
     color: $orbital-text-secondary;
     margin-top: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__author {
     font-weight: bold;
     color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &__date {
     font-family: $orbital-font-mono;
     font-size: $orbital-font-size-xs;
     letter-spacing: $orbital-letter-spacing-tight;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
   }
 
   &__stats {
@@ -287,6 +370,10 @@
   &__reply-count {
     font-size: $orbital-font-size-sm;
     color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__media-indicator {
@@ -295,12 +382,20 @@
     gap: $orbital-space-xs;
     font-size: $orbital-font-size-sm;
     color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
   }
 
   &__last-reply {
     margin-top: $orbital-space-xs;
     font-size: $orbital-font-size-xs;
     color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
   }
 }
 
@@ -342,6 +437,48 @@
 
       @include mixins.dark-theme {
         color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+  }
+
+  &__settings-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 2px outset $orbital-border-strong;
+    border-radius: $orbital-radius-base;
+    background: $orbital-surface-elevated;
+    cursor: pointer;
+    transition: all $orbital-duration-fast;
+
+    &:hover {
+      background: color.adjust($orbital-surface-elevated, $lightness: -5%);
+    }
+
+    &:active {
+      border-style: inset;
+    }
+
+    img {
+      width: 20px;
+      height: 20px;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+
+      &:hover {
+        background: color.adjust($orbital-dark-surface-elevated, $lightness: 5%);
       }
     }
   }
@@ -504,7 +641,7 @@
     img {
       width: 100%;
       height: 100%;
-      border-radius: 50%;
+      border-radius: $orbital-radius-base;
       object-fit: cover;
     }
   }
@@ -512,7 +649,7 @@
   &__avatar-placeholder {
     width: 100%;
     height: 100%;
-    border-radius: 50%;
+    border-radius: $orbital-radius-base;
     background: $orbital-blue;
     color: white;
     display: flex;
@@ -618,6 +755,10 @@
   background: $orbital-bg;
   font-family: $orbital-font-body;
 
+  @include mixins.dark-theme {
+    background: $orbital-dark-bg;
+  }
+
   &__header {
     display: flex;
     justify-content: space-between;
@@ -686,6 +827,11 @@
   &__composer-area {
     border-top: 2px solid $orbital-border-strong;
     background: $orbital-surface-elevated;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-strong;
+      background: $orbital-dark-surface-elevated;
+    }
   }
 }
 
@@ -727,8 +873,16 @@
   font-size: $orbital-font-size-base;
   line-height: $orbital-line-height-relaxed;
 
+  @include mixins.dark-theme {
+    border-color: $orbital-dark-border-strong;
+  }
+
   &:hover {
     border-color: $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-strong;
+    }
   }
 
   // Level 0 - Top-level posts (White background, gray border)
@@ -736,6 +890,11 @@
     background: $orbital-level-0-bg;
     border-left-color: $orbital-level-0-border;
     margin-left: $orbital-level-0-indent;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-left-color: $orbital-dark-border-strong;
+    }
   }
 
   // Level 1 - First-level replies (Light blue)
@@ -743,6 +902,11 @@
     background: $orbital-level-1-bg;
     border-left-color: $orbital-level-1-border;
     margin-left: $orbital-level-1-indent;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-blue, 0.12);
+      border-left-color: $orbital-dark-blue;
+    }
   }
 
   // Level 2 - Second-level replies (Light purple)
@@ -750,6 +914,11 @@
     background: $orbital-level-2-bg;
     border-left-color: $orbital-level-2-border;
     margin-left: $orbital-level-2-indent;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-purple, 0.12);
+      border-left-color: $orbital-dark-purple;
+    }
   }
 
   // Level 3 - Third-level replies (Stronger blue)
@@ -757,6 +926,11 @@
     background: $orbital-level-3-bg;
     border-left-color: $orbital-level-3-border;
     margin-left: $orbital-level-3-indent;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-blue, 0.18);
+      border-left-color: $orbital-dark-blue;
+    }
   }
 
   // Level 4+ - Fourth-level+ replies (Stronger purple, max indent)
@@ -764,6 +938,11 @@
     background: $orbital-level-4-bg;
     border-left-color: $orbital-level-4-border;
     margin-left: $orbital-level-4-indent;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-purple, 0.18);
+      border-left-color: $orbital-dark-purple;
+    }
   }
 
   // Avatar (48x48 pixel art) - Left column, spans all rows
@@ -837,6 +1016,10 @@
     font-weight: bold;
     color: $orbital-text-primary;
     font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &__contribution-badge {
@@ -851,6 +1034,12 @@
     border-radius: $orbital-radius-sm;
     font-family: $orbital-font-mono;
     letter-spacing: $orbital-letter-spacing-tight;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
   }
 
   &__timestamp {
@@ -859,6 +1048,10 @@
     font-weight: 600; // Semi-bold for better visibility
     color: $orbital-text-secondary; // Darker than tertiary for better contrast
     letter-spacing: $orbital-letter-spacing-tight;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   // Reply-to indicator - Inline with header (row 1, column 2)
@@ -872,14 +1065,26 @@
     color: $orbital-text-secondary; // Darker than tertiary for better contrast
     margin-left: $orbital-space-sm;
 
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+
     &__arrow {
       color: $orbital-text-secondary;
       font-weight: bold; // Bolder arrow for visibility
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-secondary;
+      }
     }
 
     &__author {
       color: $orbital-blue;
       font-weight: bold;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+      }
     }
   }
 
@@ -889,6 +1094,10 @@
     color: $orbital-text-primary;
     font-size: $orbital-font-size-base;
     line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
 
     p {
       margin: 0 0 $orbital-space-sm 0;
@@ -908,6 +1117,14 @@
       &:hover {
         color: $orbital-blue-hover;
       }
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+
+        &:hover {
+          color: color.adjust($orbital-dark-blue, $lightness: 10%);
+        }
+      }
     }
 
     // Bold emphasis
@@ -922,6 +1139,11 @@
       padding: 2px 4px;
       border-radius: $orbital-radius-sm;
       font-size: $orbital-font-size-sm;
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface;
+        color: $orbital-dark-text-primary;
+      }
     }
   }
 
@@ -945,9 +1167,18 @@
     font-family: $orbital-font-body;
     border-radius: $orbital-radius-sm;
 
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+
     &:hover {
       color: $orbital-blue;
       background: $orbital-blue-tint-light;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+        background: rgba($orbital-dark-blue, 0.15);
+      }
     }
 
     &:focus {
@@ -958,6 +1189,11 @@
     &:active {
       color: $orbital-blue-dark;
       background: $orbital-blue-tint;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+        background: rgba($orbital-dark-blue, 0.25);
+      }
     }
   }
 
@@ -1063,8 +1299,12 @@
   padding: $orbital-space-lg;
   padding-top: 6px; // Reduced top padding to save space
   padding-bottom: 10px;
-  background: $orbital-surface-elevated;
+  background: $orbital-surface;
   font-family: $orbital-font-body;
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface;
+  }
 
   // Field wrapper (input/textarea + character counter)
   &__field {
@@ -1085,14 +1325,28 @@
     transition: $orbital-input-transition;
     margin-bottom: 0; // Remove margin (controlled by field wrapper)
 
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+    }
+
     &:focus {
       outline: none;
       border-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-blue;
+      }
     }
 
     &::placeholder {
       color: $orbital-text-tertiary;
       font-weight: normal;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-tertiary;
+      }
     }
   }
 
@@ -1112,13 +1366,27 @@
     resize: vertical;
     margin-bottom: 0; // Remove margin (controlled by field wrapper)
 
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+    }
+
     &:focus {
       outline: none;
       border-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-blue;
+      }
     }
 
     &::placeholder {
       color: $orbital-text-tertiary;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-tertiary;
+      }
     }
   }
 
@@ -1165,6 +1433,12 @@
     min-width: 40px; // Ensure consistent button width
     min-height: 32px; // Ensure consistent button height
 
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-secondary;
+    }
+
     // Override emoji styling when used in buttons
     .emoji,
     img.emoji {
@@ -1177,10 +1451,19 @@
     &:hover {
       background: $orbital-blue-tint-light;
       border-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        background: rgba($orbital-dark-blue, 0.15);
+        border-color: $orbital-dark-blue;
+      }
     }
 
     &:active {
       background: $orbital-blue-tint;
+
+      @include mixins.dark-theme {
+        background: rgba($orbital-dark-blue, 0.25);
+      }
     }
   }
 
@@ -1240,15 +1523,28 @@
     margin-bottom: $orbital-space-md;
     font-size: $orbital-font-size-sm;
 
+    @include mixins.dark-theme {
+      background: $orbital-dark-bg;
+      border-left-color: $orbital-dark-blue;
+    }
+
     &__label {
       color: $orbital-text-tertiary;
       font-size: $orbital-font-size-sm;
       margin-bottom: $orbital-space-xs;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-tertiary;
+      }
     }
 
     &__author {
       font-weight: bold;
       color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+      }
     }
 
     &__preview {
@@ -1256,6 +1552,10 @@
       font-size: $orbital-font-size-sm;
       line-height: $orbital-line-height-normal;
       margin-top: $orbital-space-xs;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-secondary;
+      }
     }
   }
 
@@ -1423,8 +1723,17 @@
   user-select: none;
   line-height: $orbital-line-height-tight;
 
+  @include mixins.dark-theme {
+    color: $orbital-dark-text-primary;
+  }
+
   &--separator {
     letter-spacing: $orbital-letter-spacing-wide;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &--toggle {
@@ -1441,11 +1750,23 @@
     bottom: 0;
     z-index: 10;
 
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+    }
+
     &:hover {
       color: $orbital-blue;
       border-color: $orbital-blue;
       background: $orbital-surface-elevated;
       transform: scale(1.02);
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+        border-color: $orbital-dark-blue;
+        background: $orbital-dark-surface-elevated;
+      }
     }
 
     &:focus {
@@ -1454,6 +1775,13 @@
       color: $orbital-blue;
       border-color: $orbital-blue;
       background: $orbital-surface-elevated;
+
+      @include mixins.dark-theme {
+        outline-color: $orbital-dark-blue;
+        color: $orbital-dark-blue;
+        border-color: $orbital-dark-blue;
+        background: $orbital-dark-surface-elevated;
+      }
     }
 
     &:active {
@@ -1461,6 +1789,12 @@
       border-color: $orbital-blue-dark;
       background: $orbital-surface-elevated;
       transform: scale(0.98);
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+        border-color: $orbital-dark-blue;
+        background: $orbital-dark-surface;
+      }
     }
   }
 
@@ -1473,6 +1807,11 @@
     white-space: pre;
     border: 1px solid $orbital-border-subtle;
     border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-subtle;
+      background: $orbital-dark-surface;
+    }
   }
 }
 
@@ -1491,6 +1830,10 @@
     text-align: center;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 }
 
@@ -1725,7 +2068,8 @@ button img.emoji,
     min-height: 120px;
 
     @include mixins.dark-theme {
-      background: $orbital-dark-bg;
+      // Use surface-elevated for better emoji/content visibility
+      background: $orbital-dark-surface-elevated;
       border-color: $orbital-dark-border-strong;
     }
   }

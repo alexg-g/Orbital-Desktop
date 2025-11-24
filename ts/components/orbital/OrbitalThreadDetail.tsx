@@ -10,6 +10,7 @@ import { OrbitalMessage } from './OrbitalMessage';
 import { OrbitalComposer } from './OrbitalComposer';
 import type { UploadCheckResult } from './OrbitalMediaPicker';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+import type { DraftOperations } from './useDraft';
 
 export type OrbitalMessageType = {
   id: string;
@@ -49,6 +50,8 @@ export type OrbitalThreadDetailProps = {
   downloadMedia: (params: any) => Promise<string>;
   getMediaDownloadStatus: (mediaId: string) => Promise<any>;
   deleteMedia: (mediaId: string) => Promise<void>;
+  // Dependency injection for draft persistence
+  draftOperations?: DraftOperations;
 };
 
 /**
@@ -80,6 +83,7 @@ export function OrbitalThreadDetail({
   downloadMedia,
   getMediaDownloadStatus,
   deleteMedia,
+  draftOperations,
 }: OrbitalThreadDetailProps): JSX.Element {
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
   const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaAttachment>>(
@@ -217,6 +221,8 @@ export function OrbitalThreadDetail({
             formatBytes={formatBytes}
             uploadMedia={uploadMedia}
             getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+            contextId={threadId}
+            draftOperations={draftOperations}
           />
         </div>
       )}

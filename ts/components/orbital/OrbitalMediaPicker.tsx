@@ -210,10 +210,10 @@ export function OrbitalMediaPicker({
           <div className="OrbitalMediaPicker__quota-text">
             Storage: {formatBytes(quotaInfo.storageUsed)} /{' '}
             {formatBytes(quotaInfo.storageLimit)} (
-            {quotaInfo.storagePercentUsed.toFixed(1)}%)
+            {(quotaInfo.storagePercentUsed ?? 0).toFixed(1)}%)
             <br />
             Files: {quotaInfo.filesUsed} / {quotaInfo.filesLimit} (
-            {quotaInfo.filesPercentUsed.toFixed(1)}%)
+            {(quotaInfo.filesPercentUsed ?? 0).toFixed(1)}%)
           </div>
           {isNearLimit && (
             <div className="OrbitalMediaPicker__quota-warning-text">

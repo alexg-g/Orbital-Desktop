@@ -11,6 +11,7 @@ export type OrbitalChatListProps = {
   i18n: LocalizerType;
   onChatClick: (chatId: string) => void;
   onCreateChat: () => void;
+  onSettingsClick: () => void;
 };
 
 /**
@@ -23,6 +24,7 @@ export function OrbitalChatList({
   activeChatId,
   onChatClick,
   onCreateChat,
+  onSettingsClick,
 }: OrbitalChatListProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -33,6 +35,10 @@ export function OrbitalChatList({
   const handleSearchClear = useCallback(() => {
     setSearchQuery('');
   }, []);
+
+  const handleSettingsClick = useCallback(() => {
+    onSettingsClick();
+  }, [onSettingsClick]);
 
   // Filter chats based on search query
   const filteredChats = searchQuery
@@ -46,13 +52,28 @@ export function OrbitalChatList({
     <div className="OrbitalChatList">
       <div className="OrbitalChatList__header">
         <h2>Chats</h2>
-        <button
-          type="button"
-          className="OrbitalComposer__button-primary"
-          onClick={onCreateChat}
-        >
-          Create Chat
-        </button>
+        <div className="OrbitalChatList__header-actions">
+          <button
+            type="button"
+            className="OrbitalComposer__button-primary"
+            onClick={onCreateChat}
+          >
+            Create Chat
+          </button>
+          <button
+            type="button"
+            className="OrbitalChatList__settings-button"
+            onClick={handleSettingsClick}
+            aria-label="Settings"
+          >
+            <img
+              src="images/icons/gear.svg"
+              alt="Settings"
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
       </div>
 
       {/* Search Bar */}

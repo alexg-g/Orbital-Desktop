@@ -127,6 +127,7 @@ import updateToSchemaVersion1480 from './1480-chat-folders-remove-duplicates.std
 import updateToSchemaVersion1490 from './1490-lowercase-notification-profiles.std.js';
 import updateToSchemaVersion1500 from './1500-orbital-media.std.js';
 import updateToSchemaVersion1501 from './1501-orbital-threads.std.js';
+import updateToSchemaVersion1510 from './1510-add-drafts.std.js';
 
 import { DataWriter } from '../Server.node.js';
 
@@ -1611,6 +1612,7 @@ export const SCHEMA_VERSIONS: ReadonlyArray<SchemaUpdateType> = [
   { version: 1490, update: updateToSchemaVersion1490 },
   { version: 1500, update: updateToSchemaVersion1500 },
   { version: 1501, update: updateToSchemaVersion1501 },
+  { version: 1510, update: updateToSchemaVersion1510 },
 ];
 
 export class DBVersionFromFutureError extends Error {

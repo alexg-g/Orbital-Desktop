@@ -13,6 +13,7 @@ import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
 import { DisplayMode } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import type { UploadCheckResult } from './OrbitalMediaPicker';
+import { createMockDraftOperations, type DraftOperations } from './useDraft';
 import { FunProvider } from '../fun/FunProvider.dom';
 import { packs, recentStickers } from '../stickers/mocks.std';
 import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
@@ -124,6 +125,11 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     // TODO: Implement create chat functionality
     // For now, just log to console
     console.log('Create chat clicked');
+  }, []);
+
+  const handleSettingsClick = useCallback(() => {
+    // TODO: Navigate to settings view (sidebar shows menu options, main area shows settings)
+    console.log('Settings clicked - will navigate to settings view');
   }, []);
 
   const handleSubmitNewThread = useCallback((title: string, body: string, mediaIds: string[]) => {
@@ -311,6 +317,9 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const mockGetMediaDownloadStatus = useCallback(async () => ({ status: 'complete' }), []);
   const mockDeleteMedia = useCallback(async () => {}, []);
 
+  // Create mock draft operations for draft persistence per context
+  const [draftOperations] = useState<DraftOperations>(() => createMockDraftOperations());
+
   // Show loading state
   if (isLoading) {
     return (
@@ -378,6 +387,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               i18n={i18n}
               onThreadClick={handleThreadClick}
               onCreateThread={handleCreateThread}
+              onSettingsClick={handleSettingsClick}
             />
           ) : (
             <OrbitalChatList
@@ -386,6 +396,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               i18n={i18n}
               onChatClick={handleChatClick}
               onCreateChat={handleCreateChat}
+              onSettingsClick={handleSettingsClick}
             />
           )}
           <ChatsThreadsToggle
@@ -416,6 +427,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               downloadMedia={mockDownloadMedia}
               getMediaDownloadStatus={mockGetMediaDownloadStatus}
               deleteMedia={mockDeleteMedia}
+              draftOperations={draftOperations}
             />
           ) : activeChat ? (
             <OrbitalThreadDetail
@@ -437,6 +449,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               downloadMedia={mockDownloadMedia}
               getMediaDownloadStatus={mockGetMediaDownloadStatus}
               deleteMedia={mockDeleteMedia}
+              draftOperations={draftOperations}
             />
           ) : isCreatingThread ? (
             <div className="OrbitalInbox__create-thread">
@@ -454,6 +467,8 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
                 formatBytes={mockFormatBytes}
                 uploadMedia={mockUploadMedia}
                 getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+                contextId="new-thread"
+                draftOperations={draftOperations}
               />
             </div>
           ) : (
