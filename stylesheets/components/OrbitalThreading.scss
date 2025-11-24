@@ -27,6 +27,9 @@
   }
 
   &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: $orbital-space-sm $orbital-space-base $orbital-space-base;
     background: $orbital-surface-elevated;
     border-bottom: 1px solid $orbital-border-strong;
@@ -298,6 +301,309 @@
     margin-top: $orbital-space-xs;
     font-size: $orbital-font-size-xs;
     color: $orbital-text-tertiary;
+  }
+}
+
+// =============================================================================
+// CHAT LIST VIEW (for Signal-style direct messages)
+// =============================================================================
+
+.OrbitalChatList {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $orbital-bg;
+  font-family: $orbital-font-body;
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-bg;
+  }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $orbital-space-sm $orbital-space-base $orbital-space-base;
+    background: $orbital-surface-elevated;
+    border-bottom: 1px solid $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
+
+    h2 {
+      font-family: $orbital-font-header;
+      font-size: $orbital-font-size-xl;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      margin: 0;
+      line-height: $orbital-line-height-snug;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  // Search Bar - Retro 2000s style
+  &__search {
+    position: relative;
+    padding: $orbital-space-base;
+    padding-top: $orbital-space-sm;
+    padding-bottom: $orbital-space-sm;
+    background: $orbital-surface-elevated;
+    border-bottom: 1px solid $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
+  }
+
+  &__search-input {
+    width: 100%;
+    padding: 8px 32px 8px 12px; // Extra padding on right for clear button
+    border: 2px inset $orbital-border-strong; // Retro inset border
+    border-radius: $orbital-radius-base;
+    background: white;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    height: 34px;
+    box-sizing: border-box;
+    transition: border-color $orbital-duration-fast;
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+    }
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+      font-style: italic; // Retro placeholder style
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+      border-color: $orbital-dark-border-strong;
+    }
+  }
+
+  &__search-clear {
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: $orbital-text-tertiary;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background $orbital-duration-fast;
+
+    &:hover {
+      background: $orbital-text-secondary;
+    }
+
+    &:active {
+      background: $orbital-text-primary;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-text-tertiary;
+
+      &:hover {
+        background: $orbital-dark-text-secondary;
+      }
+
+      &:active {
+        background: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__items {
+    flex: 1;
+    overflow-y: auto;
+    padding: $orbital-space-sm;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-thread-item-padding;
+    width: 100%;
+    background: $orbital-surface-elevated;
+    border: 2px double $orbital-border-strong;
+    border-left: $orbital-thread-item-border-left-width solid transparent;
+    border-radius: $orbital-thread-item-border-radius;
+    margin-bottom: $orbital-space-md;
+    text-align: left;
+    cursor: pointer;
+    transition: $orbital-thread-item-transition;
+    font-family: $orbital-font-body;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+    }
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+
+      @include mixins.dark-theme {
+        background: rgba($orbital-dark-blue, 0.15);
+      }
+    }
+
+    &--active {
+      border-left-color: $orbital-blue;
+      border-color: $orbital-blue;
+      background: $orbital-blue-tint-light;
+
+      @include mixins.dark-theme {
+        border-left-color: $orbital-dark-blue;
+        border-color: $orbital-dark-blue;
+        background: rgba($orbital-dark-blue, 0.15);
+      }
+    }
+
+    &--unread {
+      border-left-color: $orbital-purple;
+      border-color: $orbital-purple;
+
+      .OrbitalChatList__name {
+        font-weight: bold;
+      }
+
+      @include mixins.dark-theme {
+        border-left-color: $orbital-dark-purple;
+        border-color: $orbital-dark-purple;
+      }
+    }
+  }
+
+  &__avatar {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+
+    img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+  }
+
+  &__avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: $orbital-blue;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: $orbital-font-size-lg;
+  }
+
+  &__online-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: $orbital-success;
+    border: 2px solid $orbital-bg;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-bg;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    margin-bottom: 2px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__last-message {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__meta {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  &__time {
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__unread-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: $orbital-blue;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__empty {
+    padding: $orbital-space-lg;
+    text-align: center;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 }
 

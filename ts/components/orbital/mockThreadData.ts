@@ -6,6 +6,233 @@ import type { OrbitalMessageType } from './OrbitalThreadDetail';
 import type { MIMEType } from '../../types/MIME.std';
 
 /**
+ * Mock user type for development/testing
+ * This mirrors what would come from the database
+ */
+export type OrbitalUser = {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  isOnline?: boolean;
+};
+
+/**
+ * Central user lookup - single source of truth for user data
+ * Maps authorId → user profile
+ *
+ * AVATAR MAPPING:
+ * Mom → rocket1.png
+ * Dad → alien1.png
+ * Grandma → moon1.png
+ * Uncle → planet1.png
+ * Aunt Sarah → nebula1.png
+ * Cousin → rocket2.png
+ * You (testuser) → blackhole1.png (center of the orbit)
+ */
+export const MOCK_USERS: Record<string, OrbitalUser> = {
+  'testuser': {
+    id: 'testuser',
+    name: 'You',
+    avatarUrl: 'images/avatars/blackhole1.png',
+    isOnline: true,
+  },
+  'user-mom': {
+    id: 'user-mom',
+    name: 'Mom',
+    avatarUrl: 'images/avatars/rocket1.png',
+    isOnline: false,
+  },
+  'user-dad': {
+    id: 'user-dad',
+    name: 'Dad',
+    avatarUrl: 'images/avatars/alien1.png',
+    isOnline: true,
+  },
+  'user-grandma': {
+    id: 'user-grandma',
+    name: 'Grandma',
+    avatarUrl: 'images/avatars/moon1.png',
+    isOnline: false,
+  },
+  'user-uncle': {
+    id: 'user-uncle',
+    name: 'Uncle',
+    avatarUrl: 'images/avatars/planet1.png',
+    isOnline: false,
+  },
+  'user-aunt': {
+    id: 'user-aunt',
+    name: 'Aunt Sarah',
+    avatarUrl: 'images/avatars/nebula1.png',
+    isOnline: false,
+  },
+  'user-cousin': {
+    id: 'user-cousin',
+    name: 'Cousin',
+    avatarUrl: 'images/avatars/rocket2.png',
+    isOnline: false,
+  },
+};
+
+/**
+ * Helper function to get user by ID
+ * Returns undefined if user not found
+ */
+export function getUserById(userId: string): OrbitalUser | undefined {
+  return MOCK_USERS[userId];
+}
+
+/**
+ * Helper function to get avatar URL by user ID
+ * Returns undefined if user not found
+ */
+export function getAvatarUrl(userId: string): string | undefined {
+  return MOCK_USERS[userId]?.avatarUrl;
+}
+
+/**
+ * Mock chat (direct message) data for development/testing
+ * Chats are 1:1 Signal-style conversations
+ */
+export type OrbitalChat = {
+  id: string;
+  userId: string; // Reference to MOCK_USERS
+  name: string;
+  avatarUrl?: string;
+  lastMessage: string;
+  lastMessageTimestamp: number;
+  unreadCount: number;
+  isOnline?: boolean;
+};
+
+export const MOCK_CHATS: ReadonlyArray<OrbitalChat> = [
+  {
+    id: 'chat-dad',
+    userId: 'user-dad',
+    name: MOCK_USERS['user-dad'].name,
+    avatarUrl: MOCK_USERS['user-dad'].avatarUrl,
+    lastMessage: 'See you at dinner Saturday!',
+    lastMessageTimestamp: Date.now() - 1 * 60 * 60 * 1000, // 1 hour ago
+    unreadCount: 0,
+    isOnline: MOCK_USERS['user-dad'].isOnline,
+  },
+  {
+    id: 'chat-mom',
+    userId: 'user-mom',
+    name: MOCK_USERS['user-mom'].name,
+    avatarUrl: MOCK_USERS['user-mom'].avatarUrl,
+    lastMessage: 'Did you see Emma\'s video? So cute!',
+    lastMessageTimestamp: Date.now() - 3 * 60 * 60 * 1000, // 3 hours ago
+    unreadCount: 2,
+    isOnline: MOCK_USERS['user-mom'].isOnline,
+  },
+  {
+    id: 'chat-grandma',
+    userId: 'user-grandma',
+    name: MOCK_USERS['user-grandma'].name,
+    avatarUrl: MOCK_USERS['user-grandma'].avatarUrl,
+    lastMessage: 'I\'ll bring the baby gates over this weekend',
+    lastMessageTimestamp: Date.now() - 24 * 60 * 60 * 1000, // Yesterday
+    unreadCount: 0,
+    isOnline: MOCK_USERS['user-grandma'].isOnline,
+  },
+];
+
+/**
+ * Mock chat messages for development/testing
+ * Simple flat messages (no threading levels)
+ */
+export const MOCK_CHAT_MESSAGES: Record<string, OrbitalMessageType[]> = {
+  'chat-dad': [
+    {
+      id: 'chat-msg-1',
+      author: MOCK_USERS['user-dad'].name,
+      authorId: 'user-dad',
+      timestamp: Date.now() - 2 * 60 * 60 * 1000,
+      body: 'Hey, are you coming to dinner Saturday?',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-dad'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-2',
+      author: MOCK_USERS['testuser'].name,
+      authorId: 'testuser',
+      timestamp: Date.now() - 1.5 * 60 * 60 * 1000,
+      body: 'Yes! What time should I be there?',
+      level: 0,
+      avatarUrl: MOCK_USERS['testuser'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-3',
+      author: MOCK_USERS['user-dad'].name,
+      authorId: 'user-dad',
+      timestamp: Date.now() - 1 * 60 * 60 * 1000,
+      body: 'See you at dinner Saturday!',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-dad'].avatarUrl,
+    },
+  ],
+  'chat-mom': [
+    {
+      id: 'chat-msg-4',
+      author: MOCK_USERS['user-mom'].name,
+      authorId: 'user-mom',
+      timestamp: Date.now() - 4 * 60 * 60 * 1000,
+      body: 'Emma took her first steps today!',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-mom'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-5',
+      author: MOCK_USERS['testuser'].name,
+      authorId: 'testuser',
+      timestamp: Date.now() - 3.5 * 60 * 60 * 1000,
+      body: 'That\'s amazing! I can\'t believe I missed it!',
+      level: 0,
+      avatarUrl: MOCK_USERS['testuser'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-6',
+      author: MOCK_USERS['user-mom'].name,
+      authorId: 'user-mom',
+      timestamp: Date.now() - 3 * 60 * 60 * 1000,
+      body: 'Did you see Emma\'s video? So cute!',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-mom'].avatarUrl,
+    },
+  ],
+  'chat-grandma': [
+    {
+      id: 'chat-msg-7',
+      author: MOCK_USERS['user-grandma'].name,
+      authorId: 'user-grandma',
+      timestamp: Date.now() - 48 * 60 * 60 * 1000,
+      body: 'Do you need baby gates for the stairs?',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-grandma'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-8',
+      author: MOCK_USERS['testuser'].name,
+      authorId: 'testuser',
+      timestamp: Date.now() - 36 * 60 * 60 * 1000,
+      body: 'Yes please! Emma is getting into everything now.',
+      level: 0,
+      avatarUrl: MOCK_USERS['testuser'].avatarUrl,
+    },
+    {
+      id: 'chat-msg-9',
+      author: MOCK_USERS['user-grandma'].name,
+      authorId: 'user-grandma',
+      timestamp: Date.now() - 24 * 60 * 60 * 1000,
+      body: 'I\'ll bring the baby gates over this weekend',
+      level: 0,
+      avatarUrl: MOCK_USERS['user-grandma'].avatarUrl,
+    },
+  ],
+};
+
+/**
  * Mock thread data for development/testing
  * This will be replaced with real database queries once backend is connected
  */

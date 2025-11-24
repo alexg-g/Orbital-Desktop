@@ -70,6 +70,14 @@ export function OrbitalThreadList({
     setSearchQuery('');
   }, []);
 
+  // Filter threads based on search query
+  const filteredThreads = searchQuery
+    ? threads.filter(thread =>
+        thread.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        thread.author.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : threads;
+
   // Group threads by day for separators
   const threadsByDay = React.useMemo(() => {
     const groups: Array<{
@@ -80,7 +88,7 @@ export function OrbitalThreadList({
     let currentDayLabel = '';
     let currentThreads: Array<OrbitalThread> = [];
 
-    threads.forEach(thread => {
+    filteredThreads.forEach(thread => {
       const dayLabel = getDayLabel(thread.timestamp, i18n);
 
       if (dayLabel !== currentDayLabel) {
@@ -105,7 +113,7 @@ export function OrbitalThreadList({
     }
 
     return groups;
-  }, [threads, i18n]);
+  }, [filteredThreads, i18n]);
 
   return (
     <div className="OrbitalThreadList">
@@ -143,10 +151,10 @@ export function OrbitalThreadList({
       </div>
 
       <div className="OrbitalThreadList__container">
-        {threads.length === 0 ? (
+        {filteredThreads.length === 0 ? (
           <OrbitalEmptyState
-            message="No threads yet"
-            subMessage="Create your first thread to get started! ✦"
+            message={searchQuery ? "No threads match your search" : "No threads yet"}
+            subMessage={searchQuery ? undefined : "Create your first thread to get started! ✦"}
           />
         ) : (
           threadsByDay.map(({ dayLabel, threads: dayThreads }) => (

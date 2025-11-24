@@ -7,7 +7,8 @@ import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
 import { OrbitalComposer } from './OrbitalComposer';
 import { OrbitalLogin } from './OrbitalLogin';
-import { MOCK_THREADS, MOCK_MESSAGES } from './mockThreadData';
+import { OrbitalChatList } from './OrbitalChatList';
+import { MOCK_THREADS, MOCK_MESSAGES, MOCK_CHATS, MOCK_CHAT_MESSAGES } from './mockThreadData';
 import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
 import { DisplayMode } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
@@ -42,6 +43,7 @@ export type OrbitalInboxProps = {
  */
 export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [threads, setThreads] = useState<OrbitalThread[]>([]);
   const [messages, setMessages] = useState<OrbitalMessageType[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -49,6 +51,10 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
   const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
+
+  // Session caches for messages (persists user-posted messages during session)
+  const [threadMessagesCache, setThreadMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
+  const [chatMessagesCache, setChatMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
 
   // Check if user is logged in to Orbital
   useEffect(() => {
@@ -91,11 +97,19 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
 
   const handleThreadClick = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
+    setActiveChatId(null); // Clear chat selection when selecting a thread
     setIsCreatingThread(false); // Cancel create mode when selecting a thread
-    // Load messages for the selected thread
-    const threadMessages = MOCK_MESSAGES[threadId] || [];
-    setMessages([...threadMessages]);
-  }, []);
+    // Load messages from cache first, then fall back to mock data
+    const cachedMessages = threadMessagesCache[threadId];
+    if (cachedMessages) {
+      setMessages([...cachedMessages]);
+    } else {
+      const threadMessages = MOCK_MESSAGES[threadId] || [];
+      setMessages([...threadMessages]);
+      // Initialize cache with mock data
+      setThreadMessagesCache(prev => ({ ...prev, [threadId]: [...threadMessages] }));
+    }
+  }, [threadMessagesCache]);
 
   const handleCreateThread = useCallback(() => {
     setActiveThreadId(null); // Deselect any active thread
@@ -104,6 +118,12 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
 
   const handleCancelCreateThread = useCallback(() => {
     setIsCreatingThread(false);
+  }, []);
+
+  const handleCreateChat = useCallback(() => {
+    // TODO: Implement create chat functionality
+    // For now, just log to console
+    console.log('Create chat clicked');
   }, []);
 
   const handleSubmitNewThread = useCallback((title: string, body: string, mediaIds: string[]) => {
@@ -142,9 +162,13 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     // Exit create mode and select the new thread
     setIsCreatingThread(false);
     setActiveThreadId(threadId);
+    setActiveChatId(null); // Clear chat selection
 
     // Initialize with root message
     setMessages([rootMessage]);
+
+    // Initialize cache for the new thread
+    setThreadMessagesCache(prev => ({ ...prev, [threadId]: [rootMessage] }));
 
     // TODO: Send to backend API
     console.log('Created new thread:', { title, body, mediaIds });
@@ -174,6 +198,12 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
       // Add to messages
       setMessages(prev => [...prev, newMessage]);
 
+      // Update cache
+      setThreadMessagesCache(prev => ({
+        ...prev,
+        [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
+      }));
+
       // Update thread reply count
       setThreads(prev => prev.map(thread =>
         thread.id === activeThreadId
@@ -200,6 +230,58 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const handleLoginSuccess = useCallback(() => {
     setIsLoggedIn(true);
   }, []);
+
+  const [chatMessages, setChatMessages] = useState<OrbitalMessageType[]>([]);
+
+  const handleChatClick = useCallback((chatId: string) => {
+    setActiveChatId(chatId);
+    setActiveThreadId(null); // Clear thread selection when selecting a chat
+    setIsCreatingThread(false); // Cancel create mode when selecting a chat
+    // Load messages from cache first, then fall back to mock data
+    const cachedMessages = chatMessagesCache[chatId];
+    if (cachedMessages) {
+      setChatMessages([...cachedMessages]);
+    } else {
+      const chatMsgs = MOCK_CHAT_MESSAGES[chatId] || [];
+      setChatMessages([...chatMsgs]);
+      // Initialize cache with mock data
+      setChatMessagesCache(prev => ({ ...prev, [chatId]: [...chatMsgs] }));
+    }
+  }, [chatMessagesCache]);
+
+  const handleSendChatMessage = useCallback(async (body: string, mediaIds?: string[]) => {
+    if (!activeChatId) {
+      return;
+    }
+
+    try {
+      const messageId = `chat-msg-${Date.now()}`;
+
+      const newMessage: OrbitalMessageType = {
+        id: messageId,
+        author: 'You',
+        authorId: 'testuser',
+        timestamp: Date.now(),
+        body,
+        level: 0,
+        hasMedia: mediaIds ? mediaIds.length > 0 : false,
+        mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+      };
+
+      // Add to chat messages
+      setChatMessages(prev => [...prev, newMessage]);
+
+      // Update cache
+      setChatMessagesCache(prev => ({
+        ...prev,
+        [activeChatId]: [...(prev[activeChatId] || []), newMessage]
+      }));
+
+      console.log('Send chat message:', { body, mediaIds, chatId: activeChatId });
+    } catch (err) {
+      console.error('Failed to send chat message:', err);
+    }
+  }, [activeChatId]);
 
   // Mock functions for dependency injection
   const mockGetQuotaInfo = useCallback(async (_groupId: string): Promise<QuotaInfo> => ({
@@ -259,6 +341,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   }
 
   const activeThread = threads.find(t => t.id === activeThreadId);
+  const activeChat = MOCK_CHATS.find(c => c.id === activeChatId);
 
   return (
     <>
@@ -286,22 +369,32 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
         onSelectGif={() => null}
       >
         <div className="OrbitalInbox">
-        {/* Left Sidebar - Thread List */}
+        {/* Left Sidebar - Thread List or Chat List */}
         <div className="OrbitalInbox__sidebar">
-          <OrbitalThreadList
-            threads={threads}
-            activeThreadId={activeThreadId}
-            i18n={i18n}
-            onThreadClick={handleThreadClick}
-            onCreateThread={handleCreateThread}
-          />
+          {displayMode === DisplayMode.Threads ? (
+            <OrbitalThreadList
+              threads={threads}
+              activeThreadId={activeThreadId}
+              i18n={i18n}
+              onThreadClick={handleThreadClick}
+              onCreateThread={handleCreateThread}
+            />
+          ) : (
+            <OrbitalChatList
+              chats={MOCK_CHATS}
+              activeChatId={activeChatId}
+              i18n={i18n}
+              onChatClick={handleChatClick}
+              onCreateChat={handleCreateChat}
+            />
+          )}
           <ChatsThreadsToggle
             displayMode={displayMode}
             onSetDisplayMode={setDisplayMode}
           />
         </div>
 
-        {/* Main Content - Thread Detail or Create Thread */}
+        {/* Main Content - Thread Detail, Chat Detail, or Create Thread */}
         <div className="OrbitalInbox__main">
           {activeThread ? (
             <OrbitalThreadDetail
@@ -315,6 +408,27 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               i18n={i18n}
               onReply={handleReply}
               onSendMessage={handleSendMessage}
+              getQuotaInfo={mockGetQuotaInfo}
+              checkUploadAllowed={mockCheckUploadAllowed}
+              formatBytes={mockFormatBytes}
+              uploadMedia={mockUploadMedia}
+              getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+              downloadMedia={mockDownloadMedia}
+              getMediaDownloadStatus={mockGetMediaDownloadStatus}
+              deleteMedia={mockDeleteMedia}
+            />
+          ) : activeChat ? (
+            <OrbitalThreadDetail
+              threadId={activeChat.id}
+              groupId="mock-group-id"
+              threadTitle={`Direct Messages with ${activeChat.name}`}
+              threadAuthor={activeChat.name}
+              threadTimestamp={activeChat.lastMessageTimestamp}
+              messages={chatMessages}
+              currentUserId="testuser"
+              i18n={i18n}
+              onReply={handleReply}
+              onSendMessage={handleSendChatMessage}
               getQuotaInfo={mockGetQuotaInfo}
               checkUploadAllowed={mockCheckUploadAllowed}
               formatBytes={mockFormatBytes}
