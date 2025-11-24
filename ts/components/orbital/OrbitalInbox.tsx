@@ -5,6 +5,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
+import { OrbitalComposer } from './OrbitalComposer';
 import { OrbitalLogin } from './OrbitalLogin';
 import { MOCK_THREADS, MOCK_MESSAGES } from './mockThreadData';
 import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
@@ -15,6 +16,7 @@ import { FunProvider } from '../fun/FunProvider.dom';
 import { packs, recentStickers } from '../stickers/mocks.std';
 import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
 import { EmojiSkinTone } from '../fun/data/emojis.std';
+import { TitlebarDragArea } from '../TitlebarDragArea.dom';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -44,6 +46,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [messages, setMessages] = useState<OrbitalMessageType[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
   const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
 
@@ -88,14 +91,63 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
 
   const handleThreadClick = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
+    setIsCreatingThread(false); // Cancel create mode when selecting a thread
     // Load messages for the selected thread
     const threadMessages = MOCK_MESSAGES[threadId] || [];
     setMessages([...threadMessages]);
   }, []);
 
   const handleCreateThread = useCallback(() => {
-    // TODO: Implement thread creation
-    console.log('Create thread clicked');
+    setActiveThreadId(null); // Deselect any active thread
+    setIsCreatingThread(true);
+  }, []);
+
+  const handleCancelCreateThread = useCallback(() => {
+    setIsCreatingThread(false);
+  }, []);
+
+  const handleSubmitNewThread = useCallback((title: string, body: string, mediaIds: string[]) => {
+    const threadId = `thread-${Date.now()}`;
+    const messageId = `message-${Date.now()}`;
+
+    // Create a new thread object
+    const newThread: OrbitalThread = {
+      id: threadId,
+      title,
+      author: 'You', // TODO: Get from current user
+      authorId: 'testuser',
+      timestamp: Date.now(),
+      replyCount: 0, // No replies yet (root post doesn't count)
+      hasMedia: mediaIds.length > 0,
+      hasVideo: false,
+      hasImage: mediaIds.length > 0,
+      isUnread: false,
+    };
+
+    // Create the root message (original post)
+    const rootMessage: OrbitalMessageType = {
+      id: messageId,
+      author: 'You',
+      authorId: 'testuser',
+      timestamp: Date.now(),
+      body,
+      level: 0, // Root level
+      hasMedia: mediaIds.length > 0,
+      mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+    };
+
+    // Add to threads list at the top
+    setThreads(prev => [newThread, ...prev]);
+
+    // Exit create mode and select the new thread
+    setIsCreatingThread(false);
+    setActiveThreadId(threadId);
+
+    // Initialize with root message
+    setMessages([rootMessage]);
+
+    // TODO: Send to backend API
+    console.log('Created new thread:', { title, body, mediaIds });
   }, []);
 
   const handleSendMessage = useCallback(async (body: string, mediaIds?: string[]) => {
@@ -104,7 +156,32 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     }
 
     try {
-      // TODO: Implement message sending to Orbital backend
+      const messageId = `message-${Date.now()}`;
+
+      // Create the reply message
+      const newMessage: OrbitalMessageType = {
+        id: messageId,
+        author: 'You',
+        authorId: 'testuser',
+        timestamp: Date.now(),
+        body,
+        level: 1, // Reply level (could be adjusted for nested replies)
+        parentId: undefined, // Direct reply to thread (not nested)
+        hasMedia: mediaIds ? mediaIds.length > 0 : false,
+        mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+      };
+
+      // Add to messages
+      setMessages(prev => [...prev, newMessage]);
+
+      // Update thread reply count
+      setThreads(prev => prev.map(thread =>
+        thread.id === activeThreadId
+          ? { ...thread, replyCount: thread.replyCount + 1 }
+          : thread
+      ));
+
+      // TODO: Send to backend API
       console.log('Send message:', { body, mediaIds, threadId: activeThreadId });
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -155,52 +232,60 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   // Show loading state
   if (isLoading) {
     return (
-      <div className="OrbitalInbox OrbitalInbox--loading">
-        <div className="OrbitalInbox__loading-spinner" />
-        <div className="OrbitalInbox__loading-text">Loading Orbital...</div>
-      </div>
+      <>
+        <TitlebarDragArea />
+        <div className="OrbitalInbox OrbitalInbox--loading">
+          <div className="OrbitalInbox__loading-spinner" />
+          <div className="OrbitalInbox__loading-text">Loading Orbital...</div>
+        </div>
+      </>
     );
   }
 
   // Show login screen if not logged in
   if (!isLoggedIn) {
     return (
-      <div className="OrbitalInbox OrbitalInbox--login">
-        <OrbitalLogin
-          i18n={i18n}
-          onClose={() => {}} // No-op for now (can't close without logging in)
-          onLoginSuccess={handleLoginSuccess}
-        />
-      </div>
+      <>
+        <TitlebarDragArea />
+        <div className="OrbitalInbox OrbitalInbox--login">
+          <OrbitalLogin
+            i18n={i18n}
+            onClose={() => {}} // No-op for now (can't close without logging in)
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </div>
+      </>
     );
   }
 
   const activeThread = threads.find(t => t.id === activeThreadId);
 
   return (
-    <FunProvider
-      i18n={i18n}
-      // Recents
-      recentEmojis={MOCK_RECENT_EMOJIS}
-      recentStickers={recentStickers}
-      recentGifs={[]}
-      // Emojis
-      emojiSkinToneDefault={skinTone}
-      onEmojiSkinToneDefaultChange={setSkinTone}
-      onOpenCustomizePreferredReactionsModal={() => null}
-      onSelectEmoji={() => null}
-      // Stickers
-      installedStickerPacks={packs}
-      showStickerPickerHint={false}
-      onClearStickerPickerHint={() => null}
-      onSelectSticker={() => null}
-      // Gifs
-      fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
-      fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
-      onSelectGif={() => null}
-    >
-      <div className="OrbitalInbox">
+    <>
+      <TitlebarDragArea />
+      <FunProvider
+        i18n={i18n}
+        // Recents
+        recentEmojis={MOCK_RECENT_EMOJIS}
+        recentStickers={recentStickers}
+        recentGifs={[]}
+        // Emojis
+        emojiSkinToneDefault={skinTone}
+        onEmojiSkinToneDefaultChange={setSkinTone}
+        onOpenCustomizePreferredReactionsModal={() => null}
+        onSelectEmoji={() => null}
+        // Stickers
+        installedStickerPacks={packs}
+        showStickerPickerHint={false}
+        onClearStickerPickerHint={() => null}
+        onSelectSticker={() => null}
+        // Gifs
+        fetchGifsSearch={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+        fetchGifsFeatured={() => Promise.resolve(MOCK_GIFS_PAGINATED_ONE_PAGE)}
+        fetchGif={() => Promise.resolve(new Blob([new Uint8Array(1)]))}
+        onSelectGif={() => null}
+      >
+        <div className="OrbitalInbox">
         {/* Left Sidebar - Thread List */}
         <div className="OrbitalInbox__sidebar">
           <OrbitalThreadList
@@ -216,7 +301,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
           />
         </div>
 
-        {/* Main Content - Thread Detail */}
+        {/* Main Content - Thread Detail or Create Thread */}
         <div className="OrbitalInbox__main">
           {activeThread ? (
             <OrbitalThreadDetail
@@ -239,9 +324,38 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               getMediaDownloadStatus={mockGetMediaDownloadStatus}
               deleteMedia={mockDeleteMedia}
             />
+          ) : isCreatingThread ? (
+            <div className="OrbitalInbox__create-thread">
+              <div className="OrbitalInbox__create-thread-header">
+                <h2>Create New Thread</h2>
+              </div>
+              <OrbitalComposer
+                mode="thread"
+                groupId="mock-group-id"
+                i18n={i18n}
+                onSubmit={handleSubmitNewThread}
+                onCancel={handleCancelCreateThread}
+                getQuotaInfo={mockGetQuotaInfo}
+                checkUploadAllowed={mockCheckUploadAllowed}
+                formatBytes={mockFormatBytes}
+                uploadMedia={mockUploadMedia}
+                getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
+              />
+            </div>
           ) : (
             <div className="OrbitalInbox__empty-state">
-              <div className="OrbitalInbox__empty-state-icon">💬</div>
+              <div className="OrbitalInbox__empty-state-icon">
+                <img
+                  src="images/orbital/orbital-logo-light-lg.svg"
+                  alt="Orbital"
+                  className="OrbitalInbox__empty-state-logo OrbitalInbox__empty-state-logo--light"
+                />
+                <img
+                  src="images/orbital/orbital-logo-darkmode-lg.svg"
+                  alt="Orbital"
+                  className="OrbitalInbox__empty-state-logo OrbitalInbox__empty-state-logo--dark"
+                />
+              </div>
               <div className="OrbitalInbox__empty-state-title">
                 Welcome to Orbital
               </div>
@@ -252,6 +366,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
           )}
         </div>
       </div>
-    </FunProvider>
+      </FunProvider>
+    </>
   );
 }

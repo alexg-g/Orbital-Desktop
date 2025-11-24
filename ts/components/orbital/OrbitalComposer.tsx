@@ -117,6 +117,7 @@ export function OrbitalComposer({
   const editorApiRef = useRef<{
     insertText: (text: string) => void;
     insertEmoji: (emoji: string) => void;
+    clear: () => void;
   } | null>(null);
 
   // Character limits
@@ -176,6 +177,7 @@ export function OrbitalComposer({
       );
       setTitle('');
       setBody('');
+      editorApiRef.current?.clear();
     } else {
       // Reply mode only needs body
       if (!body.trim()) {
@@ -198,6 +200,7 @@ export function OrbitalComposer({
 
       (onSubmit as (body: string, mediaIds: string[]) => void)(body, mediaIds);
       setBody('');
+      editorApiRef.current?.clear();
     }
     // Clear attachments after submit
     setSelectedGif(null);

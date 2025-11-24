@@ -6,7 +6,8 @@
 
 .OrbitalInbox {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 28px);
+  margin-top: 28px;
   background: $orbital-bg;
   font-family: $orbital-font-body;
 
@@ -61,9 +62,30 @@
   }
 
   &__empty-state-icon {
-    font-size: 64px;
     margin-bottom: 16px;
-    opacity: 0.5;
+  }
+
+  &__empty-state-logo {
+    width: 128px;
+    height: auto;
+
+    &--light {
+      display: block;
+    }
+
+    &--dark {
+      display: none;
+    }
+
+    @include mixins.dark-theme {
+      &--light {
+        display: none;
+      }
+
+      &--dark {
+        display: block;
+      }
+    }
   }
 
   &__empty-state-title {
@@ -85,6 +107,41 @@
 
     @include mixins.dark-theme {
       color: $orbital-dark-text-secondary;
+    }
+  }
+
+  // Create thread state
+  &__create-thread {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: $orbital-bg;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-bg;
+    }
+  }
+
+  &__create-thread-header {
+    padding: $orbital-space-base;
+    background: $orbital-surface-elevated;
+    border-bottom: 3px double $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
+
+    h2 {
+      font-family: $orbital-font-header;
+      font-size: $orbital-font-size-xl;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      margin: 0;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
     }
   }
 

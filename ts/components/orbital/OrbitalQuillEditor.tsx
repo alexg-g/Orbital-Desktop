@@ -128,6 +128,10 @@ export function OrbitalQuillEditor({
           // EmojiBlot is treated as a single character position in Quill
           quill.setSelection(index + 1, 0, 'user');
         },
+        clear: () => {
+          quill.setContents([{ insert: '\n' }]);
+          quill.setSelection(0);
+        },
       });
     }
 

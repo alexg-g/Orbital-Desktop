@@ -27,7 +27,7 @@
   }
 
   &__header {
-    padding: $orbital-space-base;
+    padding: $orbital-space-sm $orbital-space-base $orbital-space-base;
     background: $orbital-surface-elevated;
     border-bottom: 1px solid $orbital-border-strong;
 
@@ -313,17 +313,60 @@
   font-family: $orbital-font-body;
 
   &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     padding: $orbital-space-base;
     background: $orbital-surface-elevated;
     border-bottom: 3px double $orbital-border-strong; // Double-line border (retro)
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
 
     h1 {
       font-family: $orbital-font-header;
       font-size: $orbital-font-size-xl;
       font-weight: bold;
       color: $orbital-text-primary;
-      margin: 0 0 $orbital-space-sm 0;
+      margin: 0 0 $orbital-space-xs 0;
       line-height: $orbital-line-height-snug;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__header-left {
+    flex: 1;
+  }
+
+  &__header-right {
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  &__header-meta {
+    font-family: $orbital-font-mono; // Courier New for "computer text" feeling
+    font-size: $orbital-font-size-xs;
+    letter-spacing: 0.01em;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__reply-count {
+    font-family: $orbital-font-body; // Verdana for metadata
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    font-weight: 600;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
     }
   }
 
@@ -713,7 +756,7 @@
 .OrbitalComposer {
   padding: $orbital-space-lg;
   padding-top: 6px; // Reduced top padding to save space
-  padding-bottom: 60px; // Large bottom padding to prevent button cutoff
+  padding-bottom: 10px;
   background: $orbital-surface-elevated;
   font-family: $orbital-font-body;
 

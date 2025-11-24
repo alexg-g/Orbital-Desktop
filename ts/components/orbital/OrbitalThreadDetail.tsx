@@ -142,11 +142,18 @@ export function OrbitalThreadDetail({
     <div className="OrbitalThreadDetail">
       {/* Thread Header */}
       <div className="OrbitalThreadDetail__header">
-        <h1>{threadTitle}</h1>
-        <div className="OrbitalMessage__meta">
-          <span className="OrbitalMessage__author">{threadAuthor}</span>
-          <span className="OrbitalMessage__timestamp">
-            {formatTimestamp(threadTimestamp, i18n)}
+        <div className="OrbitalThreadDetail__header-left">
+          <h1>{threadTitle}</h1>
+          <div className="OrbitalThreadDetail__header-meta">
+            Started by {threadAuthor} · {formatTimestamp(threadTimestamp, i18n)}
+          </div>
+        </div>
+        <div className="OrbitalThreadDetail__header-right">
+          <span className="OrbitalThreadDetail__reply-count">
+            {(() => {
+              const replyCount = messages.filter(m => m.level > 0).length;
+              return `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
+            })()}
           </span>
         </div>
       </div>
