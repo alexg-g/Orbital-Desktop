@@ -34,6 +34,8 @@ const signalRelayRoutes = require('./routes/signal-relay');
 const threadsRoutes = require('./routes/threads');
 const groupsRoutes = require('./routes/groups');
 const mediaRoutes = require('./routes/media');
+const usersRoutes = require('./routes/users');
+const invitesRoutes = require('./routes/invites');
 
 // Import WebSocket server
 const { initWebSocketServer } = require('./websocket/signalWebSocket');
@@ -125,12 +127,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Static file serving for avatars (no authentication required for avatars within groups)
+// Avatars are served directly from the filesystem
+const avatarPath = process.env.AVATAR_STORAGE_PATH || './uploads/avatars';
+app.use('/avatars', express.static(avatarPath));
+
 // API Routes
 app.use('/api', authLimiter, authRoutes);
 app.use('/v1', signalRelayRoutes); // Signal Protocol relay endpoints
 app.use('/api/threads', threadsRoutes);
 app.use('/api/groups', groupsRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/invites', invitesRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

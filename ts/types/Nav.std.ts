@@ -50,6 +50,16 @@ export enum DisplayMode {
   Threads = 'threads',
 }
 
+// Orbital: Settings pages for the dual-panel settings UI
+export enum OrbitalSettingsPage {
+  General = 'General',
+  Appearance = 'Appearance',
+  Notifications = 'Notifications',
+  Privacy = 'Privacy',
+  Invites = 'Invites',
+  Files = 'Files',
+}
+
 export enum SettingsPage {
   // Accessible through left nav
   Profile = 'Profile',

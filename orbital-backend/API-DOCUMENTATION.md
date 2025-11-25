@@ -274,6 +274,297 @@ Remove a member from a group. Only the group creator can remove members.
 
 ---
 
+## User Profile API Endpoints
+
+### 1. Upload Avatar
+
+Upload a new avatar image for the current user. Replaces any existing avatar.
+
+**Endpoint:** `POST /api/users/avatar`
+**Authentication:** Required
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+- `avatar` - Image file (JPEG, PNG, GIF, or WebP, max 5MB)
+
+**Response:** `200 OK`
+```json
+{
+  "avatarUrl": "/avatars/user-id-timestamp.jpg",
+  "message": "Avatar uploaded successfully"
+}
+```
+
+**Errors:**
+- `400` - No avatar file uploaded
+- `400` - Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.
+- `401` - Unauthorized
+- `404` - User not found
+
+**Features:**
+- Max 5MB file size
+- Supports JPEG, PNG, GIF, WebP
+- Automatic cleanup of previous avatar
+- Unique filename generation (userId-timestamp.ext)
+
+---
+
+### 2. Remove Avatar
+
+Remove the current user's avatar.
+
+**Endpoint:** `DELETE /api/users/avatar`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "success": true,
+  "message": "Avatar removed successfully"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `404` - User not found
+
+**Features:**
+- Removes avatar_url from database
+- Deletes avatar file from filesystem
+- Idempotent (returns success if no avatar exists)
+
+---
+
+### 3. Get User Avatar
+
+Get the avatar URL for a specific user.
+
+**Endpoint:** `GET /api/users/:userId/avatar`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "avatarUrl": "/avatars/user-id-timestamp.jpg"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `404` - User not found
+
+**Features:**
+- Returns null if user has no avatar
+- Avatar URL can be used directly in <img> tags
+
+---
+
+### 4. Get Current User Profile
+
+Get the current user's profile information.
+
+**Endpoint:** `GET /api/users/me`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "username": "alice",
+  "avatarUrl": "/avatars/user-id-timestamp.jpg",
+  "createdAt": "2024-11-07T12:00:00.000Z"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `404` - User not found
+
+---
+
+### 5. Get User Profile
+
+Get another user's public profile information. Only accessible to users in the same groups.
+
+**Endpoint:** `GET /api/users/:userId`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "id": "uuid",
+  "username": "bob",
+  "avatarUrl": "/avatars/user-id-timestamp.jpg"
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Cannot view profile of users not in your groups
+- `404` - User not found
+
+**Features:**
+- Privacy: Only users in shared groups can view profiles
+- Returns limited public information (no email, password, etc.)
+
+---
+
+## Invite Code API Endpoints
+
+### 1. Generate Invite Code
+
+Generate a new invite code for a group. Only group creator can generate codes.
+
+**Endpoint:** `POST /api/invites/generate`
+**Authentication:** Required
+**Content-Type:** `application/json`
+
+**Request Body:**
+```json
+{
+  "groupId": "uuid"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "code": "X7Y8Z9A1",
+  "expiresAt": 1699977600000,
+  "createdAt": 1699372800000
+}
+```
+
+**Errors:**
+- `400` - Missing required field: groupId
+- `401` - Unauthorized
+- `403` - Only group creator can generate invite codes
+- `404` - Group not found
+
+**Features:**
+- Returns Unix timestamps in milliseconds (not ISO strings)
+- 8-character alphanumeric code
+- 24-hour expiration
+- Crypto-secure random generation
+
+---
+
+### 2. Generate Invite Link
+
+Generate a shareable invite link for a group. Only group creator can generate links.
+
+**Endpoint:** `POST /api/invites/generate-link`
+**Authentication:** Required
+**Content-Type:** `application/json`
+
+**Request Body:**
+```json
+{
+  "groupId": "uuid",
+  "linkType": "orbital"
+}
+```
+
+**Parameters:**
+- `groupId` - Group UUID (required)
+- `linkType` - Either "orbital" or "web" (optional, defaults to "orbital")
+  - `orbital` - Deep link format: `orbital://invite/{code}`
+  - `web` - Web URL format: `https://orbitl.org/invite/{code}`
+
+**Response:** `201 Created`
+```json
+{
+  "link": "orbital://invite/X7Y8Z9A1",
+  "code": "X7Y8Z9A1",
+  "expiresAt": 1699977600000,
+  "createdAt": 1699372800000
+}
+```
+
+**Errors:**
+- `400` - Missing required field: groupId
+- `400` - linkType must be either "orbital" or "web"
+- `401` - Unauthorized
+- `403` - Only group creator can generate invite links
+- `404` - Group not found
+
+**Features:**
+- Deep link support for Orbital app
+- Web link support for browser/sharing
+- Web domain configurable via WEB_DOMAIN env var
+- Returns Unix timestamps in milliseconds
+
+---
+
+### 3. Check Invite Code Status
+
+Check the status of an invite code. Anyone can check status.
+
+**Endpoint:** `GET /api/invites/status/:code`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "status": "pending",
+  "createdAt": 1699372800000,
+  "expiresAt": 1699977600000,
+  "usedAt": null,
+  "usedBy": null
+}
+```
+
+**Status Values:**
+- `pending` - Code is valid and not yet used
+- `accepted` - Code has been used
+- `expired` - Code has expired (past 24 hours)
+
+**Errors:**
+- `400` - Invalid invite code format
+- `401` - Unauthorized
+- `404` - Invite code not found
+
+**Features:**
+- Returns detailed status information
+- Includes usage information if code was accepted
+- Returns Unix timestamps in milliseconds
+
+---
+
+### 4. Get Group Invite Codes
+
+Get all active invite codes for a group. Only group creator can view codes.
+
+**Endpoint:** `GET /api/invites/group/:groupId`
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{
+  "inviteCodes": [
+    {
+      "id": "uuid",
+      "code": "X7Y8Z9A1",
+      "createdAt": 1699372800000,
+      "expiresAt": 1699977600000,
+      "status": "pending"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `401` - Unauthorized
+- `403` - Only group creator can view invite codes
+- `404` - Group not found
+
+**Features:**
+- Returns only active (unused, unexpired) codes
+- Returns Unix timestamps in milliseconds
+- All codes in response have status "pending"
+
+---
+
 ## Thread API Endpoints
 
 ### 1. Create Thread
@@ -559,11 +850,24 @@ Page 3: ?limit=50&offset=100 (items 101-150)
 | GET /api/groups/:groupId/members | ✅ Complete | List group members |
 | GET /api/groups/:groupId/quota | ✅ Complete | Get storage quota status |
 | DELETE /api/groups/:groupId/members/:userId | ✅ Complete | Remove member (creator only) |
+| **User Profile Management** | | |
+| POST /api/users/avatar | ✅ Complete | Upload avatar (5MB max, image files) |
+| DELETE /api/users/avatar | ✅ Complete | Remove avatar |
+| GET /api/users/:userId/avatar | ✅ Complete | Get user's avatar URL |
+| GET /api/users/me | ✅ Complete | Get current user profile |
+| GET /api/users/:userId | ✅ Complete | Get user profile (shared groups only) |
+| **Invite Code API** | | |
+| POST /api/invites/generate | ✅ Complete | Generate invite code |
+| POST /api/invites/generate-link | ✅ Complete | Generate shareable invite link |
+| GET /api/invites/status/:code | ✅ Complete | Check invite code status |
+| GET /api/invites/group/:groupId | ✅ Complete | Get group's invite codes |
 | **Invite Code System** | | |
 | 8-char alphanumeric codes | ✅ Complete | Crypto-secure random generation |
 | Single-use enforcement | ✅ Complete | Code marked as used on join |
-| 7-day expiration | ✅ Complete | Automatic expiration check |
+| 24-hour expiration | ✅ Complete | Reduced from 7 days for security |
 | Max 10 members limit | ✅ Complete | Enforced on join |
+| Deep link support | ✅ Complete | orbital://invite/{code} format |
+| Web link support | ✅ Complete | Configurable web domain |
 | **Thread Management** | | |
 | POST /api/threads | ✅ Complete | Create thread with Signal message linking |
 | GET /api/groups/:groupId/threads | ✅ Complete | Paginated thread listing |
@@ -578,6 +882,7 @@ Page 3: ?limit=50&offset=100 (items 101-150)
 | Error Handling | ✅ Complete | Consistent JSON responses |
 | Rate Limiting | ✅ Complete | 100 req/15min (API), 10 req/15min (auth) |
 | Logging | ✅ Complete | Winston logger with request tracking |
+| Avatar Storage | ✅ Complete | Static file serving at /avatars |
 | API Tests - Groups | ✅ Complete | 29 passing tests |
 | API Tests - Quotas | ✅ Complete | Comprehensive quota tests |
 | API Documentation | ✅ Complete | This file |

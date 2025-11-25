@@ -164,3 +164,15 @@ if (window.SignalContext.config.ciMode === 'full') {
 
 contextBridge.exposeInMainWorld('showDebugLog', window.IPC.showDebugLog);
 contextBridge.exposeInMainWorld('startApp', window.startApp);
+
+// Expose itemStorage for Orbital settings
+contextBridge.exposeInMainWorld('storage', {
+  get: <K extends keyof StorageAccessType>(
+    key: K,
+    defaultValue?: StorageAccessType[K]
+  ) => itemStorage.get(key, defaultValue),
+  put: <K extends keyof StorageAccessType>(
+    key: K,
+    value: StorageAccessType[K]
+  ) => itemStorage.put(key, value),
+});

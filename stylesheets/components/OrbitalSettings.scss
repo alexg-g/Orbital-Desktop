@@ -1,0 +1,998 @@
+// Copyright 2025 Orbital
+// SPDX-License-Identifier: AGPL-3.0-only
+
+@use '../mixins';
+@use '../orbital-variables' as *;
+
+// =============================================================================
+// SETTINGS NAVIGATION (Sidebar when in settings mode)
+// =============================================================================
+
+.OrbitalSettingsNav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $orbital-surface;
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface;
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-base;
+    background: $orbital-surface-elevated;
+    border-bottom: 3px double $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
+
+    h2 {
+      font-family: $orbital-font-header;
+      font-size: $orbital-font-size-xl;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      margin: 0;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: $orbital-space-xs;
+    padding: $orbital-space-xs $orbital-space-sm;
+    border: none;
+    border-radius: $orbital-radius-base;
+    background: transparent;
+    color: $orbital-blue;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-blue;
+
+      &:hover {
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+    }
+  }
+
+  &__items {
+    flex: 1;
+    overflow-y: auto;
+    padding: $orbital-space-sm;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    width: 100%;
+    padding: $orbital-space-md $orbital-space-base;
+    margin-bottom: $orbital-space-xs;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: $orbital-radius-base;
+    background: transparent;
+    color: $orbital-text-primary;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    font-weight: normal;
+    text-align: left;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+    }
+
+    &--active {
+      background: $orbital-blue-tint;
+      border-left-color: $orbital-blue;
+      font-weight: bold;
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+
+      &:hover {
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+
+      &--active {
+        background: rgba($orbital-dark-blue, 0.15);
+        border-left-color: $orbital-dark-blue;
+      }
+    }
+  }
+
+  &__item-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+
+    .OrbitalSettingsNav__item--active & {
+      opacity: 1;
+    }
+  }
+}
+
+// =============================================================================
+// MAIN SETTINGS PANEL (Right side)
+// =============================================================================
+
+.OrbitalSettings {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: $orbital-bg;
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-bg;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-base;
+    background: $orbital-surface-elevated;
+    border-bottom: 3px double $orbital-border-strong;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-bottom-color: $orbital-dark-border-strong;
+    }
+
+    h2 {
+      font-family: $orbital-font-header;
+      font-size: $orbital-font-size-xl;
+      font-weight: bold;
+      color: $orbital-text-primary;
+      margin: 0;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+
+  &__back-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: $orbital-radius-base;
+    background: transparent;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      &:hover {
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+    }
+
+    img {
+      width: 20px;
+      height: 20px;
+      opacity: 0.7;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: $orbital-space-lg;
+  }
+}
+
+// =============================================================================
+// SETTINGS SECTION
+// =============================================================================
+
+.OrbitalSettingsSection {
+  margin-bottom: $orbital-space-xl;
+
+  &__title {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    margin: 0 0 $orbital-space-md;
+    padding-bottom: $orbital-space-xs;
+    border-bottom: 2px solid $orbital-blue;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+      border-bottom-color: $orbital-dark-blue;
+    }
+  }
+
+  &__content {
+    padding: 0;
+  }
+}
+
+// =============================================================================
+// SETTINGS CONTROLS
+// =============================================================================
+
+.OrbitalSettingsControl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $orbital-space-md 0;
+  border-bottom: 1px solid $orbital-border-subtle;
+
+  @include mixins.dark-theme {
+    border-bottom-color: $orbital-dark-border-subtle;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &__label {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-xs;
+    flex: 1;
+    padding-right: $orbital-space-base;
+  }
+
+  &__label-text {
+    font-weight: bold;
+    color: $orbital-text-primary;
+    font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__description {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__value {
+    color: $orbital-text-secondary;
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+}
+
+// =============================================================================
+// TOGGLE SWITCH
+// =============================================================================
+
+.OrbitalToggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+
+    &:checked + .OrbitalToggle__slider {
+      background-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        background-color: $orbital-dark-blue;
+      }
+    }
+
+    &:checked + .OrbitalToggle__slider::before {
+      transform: translateX(20px);
+    }
+
+    &:focus + .OrbitalToggle__slider {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    &:disabled + .OrbitalToggle__slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: $orbital-border-strong;
+    transition: background-color $orbital-duration-fast $orbital-ease-default;
+    border-radius: 24px;
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-border-strong;
+    }
+
+    &::before {
+      position: absolute;
+      content: '';
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: transform $orbital-duration-fast $orbital-ease-default;
+      border-radius: 50%;
+    }
+  }
+}
+
+// =============================================================================
+// SELECT DROPDOWN
+// =============================================================================
+
+.OrbitalSelect {
+  min-width: 150px;
+  padding: $orbital-input-padding-y $orbital-input-padding-x;
+  padding-right: 32px;
+  border: $orbital-input-border-width solid $orbital-border-strong;
+  border-radius: $orbital-input-border-radius;
+  background: $orbital-surface-elevated;
+  color: $orbital-text-primary;
+  font-family: $orbital-font-body;
+  font-size: $orbital-font-size-base;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 8L2 4h8L6 8z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+
+  @include mixins.dark-theme {
+    background-color: $orbital-dark-surface-elevated;
+    border-color: $orbital-dark-border-strong;
+    color: $orbital-dark-text-primary;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239CA3AF' d='M6 8L2 4h8L6 8z'/%3E%3C/svg%3E");
+  }
+
+  &:focus {
+    outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+    outline-offset: $orbital-focus-outline-offset;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// =============================================================================
+// SETTINGS BUTTON
+// =============================================================================
+
+.OrbitalSettingsButton {
+  padding: $orbital-btn-padding-y $orbital-btn-padding-x;
+  border: $orbital-btn-border-width solid transparent;
+  border-radius: $orbital-btn-border-radius;
+  font-family: $orbital-font-body;
+  font-size: $orbital-btn-font-size;
+  font-weight: $orbital-btn-font-weight;
+  cursor: pointer;
+  transition: $orbital-btn-transition;
+
+  &:focus {
+    outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+    outline-offset: $orbital-focus-outline-offset;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    background: $orbital-blue;
+    color: white;
+    border-color: $orbital-blue-dark;
+
+    &:hover:not(:disabled) {
+      background: $orbital-blue-hover;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-blue;
+      border-color: $orbital-blue;
+    }
+  }
+
+  &--secondary {
+    background: $orbital-surface-elevated;
+    color: $orbital-text-primary;
+    border-color: $orbital-border-strong;
+
+    &:hover:not(:disabled) {
+      background: $orbital-blue-tint-light;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      color: $orbital-dark-text-primary;
+      border-color: $orbital-dark-border-strong;
+
+      &:hover:not(:disabled) {
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+    }
+  }
+
+  &--danger {
+    background: $orbital-error;
+    color: white;
+    border-color: #dd4a4a; // darken($orbital-error, 10%)
+
+    &:hover:not(:disabled) {
+      background: #f35050; // darken($orbital-error, 5%)
+    }
+  }
+}
+
+// =============================================================================
+// INVITES-SPECIFIC STYLES
+// =============================================================================
+
+.OrbitalSettingsInvites {
+  &__description {
+    color: $orbital-text-secondary;
+    margin-bottom: $orbital-space-base;
+    line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-lg;
+  }
+
+  &__action-group {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+  }
+
+  &__code-display,
+  &__link-display {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-sm $orbital-space-md;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+
+    code {
+      flex: 1;
+      font-family: $orbital-font-mono;
+      font-size: $orbital-font-size-base;
+      color: $orbital-blue;
+      word-break: break-all;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+      }
+    }
+  }
+
+  &__copy-button {
+    padding: $orbital-space-xs $orbital-space-sm;
+    background: $orbital-purple;
+    color: white;
+    border: none;
+    border-radius: $orbital-radius-base;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-purple-hover;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-purple;
+
+      &:hover {
+        background: $orbital-purple;
+      }
+    }
+  }
+
+  &__empty {
+    color: $orbital-text-tertiary;
+    font-style: italic;
+    padding: $orbital-space-base;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+  }
+
+  &__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $orbital-space-md;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__item-name {
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__item-status {
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    padding: $orbital-badge-padding-y $orbital-badge-padding-x;
+    border-radius: $orbital-badge-border-radius;
+    text-transform: capitalize;
+
+    &--pending {
+      background: rgba($orbital-warning, 0.15);
+      color: $orbital-warning;
+    }
+
+    &--accepted {
+      background: rgba($orbital-success, 0.15);
+      color: $orbital-success;
+    }
+
+    &--expired {
+      background: rgba($orbital-error, 0.15);
+      color: $orbital-error;
+    }
+  }
+}
+
+// =============================================================================
+// FILES STUB STYLES
+// =============================================================================
+
+.OrbitalSettingsFiles {
+  &__coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-2xl;
+    text-align: center;
+  }
+
+  &__icon {
+    font-size: 48px;
+    margin-bottom: $orbital-space-base;
+    opacity: 0.5;
+  }
+
+  &__title {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-xl;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    margin: 0 0 $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__description {
+    color: $orbital-text-secondary;
+    max-width: 400px;
+    line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__features {
+    ul {
+      margin: 0;
+      padding-left: $orbital-space-lg;
+      color: $orbital-text-secondary;
+      line-height: $orbital-line-height-relaxed;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-secondary;
+      }
+
+      li {
+        margin-bottom: $orbital-space-xs;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// PRIVACY PAGE STYLES
+// =============================================================================
+
+.OrbitalSettingsPrivacy {
+  &__info {
+    padding: $orbital-space-md;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    color: $orbital-text-secondary;
+    line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+      color: $orbital-dark-text-secondary;
+    }
+
+    p {
+      margin: 0 0 $orbital-space-sm;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    strong {
+      color: $orbital-text-primary;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// INVITES INFO STYLES (additional)
+// =============================================================================
+
+.OrbitalSettingsInvites {
+  &__info {
+    padding: $orbital-space-md;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    color: $orbital-text-secondary;
+    line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+      color: $orbital-dark-text-secondary;
+    }
+
+    p {
+      margin: 0 0 $orbital-space-sm;
+    }
+
+    strong {
+      color: $orbital-text-primary;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-primary;
+      }
+    }
+
+    ul {
+      margin: 0;
+      padding-left: $orbital-space-lg;
+
+      li {
+        margin-bottom: $orbital-space-xs;
+      }
+    }
+  }
+
+  &__item-info {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-xs;
+  }
+
+  &__item-code {
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__item-time {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+}
+
+// =============================================================================
+// GENERAL SETTINGS - PROFILE/AVATAR
+// =============================================================================
+
+.OrbitalSettingsGeneral {
+  &__profile {
+    display: flex;
+    align-items: flex-start;
+    gap: $orbital-space-lg;
+    padding: $orbital-space-base 0;
+  }
+
+  &__avatar-section {
+    flex-shrink: 0;
+  }
+
+  &__avatar {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 4px;
+    border: 3px solid $orbital-border-strong;
+    background: $orbital-surface-elevated;
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    transition: border-color $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      border-color: $orbital-blue;
+
+      .OrbitalSettingsGeneral__avatar-overlay {
+        opacity: 1;
+      }
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-strong;
+      background: $orbital-dark-surface-elevated;
+
+      &:hover {
+        border-color: $orbital-dark-blue;
+      }
+    }
+  }
+
+  &__avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-xl;
+    font-weight: bold;
+    color: $orbital-text-secondary;
+    background: linear-gradient(135deg, $orbital-blue-tint-light, $orbital-purple-tint-light);
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+      background: linear-gradient(135deg, rgba($orbital-dark-blue, 0.2), rgba($orbital-dark-purple, 0.2));
+    }
+  }
+
+  &__avatar-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity $orbital-duration-fast $orbital-ease-default;
+    font-size: 24px;
+  }
+
+  &__file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  &__profile-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-xs;
+    padding-top: $orbital-space-xs;
+  }
+
+  &__name-row {
+    display: flex;
+    align-items: center;
+  }
+
+  &__name-button {
+    display: inline-flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-xs $orbital-space-sm;
+    border: none;
+    border-radius: $orbital-radius-base;
+    background: transparent;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-surface-elevated;
+
+      .OrbitalSettingsGeneral__edit-icon {
+        opacity: 1;
+      }
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      &:hover {
+        background: $orbital-dark-surface-elevated;
+      }
+    }
+  }
+
+  &__name {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__edit-icon {
+    font-size: $orbital-font-size-sm;
+    opacity: 0.5;
+    transition: opacity $orbital-duration-fast $orbital-ease-default;
+  }
+
+  &__name-input {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    border: 2px solid $orbital-blue;
+    border-radius: $orbital-radius-base;
+    padding: $orbital-space-xs $orbital-space-sm;
+    background: $orbital-surface;
+    outline: none;
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba($orbital-blue, 0.2);
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+      border-color: $orbital-dark-blue;
+      background: $orbital-dark-surface;
+
+      &:focus {
+        box-shadow: 0 0 0 3px rgba($orbital-dark-blue, 0.2);
+      }
+    }
+  }
+
+  &__profile-hint {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    margin: 0;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__avatar-actions {
+    display: flex;
+    gap: $orbital-space-sm;
+    padding-top: $orbital-space-sm;
+  }
+}

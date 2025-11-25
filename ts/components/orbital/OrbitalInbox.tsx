@@ -10,8 +10,10 @@ import { OrbitalLogin } from './OrbitalLogin';
 import { OrbitalChatList } from './OrbitalChatList';
 import { MOCK_THREADS, MOCK_MESSAGES, MOCK_CHATS, MOCK_CHAT_MESSAGES } from './mockThreadData';
 import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
-import { DisplayMode } from '../../types/Nav.std';
+import { DisplayMode, OrbitalSettingsPage } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
+import { OrbitalSettings } from './OrbitalSettings';
+import { OrbitalSettingsNav } from './OrbitalSettingsNav';
 import type { UploadCheckResult } from './OrbitalMediaPicker';
 import { createMockDraftOperations, type DraftOperations } from './useDraft';
 import { FunProvider } from '../fun/FunProvider.dom';
@@ -52,6 +54,8 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
   const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<OrbitalSettingsPage>(OrbitalSettingsPage.General);
 
   // Session caches for messages (persists user-posted messages during session)
   const [threadMessagesCache, setThreadMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
@@ -128,8 +132,18 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   }, []);
 
   const handleSettingsClick = useCallback(() => {
-    // TODO: Navigate to settings view (sidebar shows menu options, main area shows settings)
-    console.log('Settings clicked - will navigate to settings view');
+    setShowSettings(true);
+    setActiveThreadId(null);
+    setActiveChatId(null);
+    setIsCreatingThread(false);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
+
+  const handleSettingsPageChange = useCallback((page: OrbitalSettingsPage) => {
+    setSettingsPage(page);
   }, []);
 
   const handleSubmitNewThread = useCallback((title: string, body: string, mediaIds: string[]) => {
@@ -378,9 +392,15 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
         onSelectGif={() => null}
       >
         <div className="OrbitalInbox">
-        {/* Left Sidebar - Thread List or Chat List */}
+        {/* Left Sidebar - Settings Nav, Thread List, or Chat List */}
         <div className="OrbitalInbox__sidebar">
-          {displayMode === DisplayMode.Threads ? (
+          {showSettings ? (
+            <OrbitalSettingsNav
+              activePage={settingsPage}
+              onPageSelect={handleSettingsPageChange}
+              onBack={handleCloseSettings}
+            />
+          ) : displayMode === DisplayMode.Threads ? (
             <OrbitalThreadList
               threads={threads}
               activeThreadId={activeThreadId}
@@ -399,15 +419,19 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               onSettingsClick={handleSettingsClick}
             />
           )}
-          <ChatsThreadsToggle
-            displayMode={displayMode}
-            onSetDisplayMode={setDisplayMode}
-          />
+          {!showSettings && (
+            <ChatsThreadsToggle
+              displayMode={displayMode}
+              onSetDisplayMode={setDisplayMode}
+            />
+          )}
         </div>
 
-        {/* Main Content - Thread Detail, Chat Detail, or Create Thread */}
+        {/* Main Content - Settings, Thread Detail, Chat Detail, or Create Thread */}
         <div className="OrbitalInbox__main">
-          {activeThread ? (
+          {showSettings ? (
+            <OrbitalSettings page={settingsPage} />
+          ) : activeThread ? (
             <OrbitalThreadDetail
               threadId={activeThread.id}
               groupId="mock-group-id"

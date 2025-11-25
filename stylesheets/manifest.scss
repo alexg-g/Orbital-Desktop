@@ -142,6 +142,7 @@
 @use 'components/OrbitalMediaUpload.scss'; // Orbital media upload UI (picker, progress, viewer)
 @use 'components/OrbitalLogin.scss'; // Orbital login UI
 @use 'components/OrbitalGroups.scss'; // Orbital group management UI (selector, create, join)
+@use 'components/OrbitalSettings.scss'; // Orbital settings UI
 @use 'components/PermissionsPopup.scss';
 @use 'components/PlaybackButton.scss';
 @use 'components/PlaybackRateButton.scss';

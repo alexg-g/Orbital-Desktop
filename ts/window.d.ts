@@ -191,6 +191,18 @@ declare global {
     // TODO DESKTOP-4801
     SignalContext: SignalContextType;
 
+    // Orbital: Storage access for settings
+    storage: {
+      get: <K extends keyof import('./types/Storage.d.ts').StorageAccessType>(
+        key: K,
+        defaultValue?: import('./types/Storage.d.ts').StorageAccessType[K]
+      ) => import('./types/Storage.d.ts').StorageAccessType[K] | undefined;
+      put: <K extends keyof import('./types/Storage.d.ts').StorageAccessType>(
+        key: K,
+        value: import('./types/Storage.d.ts').StorageAccessType[K]
+      ) => Promise<void>;
+    };
+
     // Used only in preload to calculate load time
     preloadCompileStartTime: number;
     preloadStartTime: number;
