@@ -3,7 +3,7 @@
  *
  * Centralized business logic for group management:
  * - Group creation with invite codes
- * - Single-use, 7-day expiring invite codes
+ * - Single-use, 24-hour expiring invite codes
  * - Max 10 members per group enforcement
  * - Invite code regeneration
  */
@@ -15,7 +15,7 @@ const quotaService = require('./quotaService');
 
 // Constants
 const MAX_MEMBERS = 10;
-const INVITE_CODE_EXPIRATION_DAYS = 7;
+const INVITE_CODE_EXPIRATION_DAYS = 1; // Reduced from 7 days for security (CISA advisory)
 const INVITE_CODE_LENGTH = 8;
 
 /**
@@ -33,7 +33,7 @@ function generateInviteCode() {
 }
 
 /**
- * Calculate invite code expiration date (7 days from now)
+ * Calculate invite code expiration date (24 hours from now)
  */
 function getExpirationDate() {
   const date = new Date();
