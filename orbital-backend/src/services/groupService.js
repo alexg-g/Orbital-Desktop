@@ -486,6 +486,23 @@ async function getActiveInviteCodes(groupId, userId) {
 }
 
 /**
+ * Get all member IDs for a group
+ * Used for WebSocket broadcast operations
+ * @param {string} groupId - Group ID
+ * @returns {Promise<Array<string>>} - Array of user IDs
+ */
+async function getGroupMemberIds(groupId) {
+  if (!groupId) throw new Error('groupId is required');
+
+  const result = await db.query(
+    'SELECT user_id FROM members WHERE group_id = $1',
+    [groupId]
+  );
+
+  return result.rows.map(row => row.user_id);
+}
+
+/**
  * Clean up expired invite codes
  * Called by a scheduled job
  * @returns {Promise<number>} - Number of codes deleted
@@ -511,6 +528,7 @@ module.exports = {
   joinGroup,
   getUserGroups,
   getGroupMembers,
+  getGroupMemberIds,
   getActiveInviteCodes,
   cleanupExpiredCodes,
   generateInviteCode,

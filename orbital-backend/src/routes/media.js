@@ -8,6 +8,8 @@ const { asyncHandler, validationError, forbiddenError, notFoundError } = require
 const db = require('../config/database');
 const logger = require('../utils/logger');
 const quotaService = require('../services/quotaService');
+const { broadcastToConversation } = require('../websocket/signalWebSocket');
+const { getGroupMemberIds } = require('../services/groupService');
 
 const router = express.Router();
 
@@ -412,15 +414,37 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
       chunks: tempUpload.total_chunks
     });
 
-    // TODO: Send WebSocket notification to group members
-    // This would be implemented once WebSocket notification system is ready
-
     res.status(201).json({
       media_id: media.id,
       size_bytes: finalSize,
       uploaded_at: media.uploaded_at,
       expires_at: media.expires_at,
       chunks_uploaded: tempUpload.total_chunks
+    });
+
+    // Broadcast to WebSocket clients in group (fire and forget)
+    getGroupMemberIds(tempUpload.group_id).then(memberIds => {
+      // Filter out the uploader
+      const recipients = memberIds.filter(id => id !== tempUpload.user_id);
+
+      if (recipients.length > 0) {
+        broadcastToConversation(tempUpload.group_id, recipients, {
+          type: 'media_uploaded',
+          media_id: media.id,
+          group_id: tempUpload.group_id,
+          author_id: tempUpload.user_id,
+          encrypted_metadata: tempUpload.encrypted_metadata,
+          size_bytes: finalSize,
+          uploaded_at: media.uploaded_at,
+          expires_at: media.expires_at
+        });
+      }
+    }).catch(err => {
+      logger.error('Failed to broadcast media upload to WebSocket clients', {
+        groupId: tempUpload.group_id,
+        mediaId: media.id,
+        error: err.message
+      });
     });
   } catch (error) {
     await client.query('ROLLBACK');

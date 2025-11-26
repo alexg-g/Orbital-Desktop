@@ -3,6 +3,8 @@ const { authenticate } = require('../middleware/auth');
 const { asyncHandler, validationError, forbiddenError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { broadcastToConversation } = require('../websocket/signalWebSocket');
+const { getGroupMemberIds } = require('../services/groupService');
 
 const router = express.Router();
 
@@ -81,8 +83,27 @@ router.post('/messages', authenticate, asyncHandler(async (req, res) => {
     server_timestamp: new Date(message.server_timestamp).getTime()
   });
 
-  // TODO: Broadcast to WebSocket clients in conversation
-  // This will be implemented in websocket/signalWebSocket.js
+  // Broadcast to WebSocket clients in conversation (fire and forget)
+  getGroupMemberIds(conversation_id).then(memberIds => {
+    // Filter out the sender
+    const recipients = memberIds.filter(id => id !== req.user.userId);
+
+    if (recipients.length > 0) {
+      broadcastToConversation(conversation_id, recipients, {
+        type: 'new_message',
+        message_id: message.id,
+        conversation_id: conversation_id,
+        sender_id: req.user.userId,
+        encrypted_envelope: encrypted_envelope,
+        server_timestamp: new Date(message.server_timestamp).getTime()
+      });
+    }
+  }).catch(err => {
+    logger.error('Failed to broadcast message to WebSocket clients', {
+      conversationId: conversation_id,
+      error: err.message
+    });
+  });
 }));
 
 /**

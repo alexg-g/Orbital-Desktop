@@ -3,6 +3,8 @@ const { authenticate } = require('../middleware/auth');
 const { asyncHandler, validationError, forbiddenError, notFoundError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { broadcastToConversation } = require('../websocket/signalWebSocket');
+const { getGroupMemberIds } = require('../services/groupService');
 
 const router = express.Router();
 
@@ -133,7 +135,30 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
       media: associatedMedia
     });
 
-    // TODO: Broadcast to WebSocket clients in group
+    // Broadcast to WebSocket clients in group (fire and forget)
+    getGroupMemberIds(group_id).then(memberIds => {
+      // Filter out the author
+      const recipients = memberIds.filter(id => id !== req.user.userId);
+
+      if (recipients.length > 0) {
+        broadcastToConversation(group_id, recipients, {
+          type: 'new_thread',
+          thread_id: thread.id,
+          group_id: group_id,
+          author_id: req.user.userId,
+          encrypted_title: encrypted_title,
+          encrypted_body: encrypted_body,
+          created_at: thread.created_at,
+          media: associatedMedia
+        });
+      }
+    }).catch(err => {
+      logger.error('Failed to broadcast new thread to WebSocket clients', {
+        groupId: group_id,
+        threadId: thread.id,
+        error: err.message
+      });
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -465,7 +490,31 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
       media: associatedMedia
     });
 
-    // TODO: Broadcast to WebSocket clients in group
+    // Broadcast to WebSocket clients in group (fire and forget)
+    getGroupMemberIds(groupId).then(memberIds => {
+      // Filter out the author
+      const recipients = memberIds.filter(id => id !== req.user.userId);
+
+      if (recipients.length > 0) {
+        broadcastToConversation(groupId, recipients, {
+          type: 'new_reply',
+          reply_id: reply.id,
+          thread_id: threadId,
+          group_id: groupId,
+          author_id: req.user.userId,
+          encrypted_body: encrypted_body,
+          created_at: reply.created_at,
+          media: associatedMedia
+        });
+      }
+    }).catch(err => {
+      logger.error('Failed to broadcast new reply to WebSocket clients', {
+        groupId: groupId,
+        threadId: threadId,
+        replyId: reply.id,
+        error: err.message
+      });
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
