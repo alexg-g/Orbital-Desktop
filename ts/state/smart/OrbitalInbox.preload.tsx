@@ -6,11 +6,26 @@ import { useSelector } from 'react-redux';
 import { OrbitalInbox } from '../../components/orbital/OrbitalInbox';
 import { getIntl } from '../selectors/user.std';
 import { validateSession } from '../../services/orbitalAuth.preload.js';
+import {
+  listThreads,
+  createThread,
+  getReplies,
+  createReply,
+} from '../../services/orbitalThreads.preload.js';
 
 export const SmartOrbitalInbox = memo(function SmartOrbitalInbox(): JSX.Element {
   const i18n = useSelector(getIntl);
 
   // Use validateSession which checks token validity with backend
   // and auto-clears invalid tokens
-  return <OrbitalInbox i18n={i18n} isAuthenticated={validateSession} />;
+  return (
+    <OrbitalInbox
+      i18n={i18n}
+      isAuthenticated={validateSession}
+      listThreads={listThreads}
+      createThread={createThread}
+      getReplies={getReplies}
+      createReply={createReply}
+    />
+  );
 });

@@ -37,6 +37,14 @@ import { EmojiSkinTone } from '../fun/data/emojis.std';
 import { TitlebarDragArea } from '../TitlebarDragArea.dom';
 import { OrbitSelectorModal } from './OrbitSelectorModal';
 import type { GroupInfo } from '../../services/orbitalGroups.preload.js';
+import type {
+  ThreadInfo,
+  ReplyInfo,
+  ListThreadsResult,
+  ListRepliesResult,
+  CreateThreadResult,
+  CreateReplyResult,
+} from '../../services/orbitalThreads.preload.js';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -46,6 +54,30 @@ export type GetGroupsFunction = () => Promise<GroupInfo[]>;
 export type GetSelectedGroupIdFunction = () => Promise<string | null>;
 export type SetSelectedGroupIdFunction = (groupId: string) => Promise<void>;
 
+// Thread API types (dependency injection for testability)
+export type ListThreadsFunction = (
+  groupId: string,
+  options?: { limit?: number; offset?: number; sort?: 'created_desc' | 'created_asc' }
+) => Promise<ListThreadsResult>;
+
+export type CreateThreadFunction = (
+  groupId: string,
+  title: string,
+  body: string,
+  mediaIds?: string[]
+) => Promise<CreateThreadResult>;
+
+export type GetRepliesFunction = (
+  threadId: string,
+  options?: { limit?: number; offset?: number }
+) => Promise<ListRepliesResult>;
+
+export type CreateReplyFunction = (
+  threadId: string,
+  body: string,
+  mediaIds?: string[]
+) => Promise<CreateReplyResult>;
+
 export type OrbitalInboxProps = {
   i18n: LocalizerType;
   // Dependency injection for Node.js operations (allows Storybook mocking)
@@ -54,6 +86,11 @@ export type OrbitalInboxProps = {
   getGroups?: GetGroupsFunction;
   getSelectedGroupId?: GetSelectedGroupIdFunction;
   setSelectedGroupId?: SetSelectedGroupIdFunction;
+  // Thread API operations (injected for testability)
+  listThreads?: ListThreadsFunction;
+  createThread?: CreateThreadFunction;
+  getReplies?: GetRepliesFunction;
+  createReply?: CreateReplyFunction;
 };
 
 /**
@@ -85,12 +122,62 @@ const mockGetGroups: GetGroupsFunction = async () => {
 const mockGetSelectedGroupId: GetSelectedGroupIdFunction = async () => null;
 const mockSetSelectedGroupId: SetSelectedGroupIdFunction = async () => {};
 
+// =============================================================================
+// DATA MAPPING FUNCTIONS
+// =============================================================================
+
+/**
+ * Map ThreadInfo from backend to OrbitalThread for UI
+ * Backend returns encrypted_title/encrypted_body, but service decrypts them
+ */
+function mapThreadInfoToOrbitalThread(thread: ThreadInfo): OrbitalThread {
+  const user = getUserById(thread.authorId);
+
+  return {
+    id: thread.threadId,
+    orbitId: thread.groupId,
+    title: thread.encryptedTitle, // Already decrypted by service
+    author: thread.authorUsername,
+    authorId: thread.authorId,
+    timestamp: new Date(thread.createdAt).getTime(),
+    replyCount: thread.replyCount,
+    hasMedia: (thread.mediaCount || 0) > 0,
+    hasVideo: false, // TODO: Parse from media metadata
+    hasImage: (thread.mediaCount || 0) > 0,
+    isUnread: false, // TODO: Track read status
+    avatarUrl: user?.avatarUrl,
+  };
+}
+
+/**
+ * Map ReplyInfo from backend to OrbitalMessageType for UI
+ */
+function mapReplyInfoToOrbitalMessage(reply: ReplyInfo): OrbitalMessageType {
+  const user = getUserById(reply.authorId);
+
+  return {
+    id: reply.replyId,
+    author: reply.authorUsername,
+    authorId: reply.authorId,
+    timestamp: new Date(reply.createdAt).getTime(),
+    body: reply.encryptedBody, // Already decrypted by service
+    level: 1, // Replies are always level 1 (flat structure for now)
+    hasMedia: (reply.mediaCount || 0) > 0,
+    mediaIds: reply.media?.map(m => m.mediaId),
+    avatarUrl: user?.avatarUrl,
+  };
+}
+
 export function OrbitalInbox({
   i18n,
   isAuthenticated,
   getGroups = mockGetGroups,
   getSelectedGroupId = mockGetSelectedGroupId,
   setSelectedGroupId = mockSetSelectedGroupId,
+  listThreads,
+  createThread: createThreadAPI,
+  getReplies,
+  createReply: createReplyAPI,
 }: OrbitalInboxProps): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -100,6 +187,24 @@ export function OrbitalInbox({
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const [isLoadingReplies, setIsLoadingReplies] = useState(false);
+  const [isSubmittingThread, setIsSubmittingThread] = useState(false);
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  // Log loading states for debugging (TODO: Use for UI spinners/disabled states)
+  useEffect(() => {
+    if (isLoadingThreads) console.log('Loading threads...');
+  }, [isLoadingThreads]);
+  useEffect(() => {
+    if (isLoadingReplies) console.log('Loading replies...');
+  }, [isLoadingReplies]);
+  useEffect(() => {
+    if (isSubmittingThread) console.log('Submitting thread...');
+  }, [isSubmittingThread]);
+  useEffect(() => {
+    if (isSubmittingReply) console.log('Submitting reply...');
+  }, [isSubmittingReply]);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(DisplayMode.Threads);
   const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
   const [showSettings, setShowSettings] = useState(false);
@@ -214,37 +319,74 @@ export function OrbitalInbox({
     const groupId = selectedGroupId;
 
     async function fetchThreads() {
+      setIsLoadingThreads(true);
       try {
-        // TODO: Replace with real API call to Orbital backend filtered by groupId
-        // const response = await window.Signal.OrbitalAPI.getThreads({ groupId });
-        // setThreads(response.threads);
+        if (listThreads) {
+          // Use real API
+          const result = await listThreads(groupId, {
+            limit: 50,
+            sort: 'created_desc',
+          });
 
-        // For now, use mock data filtered by orbit
-        const orbitThreads = getThreadsByOrbit(groupId);
-        setThreads([...orbitThreads]);
+          const mappedThreads = result.threads.map(mapThreadInfoToOrbitalThread);
+          setThreads(mappedThreads);
+        } else {
+          // Fallback to mock data
+          const orbitThreads = getThreadsByOrbit(groupId);
+          setThreads([...orbitThreads]);
+        }
       } catch (err) {
         console.error('Failed to fetch threads:', err);
+        // On error, fall back to mock data
+        const orbitThreads = getThreadsByOrbit(groupId);
+        setThreads([...orbitThreads]);
+      } finally {
+        setIsLoadingThreads(false);
       }
     }
 
     fetchThreads();
-  }, [isLoggedIn, selectedGroupId]);
+  }, [isLoggedIn, selectedGroupId, listThreads]);
 
-  const handleThreadClick = useCallback((threadId: string) => {
+  const handleThreadClick = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId);
     setActiveChatId(null); // Clear chat selection when selecting a thread
     setIsCreatingThread(false); // Cancel create mode when selecting a thread
-    // Load messages from cache first, then fall back to mock data
-    const cachedMessages = threadMessagesCache[threadId];
-    if (cachedMessages) {
-      setMessages([...cachedMessages]);
-    } else {
+
+    // Load replies from API or cache
+    setIsLoadingReplies(true);
+    try {
+      // Check cache first
+      const cachedMessages = threadMessagesCache[threadId];
+      if (cachedMessages) {
+        setMessages([...cachedMessages]);
+        setIsLoadingReplies(false);
+        return;
+      }
+
+      if (getReplies) {
+        // Use real API
+        const result = await getReplies(threadId, { limit: 100 });
+        const mappedReplies = result.replies.map(mapReplyInfoToOrbitalMessage);
+        setMessages(mappedReplies);
+        // Cache the results
+        setThreadMessagesCache(prev => ({ ...prev, [threadId]: mappedReplies }));
+      } else {
+        // Fallback to mock data
+        const threadMessages = MOCK_MESSAGES[threadId] || [];
+        setMessages([...threadMessages]);
+        setThreadMessagesCache(prev => ({ ...prev, [threadId]: [...threadMessages] }));
+      }
+    } catch (err) {
+      console.error('Failed to load replies:', err);
+      // On error, fall back to mock data
       const threadMessages = MOCK_MESSAGES[threadId] || [];
       setMessages([...threadMessages]);
-      // Initialize cache with mock data
       setThreadMessagesCache(prev => ({ ...prev, [threadId]: [...threadMessages] }));
+    } finally {
+      setIsLoadingReplies(false);
     }
-  }, [threadMessagesCache]);
+  }, [threadMessagesCache, getReplies]);
 
   const handleCreateThread = useCallback(() => {
     setActiveThreadId(null); // Deselect any active thread
@@ -336,98 +478,166 @@ export function OrbitalInbox({
     setSettingsPage(page);
   }, []);
 
-  const handleSubmitNewThread = useCallback((title: string, body: string, mediaIds: string[]) => {
-    const threadId = `thread-${Date.now()}`;
-    const messageId = `message-${Date.now()}`;
+  const handleSubmitNewThread = useCallback(async (title: string, body: string, mediaIds: string[]) => {
+    if (!selectedGroupId) {
+      console.error('No orbit selected');
+      return;
+    }
 
-    // Create a new thread object with orbitId
-    const newThread: OrbitalThread = {
-      id: threadId,
-      orbitId: selectedGroupId || DEMO_ORBIT_ID, // Associate with current orbit
-      title,
-      author: 'You', // TODO: Get from current user
-      authorId: 'testuser',
-      timestamp: Date.now(),
-      replyCount: 0, // No replies yet (root post doesn't count)
-      hasMedia: mediaIds.length > 0,
-      hasVideo: false,
-      hasImage: mediaIds.length > 0,
-      isUnread: false,
-    };
+    setIsSubmittingThread(true);
+    try {
+      if (createThreadAPI) {
+        // Use real API
+        const result = await createThreadAPI(selectedGroupId, title, body, mediaIds);
 
-    // Create the root message (original post)
-    const rootMessage: OrbitalMessageType = {
-      id: messageId,
-      author: 'You',
-      authorId: 'testuser',
-      timestamp: Date.now(),
-      body,
-      level: 0, // Root level
-      hasMedia: mediaIds.length > 0,
-      mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
-    };
+        // Create new thread object for UI
+        const newThread: OrbitalThread = {
+          id: result.threadId,
+          orbitId: result.groupId,
+          title,
+          author: 'You', // TODO: Get from current user
+          authorId: 'testuser',
+          timestamp: new Date(result.createdAt).getTime(),
+          replyCount: 0,
+          hasMedia: mediaIds.length > 0,
+          hasVideo: false,
+          hasImage: mediaIds.length > 0,
+          isUnread: false,
+        };
 
-    // Add to threads list at the top
-    setThreads(prev => [newThread, ...prev]);
+        // Add to threads list at the top
+        setThreads(prev => [newThread, ...prev]);
 
-    // Exit create mode and select the new thread
-    setIsCreatingThread(false);
-    setActiveThreadId(threadId);
-    setActiveChatId(null); // Clear chat selection
+        // Exit create mode and select the new thread
+        setIsCreatingThread(false);
+        setActiveThreadId(result.threadId);
+        setActiveChatId(null);
 
-    // Initialize with root message
-    setMessages([rootMessage]);
+        // Initialize with empty messages (thread body is not a reply)
+        setMessages([]);
+        setThreadMessagesCache(prev => ({ ...prev, [result.threadId]: [] }));
 
-    // Initialize cache for the new thread
-    setThreadMessagesCache(prev => ({ ...prev, [threadId]: [rootMessage] }));
+        console.log('Thread created successfully:', result.threadId);
+      } else {
+        // Fallback to mock behavior
+        const threadId = `thread-${Date.now()}`;
+        const messageId = `message-${Date.now()}`;
 
-    // TODO: Send to backend API
-    console.log('Created new thread:', { title, body, mediaIds, orbitId: selectedGroupId });
-  }, [selectedGroupId]);
+        const newThread: OrbitalThread = {
+          id: threadId,
+          orbitId: selectedGroupId || DEMO_ORBIT_ID,
+          title,
+          author: 'You',
+          authorId: 'testuser',
+          timestamp: Date.now(),
+          replyCount: 0,
+          hasMedia: mediaIds.length > 0,
+          hasVideo: false,
+          hasImage: mediaIds.length > 0,
+          isUnread: false,
+        };
+
+        const rootMessage: OrbitalMessageType = {
+          id: messageId,
+          author: 'You',
+          authorId: 'testuser',
+          timestamp: Date.now(),
+          body,
+          level: 0,
+          hasMedia: mediaIds.length > 0,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+        };
+
+        setThreads(prev => [newThread, ...prev]);
+        setIsCreatingThread(false);
+        setActiveThreadId(threadId);
+        setActiveChatId(null);
+        setMessages([rootMessage]);
+        setThreadMessagesCache(prev => ({ ...prev, [threadId]: [rootMessage] }));
+      }
+    } catch (err) {
+      console.error('Failed to create thread:', err);
+      // TODO: Show error message to user
+    } finally {
+      setIsSubmittingThread(false);
+    }
+  }, [selectedGroupId, createThreadAPI]);
 
   const handleSendMessage = useCallback(async (body: string, mediaIds?: string[]) => {
     if (!activeThreadId) {
       return;
     }
 
+    setIsSubmittingReply(true);
     try {
-      const messageId = `message-${Date.now()}`;
+      if (createReplyAPI) {
+        // Use real API
+        const result = await createReplyAPI(activeThreadId, body, mediaIds);
 
-      // Create the reply message
-      const newMessage: OrbitalMessageType = {
-        id: messageId,
-        author: 'You',
-        authorId: 'testuser',
-        timestamp: Date.now(),
-        body,
-        level: 1, // Reply level (could be adjusted for nested replies)
-        parentId: undefined, // Direct reply to thread (not nested)
-        hasMedia: mediaIds ? mediaIds.length > 0 : false,
-        mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
-      };
+        // Create the reply message for UI
+        const newMessage: OrbitalMessageType = {
+          id: result.replyId,
+          author: 'You',
+          authorId: 'testuser',
+          timestamp: new Date(result.createdAt).getTime(),
+          body,
+          level: 1,
+          parentId: undefined,
+          hasMedia: mediaIds ? mediaIds.length > 0 : false,
+          mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+        };
 
-      // Add to messages
-      setMessages(prev => [...prev, newMessage]);
+        // Add to messages
+        setMessages(prev => [...prev, newMessage]);
 
-      // Update cache
-      setThreadMessagesCache(prev => ({
-        ...prev,
-        [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
-      }));
+        // Update cache
+        setThreadMessagesCache(prev => ({
+          ...prev,
+          [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
+        }));
 
-      // Update thread reply count
-      setThreads(prev => prev.map(thread =>
-        thread.id === activeThreadId
-          ? { ...thread, replyCount: thread.replyCount + 1 }
-          : thread
-      ));
+        // Update thread reply count
+        setThreads(prev => prev.map(thread =>
+          thread.id === activeThreadId
+            ? { ...thread, replyCount: thread.replyCount + 1 }
+            : thread
+        ));
 
-      // TODO: Send to backend API
-      console.log('Send message:', { body, mediaIds, threadId: activeThreadId });
+        console.log('Reply created successfully:', result.replyId);
+      } else {
+        // Fallback to mock behavior
+        const messageId = `message-${Date.now()}`;
+
+        const newMessage: OrbitalMessageType = {
+          id: messageId,
+          author: 'You',
+          authorId: 'testuser',
+          timestamp: Date.now(),
+          body,
+          level: 1,
+          parentId: undefined,
+          hasMedia: mediaIds ? mediaIds.length > 0 : false,
+          mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+        };
+
+        setMessages(prev => [...prev, newMessage]);
+        setThreadMessagesCache(prev => ({
+          ...prev,
+          [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
+        }));
+        setThreads(prev => prev.map(thread =>
+          thread.id === activeThreadId
+            ? { ...thread, replyCount: thread.replyCount + 1 }
+            : thread
+        ));
+      }
     } catch (err) {
       console.error('Failed to send message:', err);
+      // TODO: Show error message to user
+    } finally {
+      setIsSubmittingReply(false);
     }
-  }, [activeThreadId]);
+  }, [activeThreadId, createReplyAPI]);
 
   const handleReply = useCallback(async (parentId: string, body: string, mediaIds?: string[]) => {
     try {
@@ -536,19 +746,32 @@ export function OrbitalInbox({
   }, [activeChatId]);
 
   // Mock functions for dependency injection
-  const mockGetQuotaInfo = useCallback(async (_groupId: string): Promise<QuotaInfo> => ({
-    storageUsedBytes: 0,
-    storageLimitBytes: 1024 * 1024 * 1024,
-    bandwidthUsedBytes: 0,
-    bandwidthLimitBytes: 5 * 1024 * 1024 * 1024,
-    bandwidthResetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    mediaCount: 0,
-    mediaLimit: 1000,
+  const mockGetQuotaInfo = useCallback(async (groupId: string): Promise<QuotaInfo> => ({
+    groupId,
+    storageUsed: 0,
+    storageLimit: 10 * 1024 * 1024 * 1024, // 10GB
+    filesUsed: 0,
+    filesLimit: 100,
+    storagePercentUsed: 0,
+    filesPercentUsed: 0,
+    isNearLimit: false,
+    canUpload: true,
   }), []);
 
-  const mockCheckUploadAllowed = useCallback(async (_groupId: string, _fileSizeBytes: number): Promise<UploadCheckResult> => ({
+  const mockCheckUploadAllowed = useCallback(async (groupId: string, _fileSizeBytes: number): Promise<UploadCheckResult> => ({
     allowed: true,
     reason: undefined,
+    quotaInfo: {
+      groupId,
+      storageUsed: 0,
+      storageLimit: 10 * 1024 * 1024 * 1024,
+      filesUsed: 0,
+      filesLimit: 100,
+      storagePercentUsed: 0,
+      filesPercentUsed: 0,
+      isNearLimit: false,
+      canUpload: true,
+    },
   }), []);
 
   const mockFormatBytes = useCallback((bytes: number): string => {
@@ -655,7 +878,7 @@ export function OrbitalInbox({
           ) : displayMode === DisplayMode.Threads ? (
             <OrbitalThreadList
               threads={threads}
-              activeThreadId={activeThreadId}
+              activeThreadId={activeThreadId || undefined}
               i18n={i18n}
               onThreadClick={handleThreadClick}
               onCreateThread={handleCreateThread}
