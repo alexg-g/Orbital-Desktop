@@ -58,6 +58,7 @@ export enum OrbitalSettingsPage {
   Privacy = 'Privacy',
   Invites = 'Invites',
   Files = 'Files',
+  Orbit = 'Orbit',
 }
 
 export enum SettingsPage {

@@ -27,27 +27,14 @@ export function is401Error(error: Error | unknown): boolean {
 /**
  * Handle 401 Unauthorized error
  * - Logs out user (clears JWT token)
- * - Shows login modal
- * - Optionally shows toast message
+ * - OrbitalInbox will detect logout and show inline login screen
  */
 export async function handle401Error(): Promise<void> {
   log.warn('Received 401 Unauthorized - token expired or invalid');
 
   // Clear JWT token from storage
+  // OrbitalInbox will detect the logout via isAuthenticated() and show login
   await logout();
-
-  // Show login modal via redux action
-  if (window.reduxActions?.globalModals?.toggleOrbitalLogin) {
-    window.reduxActions.globalModals.toggleOrbitalLogin(true);
-  }
-
-  // Optional: Show toast notification
-  // if (window.reduxActions?.toast?.showToast) {
-  //   window.reduxActions.toast.showToast({
-  //     message: 'Your session has expired. Please log in again.',
-  //     toastType: 'error',
-  //   });
-  // }
 }
 
 /**

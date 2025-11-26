@@ -17,6 +17,7 @@ type SettingsNavItem = {
 };
 
 const SETTINGS_NAV_ITEMS: Array<SettingsNavItem> = [
+  { page: OrbitalSettingsPage.Orbit, label: 'Switch Orbit', emoji: '🪐' },
   { page: OrbitalSettingsPage.General, label: 'General', emoji: '⚙️' },
   { page: OrbitalSettingsPage.Appearance, label: 'Appearance', emoji: '🎨' },
   { page: OrbitalSettingsPage.Notifications, label: 'Notifications', emoji: '🔔' },

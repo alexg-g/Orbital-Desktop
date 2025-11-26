@@ -1,13 +1,73 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use 'sass:color';
 @use '../mixins';
 @use '../orbital-variables' as *;
 
 .OrbitalLogin {
-  padding: 16px 0;
-  max-width: 400px;
-  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  background-color: $orbital-surface;
+
+  @include mixins.dark-theme {
+    background-color: $orbital-dark-surface;
+  }
+
+  &__card {
+    width: 100%;
+    max-width: 400px;
+    padding: 32px;
+    background-color: $orbital-surface-elevated;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface-elevated;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  &__logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+
+  &__logo-img {
+    width: 120px;
+    height: auto;
+
+    &--light {
+      display: block;
+      @include mixins.dark-theme {
+        display: none;
+      }
+    }
+
+    &--dark {
+      display: none;
+      @include mixins.dark-theme {
+        display: block;
+      }
+    }
+  }
+
+  &__title {
+    font-size: 24px;
+    font-weight: 600;
+    color: $orbital-text-primary;
+    text-align: center;
+    margin: 0 0 8px 0;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
 
   &__description {
     color: $orbital-text-secondary;
@@ -15,6 +75,10 @@
     line-height: 20px;
     margin-bottom: 24px;
     text-align: center;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__form {
@@ -36,6 +100,56 @@
 
     @include mixins.dark-theme {
       color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__password-wrapper,
+  &__input-wrapper {
+    .Input__input {
+      width: 100%;
+    }
+  }
+
+  &__invite-code-input {
+    font-family: monospace;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  &__mode-switch {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid $orbital-border-subtle;
+    text-align: center;
+    font-size: 14px;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__mode-switch-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: $orbital-blue;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+
+    &:hover {
+      color: color.adjust($orbital-blue, $lightness: -10%);
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-blue;
+
+      &:hover {
+        color: color.adjust($orbital-dark-blue, $lightness: 10%);
+      }
     }
   }
 

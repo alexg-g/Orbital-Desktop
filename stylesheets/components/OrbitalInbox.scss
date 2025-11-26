@@ -196,6 +196,19 @@
       background: $orbital-dark-bg;
     }
   }
+
+  // Orbit selector state (after login, selecting which orbit to view)
+  &--orbit-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: $orbital-bg;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-bg;
+    }
+  }
 }
 
 @keyframes orbitalSpin {

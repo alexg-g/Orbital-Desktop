@@ -1420,14 +1420,8 @@ export async function startApp(): Promise<void> {
     if (Registration.everDone()) {
       idleDetector.start();
 
-      // Orbital: Check JWT authentication after Signal registration
-      const { isAuthenticated } = await import('./services/orbitalAuth.preload.js');
-      const authenticated = await isAuthenticated();
-
-      if (!authenticated) {
-        log.info('Orbital: No JWT token found, showing login modal');
-        window.reduxActions.globalModals.toggleOrbitalLogin(true);
-      }
+      // Orbital: OrbitalInbox handles its own login state via isAuthenticated()
+      // No need to trigger global modal here - inline login is shown automatically
 
       if (itemStorage.get('backupDownloadPath')) {
         window.reduxActions.installer.showBackupImport();
@@ -1435,16 +1429,15 @@ export async function startApp(): Promise<void> {
         window.reduxActions.app.openInbox();
       }
     } else {
-      // Orbital: Skip Signal registration, show Orbital login instead
+      // Orbital: Skip Signal registration, open inbox directly
+      // OrbitalInbox handles its own login state via isAuthenticated()
       window.IPC.readyForUpdates();
       drop(
         (async () => {
           try {
             await window.IPC.whenWindowVisible();
           } finally {
-            // Show Orbital login modal and open inbox
-            log.info('Orbital: First-time startup, showing login modal');
-            window.reduxActions.globalModals.toggleOrbitalLogin(true);
+            log.info('Orbital: First-time startup, opening inbox');
             window.reduxActions.app.openInbox();
           }
         })()

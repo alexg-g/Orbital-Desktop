@@ -2184,6 +2184,12 @@ button img.emoji,
     }
   }
 
+  // Hide Quill's link tooltip - we don't use links, so this should be fully hidden
+  // Using display: none instead of visibility: hidden to prevent keyboard focus
+  .ql-tooltip {
+    display: none !important;
+  }
+
   // Character counter
   &__counter {
     display: flex;
@@ -2320,6 +2326,361 @@ button img.emoji,
 
   &__label {
     line-height: 1;
+  }
+}
+
+// =============================================================================
+// CONTACT SELECTOR (for Create Chat picker)
+// =============================================================================
+
+.ContactSelector {
+  display: flex;
+  flex-direction: column;
+  gap: $orbital-space-sm;
+
+  &__search {
+    position: relative;
+    padding: 0;
+  }
+
+  &__search-input {
+    width: 100%;
+    padding: 10px 36px 10px 12px;
+    border: 2px inset $orbital-border-strong;
+    border-radius: $orbital-radius-base;
+    background: white;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    box-sizing: border-box;
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+    }
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+      font-style: italic;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+      border-color: $orbital-dark-border-strong;
+    }
+  }
+
+  &__search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: $orbital-text-tertiary;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      background: $orbital-text-secondary;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-text-tertiary;
+
+      &:hover {
+        background: $orbital-dark-text-secondary;
+      }
+    }
+  }
+
+  &__list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: $orbital-space-xs 0;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-sm $orbital-space-md;
+    border: 2px solid transparent;
+    border-radius: $orbital-radius-base;
+    cursor: pointer;
+    background: transparent;
+    text-align: left;
+    width: 100%;
+    font-family: $orbital-font-body;
+    transition: all $orbital-duration-fast;
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+      border-color: $orbital-border-subtle;
+    }
+
+    &--selected {
+      background: rgba($orbital-blue, 0.12);
+      border-color: $orbital-blue;
+    }
+
+    @include mixins.dark-theme {
+      &:hover {
+        background: rgba($orbital-dark-blue, 0.15);
+        border-color: $orbital-dark-border-subtle;
+      }
+
+      &--selected {
+        background: rgba($orbital-dark-blue, 0.2);
+        border-color: $orbital-dark-blue;
+      }
+    }
+  }
+
+  &__avatar {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  &__avatar-image {
+    width: 100%;
+    height: 100%;
+    border-radius: $orbital-radius-base;
+    object-fit: cover;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  &__avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: $orbital-radius-base;
+    background: linear-gradient(135deg, $orbital-blue 0%, $orbital-purple 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: $orbital-font-size-lg;
+  }
+
+  &__online-indicator {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: $orbital-success;
+    border: 2px solid white;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-surface;
+    }
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-weight: 500;
+    color: $orbital-text-primary;
+    font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__checkmark {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $orbital-blue;
+    font-size: 16px;
+    font-weight: bold;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-blue;
+    }
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-lg;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__empty {
+    padding: $orbital-space-lg;
+    text-align: center;
+    color: $orbital-text-secondary;
+    font-size: $orbital-font-size-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__error {
+    padding: $orbital-space-sm $orbital-space-md;
+    background: rgba(227, 44, 44, 0.1);
+    color: #e32c2c;
+    border-radius: $orbital-radius-base;
+    font-size: $orbital-font-size-sm;
+  }
+}
+
+// =============================================================================
+// CONTACT PICKER MODAL
+// =============================================================================
+
+.ContactPickerModal {
+  padding: $orbital-space-md;
+  min-width: 340px;
+  max-width: 400px;
+
+  &__group-name {
+    margin-top: $orbital-space-md;
+    padding-top: $orbital-space-md;
+    border-top: 1px solid $orbital-border-subtle;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__group-name-label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: $orbital-space-xs;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__group-name-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px inset $orbital-border-strong;
+    border-radius: $orbital-radius-base;
+    background: white;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    box-sizing: border-box;
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+    }
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+      border-color: $orbital-dark-border-strong;
+    }
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: $orbital-space-sm;
+    margin-top: $orbital-space-md;
+    padding-top: $orbital-space-md;
+    border-top: 1px solid $orbital-border-subtle;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__button {
+    padding: $orbital-btn-padding-y $orbital-btn-padding-x;
+    border-radius: $orbital-btn-border-radius;
+    font-family: $orbital-font-body;
+    font-size: $orbital-btn-font-size;
+    font-weight: $orbital-btn-font-weight;
+    cursor: pointer;
+    transition: $orbital-btn-transition;
+
+    &--primary {
+      background: $orbital-blue;
+      color: white;
+      border: $orbital-btn-border-width solid $orbital-blue-dark;
+
+      &:hover:not(:disabled) {
+        background: $orbital-blue-hover;
+      }
+
+      &:active:not(:disabled) {
+        background: $orbital-blue-dark;
+      }
+
+      &:disabled {
+        background: $orbital-text-tertiary;
+        border-color: $orbital-border-subtle;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+    }
+
+    &--secondary {
+      background: $orbital-surface-elevated;
+      color: $orbital-text-primary;
+      border: $orbital-btn-border-width solid $orbital-border-strong;
+
+      &:hover {
+        background: $orbital-blue-tint-light;
+        border-color: $orbital-blue;
+      }
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface-elevated;
+        color: $orbital-dark-text-primary;
+        border-color: $orbital-dark-border-strong;
+
+        &:hover {
+          background: rgba($orbital-dark-blue, 0.15);
+          border-color: $orbital-dark-blue;
+        }
+      }
+    }
   }
 }
 

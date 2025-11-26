@@ -121,6 +121,84 @@ export function ThreadMode() {
 - Cause: Old compiled .js files from before refactoring
 - Fix: Run `pnpm run clean-stale-js` then restart Storybook
 
+## File Suffix Convention Reference
+
+Signal-Desktop uses file suffixes to enforce process boundaries. Understanding this is critical:
+
+| Suffix | Context | Node.js Access | Example |
+|--------|---------|----------------|---------|
+| `.main.ts` | Main process only | ✅ Full | `app/main.main.ts` |
+| `.preload.ts` | Preload context | ✅ Full | `ts/services/orbitalAuth.preload.ts` |
+| `.node.ts` | Node.js worker | ✅ Full | `ts/sql/Server.node.ts` |
+| `.std.ts` | Cross-platform | ❌ None | `ts/types/Draft.std.ts` |
+| `.dom.ts` | Browser/DOM only | ❌ None | `ts/windows/Preferences.dom.ts` |
+| `.tsx` | React components | ❌ None | `ts/components/orbital/*.tsx` |
+
+**Key Rule:** Components (`.tsx`) must NEVER import `.preload.ts` or `.node.ts` files directly. This breaks Storybook.
+
+## Code Location Quick Reference
+
+| What | Where | Pattern |
+|------|-------|---------|
+| Orbital services | `/ts/services/orbital*.preload.ts` | Node.js + API calls |
+| Database methods | `/ts/sql/Server.node.ts` | SQLCipher queries |
+| Database client | `/ts/sql/Client.preload.ts` | IPC bridge |
+| Type definitions | `/ts/types/*.std.ts` | Cross-platform types |
+| Smart containers | `/ts/state/smart/*.preload.tsx` | Redux selectors |
+| UI components | `/ts/components/orbital/*.tsx` | Pure React |
+| Storybook stories | `/ts/components/orbital/*.stories.tsx` | Component demos |
+| Mock data | `/ts/components/orbital/mockThreadData.ts` | Test fixtures |
+| DB migrations | `/ts/sql/migrations/*.std.ts` | Schema changes |
+
+## Before Creating New Code (Advisory)
+
+Before implementing new functionality, search for existing code:
+
+1. **Services**: `grep -r "functionName\|FeatureName" ts/services/`
+2. **Components**: `ls ts/components/orbital/` - check for similar components
+3. **Database**: Search `ts/sql/Server.node.ts` for existing methods
+4. **Types**: Check `/ts/types/` for existing type definitions
+5. **Recent commits**: `git log --oneline -20` - see what was recently added
+
+If similar code exists, **extend it** rather than creating parallel implementations.
+
+## Feature Wiring Checklist
+
+When adding a new feature end-to-end:
+
+```
+1. [ ] Define types in `/ts/types/FeatureName.std.ts`
+2. [ ] Add DB migration in `/ts/sql/migrations/XXXX-feature.std.ts`
+3. [ ] Add DB methods to `/ts/sql/Server.node.ts`
+4. [ ] Export from `/ts/sql/Interface.std.ts`
+5. [ ] Add service in `/ts/services/orbitalFeature.preload.ts`
+6. [ ] Create component `/ts/components/orbital/FeatureName.tsx`
+   - Accept all Node.js operations as props (DI pattern)
+7. [ ] Create story `/ts/components/orbital/FeatureName.stories.tsx`
+   - Use mock implementations for all props
+8. [ ] Create smart container `/ts/state/smart/FeatureName.preload.tsx`
+   - Wire real implementations to component props
+9. [ ] Test in Storybook first, then Electron
+```
+
+## Mock Data for Development (Temporary)
+
+**Location:** `/ts/components/orbital/mockThreadData.ts`
+
+Mock data exists to enable Storybook development before production services are ready.
+
+**Guidelines:**
+- Use `MOCK_USERS` and `MOCK_THREADS` for Storybook stories only
+- Mock implementations should mirror the real service signatures exactly
+- When real services become available, Storybook stories continue working (same prop signatures)
+- Do NOT embed mock data in production components - always use dependency injection
+
+**Production Migration Path:**
+1. Component props define the contract (e.g., `getQuotaInfo: (groupId: string) => Promise<QuotaInfo>`)
+2. Storybook uses mock implementation
+3. Smart container uses real service from `.preload.ts`
+4. Mock data stays in Storybook only - production never sees it
+
 ## Testing Strategy
 
 ### Component Testing (Storybook)
@@ -278,9 +356,24 @@ pnpm run test:playwright:ui     # Interactive mode
 - **Storage awareness** - Show quota usage prominently
 
 ## Coordination
-- Work closely with **Backend Engineer** on API contracts and error handling
-- Work closely with **Signal Protocol Specialist** on encryption indicators
-- Work closely with **QA Specialist** on usability testing with non-technical users
+
+### With Backend Engineer
+**When implementing UI for new API endpoints:**
+1. Reference the PRD section for requirements
+2. Check if backend service exists in `/ts/services/orbital*.preload.ts`
+3. If not, coordinate via GitHub Issue comments on which endpoints are needed
+4. Agree on request/response shapes (document in Issue)
+5. Frontend can proceed with mock implementations while backend builds real ones
+
+**Shared documentation:** `/planning-docs/api-specification.md`
+
+### With Signal Protocol Specialist
+- Consult on encryption indicators and security UI
+- Review any code touching Signal Protocol components
+
+### With QA Specialist
+- Collaborate on usability testing with non-technical users
+- Verify "grandparent test" compliance
 
 ---
 

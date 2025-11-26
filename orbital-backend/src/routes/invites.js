@@ -4,6 +4,7 @@ const { asyncHandler, validationError, forbiddenError, notFoundError } = require
 const db = require('../config/database');
 const logger = require('../utils/logger');
 const groupService = require('../services/groupService');
+const { isValidEmail } = require('../utils/emailNormalization');
 
 const router = express.Router();
 
@@ -24,26 +25,37 @@ const router = express.Router();
  *
  * Request body:
  * - groupId: string (UUID)
+ * - targetEmail: string (email address the invite is for)
  *
  * Response:
  * - code: string (8-char alphanumeric)
  * - expiresAt: number (Unix timestamp in milliseconds)
  * - createdAt: number (Unix timestamp in milliseconds)
+ * - targetEmail: string (email address)
  */
 router.post('/generate', authenticate, asyncHandler(async (req, res) => {
-  const { groupId } = req.body;
+  const { groupId, targetEmail } = req.body;
 
   if (!groupId) {
     throw validationError('Missing required field: groupId');
   }
 
+  if (!targetEmail) {
+    throw validationError('Missing required field: targetEmail');
+  }
+
+  if (!isValidEmail(targetEmail)) {
+    throw validationError('Invalid email format');
+  }
+
   try {
-    const result = await groupService.regenerateInviteCode(groupId, req.user.userId);
+    const result = await groupService.regenerateInviteCode(groupId, req.user.userId, targetEmail);
 
     logger.info('Invite code generated via API', {
       groupId,
       userId: req.user.userId,
-      code: result.invite_code
+      code: result.invite_code,
+      targetEmail: result.target_email
     });
 
     // Convert ISO timestamps to Unix timestamps (milliseconds)
@@ -53,7 +65,8 @@ router.post('/generate', authenticate, asyncHandler(async (req, res) => {
     res.status(201).json({
       code: result.invite_code,
       expiresAt,
-      createdAt
+      createdAt,
+      targetEmail: result.target_email
     });
   } catch (error) {
     if (error.message === 'GROUP_NOT_FOUND') {
@@ -61,6 +74,9 @@ router.post('/generate', authenticate, asyncHandler(async (req, res) => {
     }
     if (error.message === 'FORBIDDEN_NOT_CREATOR') {
       throw forbiddenError('Only group creator can generate invite codes');
+    }
+    if (error.message === 'INVALID_EMAIL_FORMAT') {
+      throw validationError('Invalid email format');
     }
     throw error;
   }
@@ -73,6 +89,7 @@ router.post('/generate', authenticate, asyncHandler(async (req, res) => {
  *
  * Request body:
  * - groupId: string (UUID)
+ * - targetEmail: string (email address the invite is for)
  * - linkType: 'orbital' | 'web' (optional, defaults to 'orbital')
  *
  * Response:
@@ -80,12 +97,21 @@ router.post('/generate', authenticate, asyncHandler(async (req, res) => {
  * - code: string (8-char alphanumeric)
  * - expiresAt: number (Unix timestamp in milliseconds)
  * - createdAt: number (Unix timestamp in milliseconds)
+ * - targetEmail: string (email address)
  */
 router.post('/generate-link', authenticate, asyncHandler(async (req, res) => {
-  const { groupId, linkType = 'orbital' } = req.body;
+  const { groupId, targetEmail, linkType = 'orbital' } = req.body;
 
   if (!groupId) {
     throw validationError('Missing required field: groupId');
+  }
+
+  if (!targetEmail) {
+    throw validationError('Missing required field: targetEmail');
+  }
+
+  if (!isValidEmail(targetEmail)) {
+    throw validationError('Invalid email format');
   }
 
   if (!['orbital', 'web'].includes(linkType)) {
@@ -93,8 +119,8 @@ router.post('/generate-link', authenticate, asyncHandler(async (req, res) => {
   }
 
   try {
-    // Generate invite code
-    const result = await groupService.regenerateInviteCode(groupId, req.user.userId);
+    // Generate invite code with target email
+    const result = await groupService.regenerateInviteCode(groupId, req.user.userId, targetEmail);
 
     // Generate link based on type
     let link;
@@ -111,6 +137,7 @@ router.post('/generate-link', authenticate, asyncHandler(async (req, res) => {
       groupId,
       userId: req.user.userId,
       code: result.invite_code,
+      targetEmail: result.target_email,
       linkType,
       link
     });
@@ -123,7 +150,8 @@ router.post('/generate-link', authenticate, asyncHandler(async (req, res) => {
       link,
       code: result.invite_code,
       expiresAt,
-      createdAt
+      createdAt,
+      targetEmail: result.target_email
     });
   } catch (error) {
     if (error.message === 'GROUP_NOT_FOUND') {
@@ -131,6 +159,9 @@ router.post('/generate-link', authenticate, asyncHandler(async (req, res) => {
     }
     if (error.message === 'FORBIDDEN_NOT_CREATOR') {
       throw forbiddenError('Only group creator can generate invite links');
+    }
+    if (error.message === 'INVALID_EMAIL_FORMAT') {
+      throw validationError('Invalid email format');
     }
     throw error;
   }
@@ -225,7 +256,8 @@ router.get('/group/:groupId', authenticate, asyncHandler(async (req, res) => {
       code: code.code,
       createdAt: new Date(code.created_at).getTime(),
       expiresAt: new Date(code.expires_at).getTime(),
-      status: 'pending' // All codes from getActiveInviteCodes are pending
+      status: 'pending', // All codes from getActiveInviteCodes are pending
+      targetEmail: code.target_email
     }));
 
     res.status(200).json({

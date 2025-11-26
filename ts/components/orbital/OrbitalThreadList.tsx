@@ -8,6 +8,7 @@ import { OrbitalDaySeparator } from './OrbitalDaySeparator';
 
 export type OrbitalThread = {
   id: string;
+  orbitId: string; // The orbit (group) this thread belongs to
   title: string;
   author: string;
   authorId: string;

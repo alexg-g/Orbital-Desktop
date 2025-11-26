@@ -1,6 +1,7 @@
 // Copyright 2025 Orbital
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@use 'sass:color';
 @use '../mixins';
 @use '../orbital-variables' as *;
 
@@ -492,6 +493,96 @@
     }
   }
 
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-md;
+  }
+
+  &__email-input {
+    width: 100%;
+    // Match button padding, border-radius, and font-size
+    padding: $orbital-btn-padding-y $orbital-btn-padding-x;
+    font-size: $orbital-btn-font-size;
+    font-family: $orbital-font-body;
+    border: 2px solid $orbital-border-strong;
+    border-radius: $orbital-btn-border-radius;
+    background: $orbital-surface-elevated;
+    color: $orbital-text-primary;
+    transition: border-color $orbital-duration-fast $orbital-ease-default,
+                background-color $orbital-duration-fast $orbital-ease-default;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+      border-color: $orbital-blue;
+    }
+
+    &--error {
+      border-color: $orbital-error;
+
+      &:focus {
+        border-color: $orbital-error;
+      }
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    @include mixins.dark-theme {
+      // More visible in dark mode - lighter background with visible border
+      background: color.adjust($orbital-dark-surface-elevated, $lightness: 5%);
+      border-color: color.adjust($orbital-dark-border-strong, $lightness: 15%);
+      color: $orbital-dark-text-primary;
+
+      &::placeholder {
+        color: $orbital-dark-text-secondary;
+      }
+
+      &:focus {
+        border-color: $orbital-dark-blue;
+        background: color.adjust($orbital-dark-surface-elevated, $lightness: 8%);
+      }
+
+      &--error {
+        border-color: $orbital-error;
+      }
+    }
+  }
+
+  &__email-error {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-error;
+    margin-top: -$orbital-space-sm;
+  }
+
+  &__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+
+    .OrbitalSettingsButton {
+      width: 100%;
+    }
+  }
+
+  &__api-error {
+    padding: $orbital-space-sm $orbital-space-md;
+    margin-bottom: $orbital-space-base;
+    font-size: $orbital-font-size-sm;
+    color: white;
+    background-color: $orbital-error;
+    border-radius: $orbital-radius-base;
+    text-align: center;
+  }
+
   &__actions {
     display: flex;
     flex-direction: column;
@@ -591,6 +682,40 @@
     @include mixins.dark-theme {
       background: $orbital-dark-surface;
       border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__item-email {
+    font-weight: 600;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__item-code {
+    font-family: $orbital-font-mono;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__item-time {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
     }
   }
 
@@ -994,5 +1119,200 @@
     display: flex;
     gap: $orbital-space-sm;
     padding-top: $orbital-space-sm;
+  }
+
+  &__account {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+  }
+
+  &__account-info {
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-secondary;
+    margin: 0 0 $orbital-space-sm;
+
+    strong {
+      color: $orbital-text-primary;
+      font-weight: 600;
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+
+      strong {
+        color: $orbital-dark-text-primary;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// CREATE ORBIT STYLES
+// =============================================================================
+
+.OrbitalSettingsInvites {
+  &__create-form {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-base;
+  }
+
+  &__char-count {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    text-align: right;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__create-success {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-base;
+    text-align: center;
+  }
+
+  &__success-message {
+    font-size: $orbital-font-size-lg;
+    color: $orbital-text-primary;
+    margin: 0;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__invite-section {
+    padding: $orbital-space-base;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__invite-label {
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-secondary;
+    margin-bottom: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__invite-expiry {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    margin-top: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__invite-note {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    font-style: italic;
+    margin-top: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+}
+
+// =============================================================================
+// ORBIT SELECTOR MODAL
+// =============================================================================
+
+.OrbitSelectorModal {
+  padding: $orbital-space-lg;
+  min-width: 400px;
+  max-width: 500px;
+
+  &__description {
+    color: $orbital-text-secondary;
+    margin: 0 0 $orbital-space-lg;
+    line-height: $orbital-line-height-relaxed;
+    font-size: $orbital-font-size-base;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+}
+
+// =============================================================================
+// ORBIT SETTINGS PAGE
+// =============================================================================
+
+.OrbitalSettingsOrbit {
+  &__current {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-xs;
+    padding: $orbital-space-base;
+    background: $orbital-surface;
+    border: 2px solid $orbital-blue;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-blue;
+    }
+  }
+
+  &__current-name {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-xl;
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__current-meta {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__no-current {
+    padding: $orbital-space-base;
+    color: $orbital-text-tertiary;
+    font-style: italic;
+    background: $orbital-surface;
+    border: 1px dashed $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__description {
+    color: $orbital-text-secondary;
+    margin: 0 0 $orbital-space-base;
+    line-height: $orbital-line-height-relaxed;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 }

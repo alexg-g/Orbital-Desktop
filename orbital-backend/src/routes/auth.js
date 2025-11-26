@@ -4,6 +4,7 @@ const { generateToken } = require('../middleware/auth');
 const { asyncHandler, validationError, conflictError } = require('../middleware/errorHandler');
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { isValidEmail, normalizeEmail } = require('../utils/emailNormalization');
 
 const router = express.Router();
 
@@ -64,9 +65,12 @@ function validatePassword(password) {
 /**
  * POST /api/signup
  * Register new user account
+ *
+ * Requires a valid invite code that matches the provided email address.
+ * This is a closed beta - no account creation without an invite.
  */
 router.post('/signup', asyncHandler(async (req, res) => {
-  const { username, password, public_key } = req.body;
+  const { username, password, email, inviteCode, public_key } = req.body;
 
   // Validate username
   const usernameError = validateUsername(username);
@@ -80,10 +84,30 @@ router.post('/signup', asyncHandler(async (req, res) => {
     throw validationError(passwordError);
   }
 
+  // Validate email
+  if (!email) {
+    throw validationError('Email is required');
+  }
+  if (!isValidEmail(email)) {
+    throw validationError('Invalid email format');
+  }
+
+  // Validate invite code
+  if (!inviteCode) {
+    throw validationError('Invite code is required');
+  }
+  if (inviteCode.length !== 8) {
+    throw validationError('Invalid invite code format');
+  }
+
   // Validate public key
   if (!public_key || typeof public_key !== 'object') {
     throw validationError('Public key is required and must be a JSON object (JWK format)');
   }
+
+  // Normalize the provided email for comparison
+  const normalizedEmail = normalizeEmail(email);
+  const emailLower = email.toLowerCase().trim();
 
   // Check if username already exists
   const existingUser = await db.query(
@@ -95,32 +119,108 @@ router.post('/signup', asyncHandler(async (req, res) => {
     throw conflictError('Username already taken');
   }
 
-  // Hash password
-  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-
-  // Create user
-  const result = await db.query(
-    `INSERT INTO users (username, password_hash, public_key)
-     VALUES ($1, $2, $3)
-     RETURNING id, username, public_key, created_at`,
-    [username, passwordHash, JSON.stringify(public_key)]
+  // Check if email already exists
+  const existingEmail = await db.query(
+    'SELECT id FROM users WHERE normalized_email = $1',
+    [normalizedEmail]
   );
 
-  const user = result.rows[0];
+  if (existingEmail.rowCount > 0) {
+    throw conflictError('An account with this email already exists');
+  }
 
-  // Generate JWT token
-  const token = generateToken(user);
+  // Look up the invite code
+  const codeResult = await db.query(
+    `SELECT id, group_id, expires_at, used_by, normalized_target_email
+     FROM invite_codes
+     WHERE code = $1`,
+    [inviteCode.toUpperCase()]
+  );
 
-  logger.info('User registered', {
-    userId: user.id,
-    username: user.username
-  });
+  if (codeResult.rowCount === 0) {
+    throw validationError('Invalid invite code');
+  }
 
-  res.status(201).json({
-    user_id: user.id,
-    username: user.username,
-    token
-  });
+  const code = codeResult.rows[0];
+
+  // Check if code is already used
+  if (code.used_by) {
+    throw validationError('This invite code has already been used');
+  }
+
+  // Check if code is expired
+  if (new Date(code.expires_at) < new Date()) {
+    throw validationError('This invite code has expired');
+  }
+
+  // Check if email matches the invite code's target email
+  if (code.normalized_target_email !== normalizedEmail) {
+    logger.warn('Signup attempt with mismatched email', {
+      providedEmail: emailLower,
+      providedNormalized: normalizedEmail,
+      targetNormalized: code.normalized_target_email,
+      inviteCode: inviteCode.toUpperCase()
+    });
+    throw validationError('This invite code was sent to a different email address');
+  }
+
+  // All validations passed - create the user and mark code as used
+  const client = await db.getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    // Create user with email
+    const result = await client.query(
+      `INSERT INTO users (username, password_hash, public_key, email, normalized_email)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, username, email, public_key, created_at`,
+      [username, passwordHash, JSON.stringify(public_key), emailLower, normalizedEmail]
+    );
+
+    const user = result.rows[0];
+
+    // Mark invite code as used
+    await client.query(
+      `UPDATE invite_codes
+       SET used_by = $1, used_at = NOW()
+       WHERE id = $2`,
+      [user.id, code.id]
+    );
+
+    // Add user to the group associated with the invite code
+    // For now, we don't auto-join - they'll need to provide encrypted_group_key
+    // This could be enhanced later with a key exchange flow
+
+    await client.query('COMMIT');
+
+    // Generate JWT token
+    const token = generateToken(user);
+
+    logger.info('User registered via invite code', {
+      userId: user.id,
+      username: user.username,
+      email: emailLower,
+      inviteCode: inviteCode.toUpperCase(),
+      groupId: code.group_id
+    });
+
+    res.status(201).json({
+      user_id: user.id,
+      username: user.username,
+      email: user.email,
+      token,
+      groupId: code.group_id // Client can use this to initiate key exchange
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
 /**

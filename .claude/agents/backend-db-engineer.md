@@ -105,6 +105,22 @@ You are the **Backend/Database Engineer** for Orbital. You design and implement 
 - [ ] Error responses are user-friendly
 - [ ] CORS configured correctly
 
+## Client Integration Pattern
+
+Frontend consumes backend APIs via preload services:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| Service | `/ts/services/orbital*.preload.ts` | Makes HTTPS requests to Orbital API |
+| Storage | `itemStorage` (SQLCipher) | Caches results locally |
+| Component | Receives functions as props | Uses dependency injection |
+
+**Key points:**
+- Services in `.preload.ts` files have full Node.js access
+- Components never import services directly (breaks Storybook)
+- When designing APIs, ensure response shapes are easy to mock for Storybook testing
+- Coordinate with Frontend Engineer via GitHub Issue comments on API contracts
+
 ## Coordination
 - Work closely with **Signal Protocol Specialist** on relay endpoint design
 - Work closely with **Frontend Engineer** on API contracts

@@ -6,6 +6,20 @@ import type { OrbitalMessageType } from './OrbitalThreadDetail';
 import type { MIMEType } from '../../types/MIME.std';
 
 /**
+ * Mock orbit (group) type for development/testing
+ * This mirrors the GroupInfo type from orbitalGroups.preload.ts
+ */
+export type OrbitalOrbit = {
+  groupId: string;
+  name: string;
+  encryptedName: string;
+  createdBy: string; // userId of creator
+  memberIds: string[]; // Array of member userIds
+  memberCount: number;
+  createdAt: string;
+};
+
+/**
  * Mock user type for development/testing
  * This mirrors what would come from the database
  */
@@ -14,6 +28,7 @@ export type OrbitalUser = {
   name: string;
   avatarUrl: string;
   isOnline?: boolean;
+  orbitIds?: string[]; // Which orbits this user belongs to
 };
 
 /**
@@ -29,50 +44,108 @@ export type OrbitalUser = {
  * Cousin → rocket2.png
  * You (testuser) → blackhole1.png (center of the orbit)
  */
+// Orbit ID constant for consistency
+export const DEMO_ORBIT_ID = 'demo-orbit-1';
+
 export const MOCK_USERS: Record<string, OrbitalUser> = {
   'testuser': {
     id: 'testuser',
     name: 'You',
     avatarUrl: 'images/avatars/blackhole1.png',
     isOnline: true,
+    orbitIds: [DEMO_ORBIT_ID], // Member of Demo Orbit
   },
   'user-mom': {
     id: 'user-mom',
     name: 'Mom',
     avatarUrl: 'images/avatars/rocket1.png',
     isOnline: false,
+    orbitIds: [DEMO_ORBIT_ID],
   },
   'user-dad': {
     id: 'user-dad',
     name: 'Dad',
     avatarUrl: 'images/avatars/alien1.png',
     isOnline: true,
+    orbitIds: [DEMO_ORBIT_ID],
   },
   'user-grandma': {
     id: 'user-grandma',
     name: 'Grandma',
     avatarUrl: 'images/avatars/moon1.png',
     isOnline: false,
+    orbitIds: [DEMO_ORBIT_ID],
   },
   'user-uncle': {
     id: 'user-uncle',
     name: 'Uncle',
     avatarUrl: 'images/avatars/planet1.png',
     isOnline: false,
+    orbitIds: [DEMO_ORBIT_ID],
   },
   'user-aunt': {
     id: 'user-aunt',
     name: 'Aunt Sarah',
     avatarUrl: 'images/avatars/nebula1.png',
     isOnline: false,
+    orbitIds: [DEMO_ORBIT_ID],
   },
   'user-cousin': {
     id: 'user-cousin',
     name: 'Cousin',
     avatarUrl: 'images/avatars/rocket2.png',
     isOnline: false,
+    orbitIds: [DEMO_ORBIT_ID],
   },
 };
+
+/**
+ * Mock orbits data for development/testing
+ * Demo Orbit is created by testuser and includes all family members
+ */
+export const MOCK_ORBITS: Record<string, OrbitalOrbit> = {
+  [DEMO_ORBIT_ID]: {
+    groupId: DEMO_ORBIT_ID,
+    name: 'Demo Orbit',
+    encryptedName: 'encrypted-demo-orbit',
+    createdBy: 'testuser', // testuser is the creator/owner
+    memberIds: [
+      'testuser',
+      'user-mom',
+      'user-dad',
+      'user-grandma',
+      'user-uncle',
+      'user-aunt',
+      'user-cousin',
+    ],
+    memberCount: 7,
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
+  },
+};
+
+/**
+ * Helper function to get orbit by ID
+ */
+export function getOrbitById(orbitId: string): OrbitalOrbit | undefined {
+  return MOCK_ORBITS[orbitId];
+}
+
+/**
+ * Helper function to check if a user is owner of an orbit
+ */
+export function isOrbitOwner(orbitId: string, userId: string): boolean {
+  const orbit = MOCK_ORBITS[orbitId];
+  return orbit?.createdBy === userId;
+}
+
+/**
+ * Helper function to get all members of an orbit
+ */
+export function getOrbitMembers(orbitId: string): OrbitalUser[] {
+  const orbit = MOCK_ORBITS[orbitId];
+  if (!orbit) return [];
+  return orbit.memberIds.map(id => MOCK_USERS[id]).filter(Boolean);
+}
 
 /**
  * Helper function to get user by ID
@@ -92,51 +165,89 @@ export function getAvatarUrl(userId: string): string | undefined {
 
 /**
  * Mock chat (direct message) data for development/testing
- * Chats are 1:1 Signal-style conversations
+ * Chats are global 1:1 Signal-style conversations (orbit-agnostic)
  */
 export type OrbitalChat = {
   id: string;
-  userId: string; // Reference to MOCK_USERS
+  recipientId: string; // Reference to MOCK_USERS (the other person in the chat)
   name: string;
   avatarUrl?: string;
   lastMessage: string;
   lastMessageTimestamp: number;
   unreadCount: number;
   isOnline?: boolean;
+  sharedOrbitIds?: string[]; // Optional: orbits shared with this contact
 };
 
 export const MOCK_CHATS: ReadonlyArray<OrbitalChat> = [
   {
     id: 'chat-dad',
-    userId: 'user-dad',
+    recipientId: 'user-dad',
     name: MOCK_USERS['user-dad'].name,
     avatarUrl: MOCK_USERS['user-dad'].avatarUrl,
     lastMessage: 'See you at dinner Saturday!',
     lastMessageTimestamp: Date.now() - 1 * 60 * 60 * 1000, // 1 hour ago
     unreadCount: 0,
     isOnline: MOCK_USERS['user-dad'].isOnline,
+    sharedOrbitIds: [DEMO_ORBIT_ID], // Shared orbits with this contact
   },
   {
     id: 'chat-mom',
-    userId: 'user-mom',
+    recipientId: 'user-mom',
     name: MOCK_USERS['user-mom'].name,
     avatarUrl: MOCK_USERS['user-mom'].avatarUrl,
     lastMessage: 'Did you see Emma\'s video? So cute!',
     lastMessageTimestamp: Date.now() - 3 * 60 * 60 * 1000, // 3 hours ago
     unreadCount: 2,
     isOnline: MOCK_USERS['user-mom'].isOnline,
+    sharedOrbitIds: [DEMO_ORBIT_ID],
   },
   {
     id: 'chat-grandma',
-    userId: 'user-grandma',
+    recipientId: 'user-grandma',
     name: MOCK_USERS['user-grandma'].name,
     avatarUrl: MOCK_USERS['user-grandma'].avatarUrl,
     lastMessage: 'I\'ll bring the baby gates over this weekend',
     lastMessageTimestamp: Date.now() - 24 * 60 * 60 * 1000, // Yesterday
     unreadCount: 0,
     isOnline: MOCK_USERS['user-grandma'].isOnline,
+    sharedOrbitIds: [DEMO_ORBIT_ID],
   },
 ];
+
+/**
+ * Helper function to get all chats (orbit-agnostic)
+ * Chats are global 1:1 conversations, not tied to any specific orbit
+ */
+export function getAllChats(): ReadonlyArray<OrbitalChat> {
+  return MOCK_CHATS;
+}
+
+/**
+ * Get all contacts from all orbits (excluding current user)
+ * Used by the Create Chat contact picker
+ */
+export function getAllContacts(currentUserId: string = 'testuser'): ReadonlyArray<OrbitalUser> {
+  return Object.values(MOCK_USERS).filter(user => user.id !== currentUserId);
+}
+
+/**
+ * Find existing chat with a single recipient (1:1 DM)
+ * Returns undefined if no existing chat found
+ */
+export function findExistingChat(recipientId: string): OrbitalChat | undefined {
+  return MOCK_CHATS.find(chat => chat.recipientId === recipientId);
+}
+
+/**
+ * Find existing group chat with exact set of participants
+ * For group chats, we match on participantIds array
+ * Note: Current MOCK_CHATS are 1:1 only, so this returns undefined for now
+ */
+export function findExistingGroupChat(_participantIds: string[]): OrbitalChat | undefined {
+  // TODO: Implement when group chat support is added to MOCK_CHATS
+  return undefined;
+}
 
 /**
  * Mock chat messages for development/testing
@@ -239,6 +350,7 @@ export const MOCK_CHAT_MESSAGES: Record<string, OrbitalMessageType[]> = {
 export const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   {
     id: 'thread-1',
+    orbitId: DEMO_ORBIT_ID, // Thread within Demo Orbit
     title: "Emma's First Steps!",
     author: 'Mom',
     authorId: 'user-mom',
@@ -253,6 +365,7 @@ export const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-2',
+    orbitId: DEMO_ORBIT_ID, // Thread within Demo Orbit
     title: 'Family Dinner This Weekend?',
     author: 'Dad',
     authorId: 'user-dad',
@@ -267,6 +380,7 @@ export const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-3',
+    orbitId: DEMO_ORBIT_ID, // Thread within Demo Orbit
     title: 'Check out these vacation photos',
     author: 'Aunt Sarah',
     authorId: 'user-aunt',
@@ -279,6 +393,7 @@ export const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-4',
+    orbitId: DEMO_ORBIT_ID, // Thread within Demo Orbit
     title: 'Recipe for Grandmas cookies?',
     author: 'Cousin',
     authorId: 'user-cousin',
@@ -290,6 +405,13 @@ export const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
     isUnread: false,
   },
 ];
+
+/**
+ * Helper function to get threads for a specific orbit
+ */
+export function getThreadsByOrbit(orbitId: string): ReadonlyArray<OrbitalThread> {
+  return MOCK_THREADS.filter(thread => thread.orbitId === orbitId);
+}
 
 /**
  * Mock messages for each thread

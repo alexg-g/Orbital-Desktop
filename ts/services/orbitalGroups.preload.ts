@@ -77,6 +77,10 @@ export type InviteCodeInfo = {
   expiresAt: string;
   groupId: string;
   groupName: string;
+  targetEmail?: string;
+  createdAt?: string;
+  link?: string; // For shareable links
+  status?: 'pending' | 'accepted' | 'expired';
 };
 
 /**
@@ -376,7 +380,318 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
 }
 
 /**
- * Generate a new invite code for a group
+ * Generate a mock invite code (for demo orbits)
+ */
+function generateMockInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+/**
+ * Check if this is a mock/demo group ID
+ */
+function isMockGroupId(groupId: string): boolean {
+  return groupId.startsWith('demo-') || groupId === 'DEMO_ORBIT_ID';
+}
+
+/**
+ * Store a mock invite code in local storage (persisted via SQLCipher)
+ */
+async function storeMockInvite(groupId: string, invite: InviteCodeInfo): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  // Get existing mock invites or create new map
+  const existingInvites = itemStorage.get('orbitalMockInvites') || {};
+  const groupInvites = existingInvites[groupId] || [];
+
+  // Add new invite at the beginning
+  groupInvites.unshift(invite);
+
+  // Keep only the last 20 invites per group
+  const trimmedInvites = groupInvites.slice(0, 20);
+
+  const updatedInvites = {
+    ...existingInvites,
+    [groupId]: trimmedInvites,
+  };
+
+  await itemStorage.put('orbitalMockInvites', updatedInvites);
+  log.info(`storeMockInvite: Stored mock invite for group ${groupId}`);
+}
+
+/**
+ * Get mock invites for a group from local storage
+ */
+async function getMockInvites(groupId: string): Promise<InviteCodeInfo[]> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const allInvites = itemStorage.get('orbitalMockInvites') || {};
+  const groupInvites = allInvites[groupId] || [];
+
+  // Filter out expired invites
+  const now = Date.now();
+  const activeInvites = groupInvites.filter((invite: InviteCodeInfo) => {
+    const expiresAt = new Date(invite.expiresAt).getTime();
+    return expiresAt > now;
+  });
+
+  return activeInvites;
+}
+
+/**
+ * Generate a new invite code for a group (requires target email)
+ *
+ * @param groupId Group ID
+ * @param targetEmail Email address the invite is for
+ * @returns New invite code info
+ */
+export async function generateInviteCode(groupId: string, targetEmail: string): Promise<InviteCodeInfo> {
+  const logId = `generateInviteCode(${groupId})`;
+
+  if (!targetEmail || !targetEmail.trim()) {
+    throw new Error('Target email is required');
+  }
+
+  // Handle mock/demo orbits
+  if (isMockGroupId(groupId)) {
+    const mockCode = generateMockInviteCode();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const inviteCode: InviteCodeInfo = {
+      code: mockCode,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: now.toISOString(),
+      groupId,
+      groupName: 'Demo Orbit',
+      targetEmail: targetEmail.trim().toLowerCase(),
+      status: 'pending',
+    };
+
+    // Store the mock invite for persistence
+    await storeMockInvite(groupId, inviteCode);
+
+    log.info(`${logId}: Mock invite code generated for ${targetEmail}: ${mockCode}`);
+    return inviteCode;
+  }
+
+  try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    const requestBody = JSON.stringify({
+      groupId,
+      targetEmail: targetEmail.trim().toLowerCase(),
+    });
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/invites/generate`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: Buffer.from(requestBody),
+    });
+
+    if (response.status !== 201 && response.status !== 200) {
+      const errorData = parseErrorResponse(response.data);
+      throw new Error(errorData.error || `Failed to generate invite code: ${response.status}`);
+    }
+
+    const data = JSON.parse(response.data);
+
+    const inviteCode: InviteCodeInfo = {
+      code: data.code,
+      expiresAt: new Date(data.expiresAt).toISOString(),
+      createdAt: new Date(data.createdAt).toISOString(),
+      groupId,
+      groupName: '', // Will be filled by caller if needed
+      targetEmail: data.targetEmail,
+      status: 'pending',
+    };
+
+    log.info(`${logId}: Invite code generated for ${targetEmail}`);
+
+    return inviteCode;
+  } catch (error) {
+    log.error(`${logId}: Failed to generate invite code`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a shareable invite link for a group (requires target email)
+ *
+ * @param groupId Group ID
+ * @param targetEmail Email address the invite is for
+ * @param linkType Type of link ('orbital' for deep link, 'web' for web link)
+ * @returns New invite code info with link
+ */
+export async function generateInviteLink(
+  groupId: string,
+  targetEmail: string,
+  linkType: 'orbital' | 'web' = 'orbital'
+): Promise<InviteCodeInfo> {
+  const logId = `generateInviteLink(${groupId})`;
+
+  if (!targetEmail || !targetEmail.trim()) {
+    throw new Error('Target email is required');
+  }
+
+  // Handle mock/demo orbits
+  if (isMockGroupId(groupId)) {
+    const mockCode = generateMockInviteCode();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+    const mockLink = linkType === 'orbital'
+      ? `orbital://invite/${mockCode}`
+      : `https://orbitl.org/join/${mockCode}`;
+
+    const inviteCode: InviteCodeInfo = {
+      code: mockCode,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: now.toISOString(),
+      groupId,
+      groupName: 'Demo Orbit',
+      targetEmail: targetEmail.trim().toLowerCase(),
+      link: mockLink,
+      status: 'pending',
+    };
+
+    // Store the mock invite for persistence
+    await storeMockInvite(groupId, inviteCode);
+
+    log.info(`${logId}: Mock invite link generated for ${targetEmail}: ${mockLink}`);
+    return inviteCode;
+  }
+
+  try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    const requestBody = JSON.stringify({
+      groupId,
+      targetEmail: targetEmail.trim().toLowerCase(),
+      linkType,
+    });
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/invites/generate-link`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: Buffer.from(requestBody),
+    });
+
+    if (response.status !== 201 && response.status !== 200) {
+      const errorData = parseErrorResponse(response.data);
+      throw new Error(errorData.error || `Failed to generate invite link: ${response.status}`);
+    }
+
+    const data = JSON.parse(response.data);
+
+    const inviteCode: InviteCodeInfo = {
+      code: data.code,
+      expiresAt: new Date(data.expiresAt).toISOString(),
+      createdAt: new Date(data.createdAt).toISOString(),
+      groupId,
+      groupName: '', // Will be filled by caller if needed
+      targetEmail: data.targetEmail,
+      link: data.link,
+      status: 'pending',
+    };
+
+    log.info(`${logId}: Invite link generated for ${targetEmail}`);
+
+    return inviteCode;
+  } catch (error) {
+    log.error(`${logId}: Failed to generate invite link`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
+
+/**
+ * Get active invite codes for a group
+ *
+ * @param groupId Group ID
+ * @returns Array of active invite codes
+ */
+export async function getActiveInviteCodes(groupId: string): Promise<InviteCodeInfo[]> {
+  const logId = `getActiveInviteCodes(${groupId})`;
+
+  // Handle mock/demo orbits - return stored mock invites
+  if (isMockGroupId(groupId)) {
+    const mockInvites = await getMockInvites(groupId);
+    log.info(`${logId}: Retrieved ${mockInvites.length} mock invite codes`);
+    return mockInvites;
+  }
+
+  try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/invites/group/${groupId}`,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+      },
+    });
+
+    if (response.status !== 200) {
+      const errorData = parseErrorResponse(response.data);
+      throw new Error(errorData.error || `Failed to get invite codes: ${response.status}`);
+    }
+
+    const data = JSON.parse(response.data);
+
+    const inviteCodes: InviteCodeInfo[] = (data.inviteCodes || []).map((ic: any) => ({
+      code: ic.code,
+      expiresAt: new Date(ic.expiresAt).toISOString(),
+      createdAt: new Date(ic.createdAt).toISOString(),
+      groupId,
+      groupName: '',
+      targetEmail: ic.targetEmail,
+      status: ic.status || 'pending',
+    }));
+
+    log.info(`${logId}: Retrieved ${inviteCodes.length} active invite codes`);
+
+    return inviteCodes;
+  } catch (error) {
+    log.error(`${logId}: Failed to get invite codes`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a new invite code for a group (legacy - without target email)
+ * @deprecated Use generateInviteCode instead
  *
  * @param groupId Group ID
  * @returns New invite code info
@@ -607,4 +922,36 @@ function makeRequest(options: {
 
     request.end();
   });
+}
+
+// =============================================================================
+// SELECTED GROUP PERSISTENCE
+// =============================================================================
+
+/**
+ * Set the currently selected group ID (persisted in SQLCipher)
+ */
+export async function setSelectedGroupId(groupId: string): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+  await itemStorage.put('orbitalSelectedGroupId', groupId);
+  log.info('setSelectedGroupId: Saved', { groupId });
+}
+
+/**
+ * Get the currently selected group ID from SQLCipher
+ * Returns null if no group is selected
+ */
+export async function getSelectedGroupId(): Promise<string | null> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+  const groupId = itemStorage.get('orbitalSelectedGroupId');
+  return groupId || null;
+}
+
+/**
+ * Clear the selected group ID (e.g., on logout)
+ */
+export async function clearSelectedGroupId(): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+  await itemStorage.remove('orbitalSelectedGroupId');
+  log.info('clearSelectedGroupId: Cleared');
 }

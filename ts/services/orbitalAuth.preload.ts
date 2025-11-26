@@ -126,11 +126,93 @@ export async function getUsername(): Promise<string | null> {
 }
 
 /**
- * Check if user is authenticated (has valid JWT token)
+ * Check if user has a stored token (does NOT validate with backend)
+ * Use validateSession() for full validation
  */
 export async function isAuthenticated(): Promise<boolean> {
   const token = await getJWT();
+  console.log('[OrbitalAuth] isAuthenticated: token exists =', token !== null, 'token preview =', token ? token.substring(0, 20) + '...' : 'null');
   return token !== null;
+}
+
+/**
+ * Validation result from server
+ */
+export type ValidationResult = {
+  valid: boolean;
+  userId?: string;
+  username?: string;
+  error?: string;
+};
+
+/**
+ * Validate stored JWT token against backend server
+ * Returns validation result with user info if valid
+ * Automatically clears invalid tokens
+ */
+export async function validateToken(): Promise<ValidationResult> {
+  const token = await getJWT();
+
+  if (!token) {
+    log.info('validateToken: No token stored');
+    return { valid: false, error: 'No token stored' };
+  }
+
+  log.info('validateToken: Validating stored token with backend');
+
+  try {
+    const response = await makeAuthRequest({
+      path: '/api/verify-token',
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+
+    if (response.status !== 200) {
+      log.warn('validateToken: Server error', { status: response.status });
+      // Don't clear token on server error - might be temporary
+      return { valid: false, error: `Server error: ${response.status}` };
+    }
+
+    const result = JSON.parse(response.data.toString());
+
+    if (result.valid) {
+      log.info('validateToken: Token is valid', { userId: result.user_id });
+      return {
+        valid: true,
+        userId: result.user_id,
+        username: result.username,
+      };
+    } else {
+      log.warn('validateToken: Token is invalid, clearing stored credentials');
+      // Token is invalid - clear it
+      await logout();
+      return { valid: false, error: result.error || 'Token invalid' };
+    }
+  } catch (error) {
+    // Network error - don't clear token, might be offline
+    log.error('validateToken: Network error', { error: Errors.toLogFormat(error) });
+    return { valid: false, error: 'Network error - could not reach server' };
+  }
+}
+
+/**
+ * Full session validation - checks token with backend
+ * If token is invalid, clears credentials and returns false
+ * Network errors return false (require backend connection for security)
+ */
+export async function validateSession(): Promise<boolean> {
+  log.info('validateSession: Starting session validation');
+
+  const result = await validateToken();
+
+  if (result.valid) {
+    log.info('validateSession: Session is valid', { userId: result.userId });
+    return true;
+  }
+
+  // Token invalid or network error - require re-login
+  log.warn('validateSession: Session invalid', { error: result.error });
+  return false;
 }
 
 /**

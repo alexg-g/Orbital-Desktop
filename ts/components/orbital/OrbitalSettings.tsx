@@ -9,9 +9,20 @@ import { OrbitalSettingsNotifications } from './OrbitalSettingsNotifications';
 import { OrbitalSettingsPrivacy } from './OrbitalSettingsPrivacy';
 import { OrbitalSettingsInvites } from './OrbitalSettingsInvites';
 import { OrbitalSettingsFiles } from './OrbitalSettingsFiles';
+import { OrbitalSettingsOrbit } from './OrbitalSettingsOrbit';
+import type { GroupInfo } from '../../services/orbitalGroups.preload.js';
 
 export type OrbitalSettingsProps = {
   page: OrbitalSettingsPage;
+  // Orbit-related props (optional, only needed for Orbit page)
+  groups?: GroupInfo[];
+  selectedGroupId?: string | null;
+  currentGroup?: GroupInfo | null;
+  isLoadingGroups?: boolean;
+  groupsError?: string;
+  onSelectOrbit?: (groupId: string) => void;
+  onCreateOrbit?: () => void;
+  onJoinOrbit?: () => void;
 };
 
 const PAGE_TITLES: Record<OrbitalSettingsPage, string> = {
@@ -21,9 +32,20 @@ const PAGE_TITLES: Record<OrbitalSettingsPage, string> = {
   [OrbitalSettingsPage.Privacy]: 'Privacy',
   [OrbitalSettingsPage.Invites]: 'Invite Friends',
   [OrbitalSettingsPage.Files]: 'File Library',
+  [OrbitalSettingsPage.Orbit]: 'Switch Orbit',
 };
 
-export function OrbitalSettings({ page }: OrbitalSettingsProps): JSX.Element {
+export function OrbitalSettings({
+  page,
+  groups = [],
+  selectedGroupId = null,
+  currentGroup = null,
+  isLoadingGroups = false,
+  groupsError,
+  onSelectOrbit = () => {},
+  onCreateOrbit = () => {},
+  onJoinOrbit = () => {},
+}: OrbitalSettingsProps): JSX.Element {
   const renderPage = (): JSX.Element => {
     switch (page) {
       case OrbitalSettingsPage.General:
@@ -35,9 +57,27 @@ export function OrbitalSettings({ page }: OrbitalSettingsProps): JSX.Element {
       case OrbitalSettingsPage.Privacy:
         return <OrbitalSettingsPrivacy />;
       case OrbitalSettingsPage.Invites:
-        return <OrbitalSettingsInvites />;
+        return (
+          <OrbitalSettingsInvites
+            currentGroup={currentGroup}
+            onCreateOrbit={onCreateOrbit}
+          />
+        );
       case OrbitalSettingsPage.Files:
         return <OrbitalSettingsFiles />;
+      case OrbitalSettingsPage.Orbit:
+        return (
+          <OrbitalSettingsOrbit
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            currentGroup={currentGroup}
+            isLoading={isLoadingGroups}
+            error={groupsError}
+            onSelectOrbit={onSelectOrbit}
+            onCreateOrbit={onCreateOrbit}
+            onJoinOrbit={onJoinOrbit}
+          />
+        );
       default:
         return <OrbitalSettingsGeneral />;
     }

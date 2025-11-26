@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 const logger = require('../utils/logger');
 const quotaService = require('./quotaService');
+const { normalizeEmail, isValidEmail } = require('../utils/emailNormalization');
 
 // Constants
 const MAX_MEMBERS = 10;
@@ -140,11 +141,21 @@ async function createGroup(userId, encryptedName, encryptedGroupKey) {
  * Only the group creator can regenerate codes
  * @param {string} groupId - Group ID
  * @param {string} userId - User requesting new code (must be creator)
+ * @param {string} targetEmail - Email address the invite is for
  * @returns {Promise<Object>} - New invite code with expiration
  */
-async function regenerateInviteCode(groupId, userId) {
+async function regenerateInviteCode(groupId, userId, targetEmail) {
   if (!groupId) throw new Error('groupId is required');
   if (!userId) throw new Error('userId is required');
+  if (!targetEmail) throw new Error('targetEmail is required');
+
+  // Validate email format
+  if (!isValidEmail(targetEmail)) {
+    throw new Error('INVALID_EMAIL_FORMAT');
+  }
+
+  // Normalize the email for consistent comparison
+  const normalizedEmail = normalizeEmail(targetEmail);
 
   const client = await db.getClient();
 
@@ -182,12 +193,12 @@ async function regenerateInviteCode(groupId, userId) {
       throw new Error('Failed to generate unique invite code');
     }
 
-    // Create new invite code
+    // Create new invite code with target email
     const expiresAt = getExpirationDate();
     await client.query(
-      `INSERT INTO invite_codes (group_id, code, expires_at)
-       VALUES ($1, $2, $3)`,
-      [groupId, inviteCode, expiresAt]
+      `INSERT INTO invite_codes (group_id, code, expires_at, target_email, normalized_target_email)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [groupId, inviteCode, expiresAt, targetEmail.toLowerCase().trim(), normalizedEmail]
     );
 
     // Update the legacy invite_code field
@@ -201,13 +212,15 @@ async function regenerateInviteCode(groupId, userId) {
     logger.info('Invite code regenerated', {
       groupId,
       userId,
-      inviteCode
+      inviteCode,
+      targetEmail: targetEmail.toLowerCase().trim()
     });
 
     return {
       invite_code: inviteCode,
       expires_at: expiresAt.toISOString(),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      target_email: targetEmail.toLowerCase().trim()
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -224,6 +237,7 @@ async function regenerateInviteCode(groupId, userId) {
 
 /**
  * Join a group using an invite code
+ * Validates that the user's email matches the invite's target email.
  * @param {string} userId - User joining
  * @param {string} inviteCode - Invite code
  * @param {string} encryptedGroupKey - Encrypted group key for this user
@@ -239,9 +253,21 @@ async function joinGroup(userId, inviteCode, encryptedGroupKey) {
   try {
     await client.query('BEGIN');
 
+    // Get user's normalized email
+    const userResult = await client.query(
+      'SELECT normalized_email FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    const userNormalizedEmail = userResult.rows[0].normalized_email;
+
     // Find the invite code (check not expired, not used)
     const codeResult = await client.query(
-      `SELECT ic.id, ic.group_id, ic.expires_at, ic.used_by,
+      `SELECT ic.id, ic.group_id, ic.expires_at, ic.used_by, ic.normalized_target_email,
               g.encrypted_name, g.max_members
        FROM invite_codes ic
        INNER JOIN groups g ON g.id = ic.group_id
@@ -264,6 +290,17 @@ async function joinGroup(userId, inviteCode, encryptedGroupKey) {
     // Check if code is expired
     if (new Date(code.expires_at) < new Date()) {
       throw new Error('INVITE_CODE_EXPIRED');
+    }
+
+    // Check if user's email matches the invite's target email
+    if (code.normalized_target_email && code.normalized_target_email !== userNormalizedEmail) {
+      logger.warn('Join group attempt with mismatched email', {
+        userId,
+        userNormalizedEmail,
+        targetNormalizedEmail: code.normalized_target_email,
+        inviteCode: inviteCode.toUpperCase()
+      });
+      throw new Error('EMAIL_MISMATCH');
     }
 
     const groupId = code.group_id;
@@ -432,7 +469,7 @@ async function getActiveInviteCodes(groupId, userId) {
   }
 
   const result = await db.query(
-    `SELECT id, code, created_at, expires_at
+    `SELECT id, code, created_at, expires_at, target_email
      FROM invite_codes
      WHERE group_id = $1 AND used_by IS NULL AND expires_at > NOW()
      ORDER BY created_at DESC`,
@@ -443,7 +480,8 @@ async function getActiveInviteCodes(groupId, userId) {
     id: row.id,
     code: row.code,
     created_at: row.created_at,
-    expires_at: row.expires_at
+    expires_at: row.expires_at,
+    target_email: row.target_email
   }));
 }
 

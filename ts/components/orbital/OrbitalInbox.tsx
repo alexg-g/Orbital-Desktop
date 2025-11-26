@@ -8,7 +8,21 @@ import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDet
 import { OrbitalComposer } from './OrbitalComposer';
 import { OrbitalLogin } from './OrbitalLogin';
 import { OrbitalChatList } from './OrbitalChatList';
-import { MOCK_THREADS, MOCK_MESSAGES, MOCK_CHATS, MOCK_CHAT_MESSAGES } from './mockThreadData';
+import {
+  MOCK_MESSAGES,
+  MOCK_CHAT_MESSAGES,
+  MOCK_ORBITS,
+  DEMO_ORBIT_ID,
+  getThreadsByOrbit,
+  getAllChats,
+  getAllContacts,
+  findExistingChat,
+  getUserById,
+  isOrbitOwner,
+  type OrbitalChat,
+  type OrbitalUser,
+} from './mockThreadData';
+import { ContactPickerModal } from './ContactPickerModal';
 import { ChatsThreadsToggle } from '../ChatsThreadsToggle.dom';
 import { DisplayMode, OrbitalSettingsPage } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
@@ -21,14 +35,25 @@ import { packs, recentStickers } from '../stickers/mocks.std';
 import { MOCK_GIFS_PAGINATED_ONE_PAGE, MOCK_RECENT_EMOJIS } from '../fun/mocks.dom';
 import { EmojiSkinTone } from '../fun/data/emojis.std';
 import { TitlebarDragArea } from '../TitlebarDragArea.dom';
+import { OrbitSelectorModal } from './OrbitSelectorModal';
+import type { GroupInfo } from '../../services/orbitalGroups.preload.js';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
+
+// Orbit management types
+export type GetGroupsFunction = () => Promise<GroupInfo[]>;
+export type GetSelectedGroupIdFunction = () => Promise<string | null>;
+export type SetSelectedGroupIdFunction = (groupId: string) => Promise<void>;
 
 export type OrbitalInboxProps = {
   i18n: LocalizerType;
   // Dependency injection for Node.js operations (allows Storybook mocking)
   isAuthenticated: IsAuthenticatedFunction;
+  // Orbit management (injected for testability)
+  getGroups?: GetGroupsFunction;
+  getSelectedGroupId?: GetSelectedGroupIdFunction;
+  setSelectedGroupId?: SetSelectedGroupIdFunction;
 };
 
 /**
@@ -44,10 +69,33 @@ export type OrbitalInboxProps = {
  * - Reddit-style threading
  * - 2000s forum aesthetic
  */
-export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.Element {
+// Mock functions for orbit management (used when no injection provided)
+// Uses MOCK_ORBITS from mockThreadData.ts for consistency
+const mockGetGroups: GetGroupsFunction = async () => {
+  const currentUserId = 'testuser';
+  return Object.values(MOCK_ORBITS).map(orbit => ({
+    groupId: orbit.groupId,
+    name: orbit.name,
+    encryptedName: orbit.encryptedName,
+    memberCount: orbit.memberCount,
+    createdAt: orbit.createdAt,
+    isOwner: isOrbitOwner(orbit.groupId, currentUserId),
+  }));
+};
+const mockGetSelectedGroupId: GetSelectedGroupIdFunction = async () => null;
+const mockSetSelectedGroupId: SetSelectedGroupIdFunction = async () => {};
+
+export function OrbitalInbox({
+  i18n,
+  isAuthenticated,
+  getGroups = mockGetGroups,
+  getSelectedGroupId = mockGetSelectedGroupId,
+  setSelectedGroupId = mockSetSelectedGroupId,
+}: OrbitalInboxProps): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [threads, setThreads] = useState<OrbitalThread[]>([]);
+  const [chats, setChats] = useState<OrbitalChat[]>([]); // Global chats (orbit-agnostic)
   const [messages, setMessages] = useState<OrbitalMessageType[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +104,17 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const [skinTone, setSkinTone] = useState<EmojiSkinTone>(EmojiSkinTone.None);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsPage, setSettingsPage] = useState<OrbitalSettingsPage>(OrbitalSettingsPage.General);
+
+  // Orbit selection state
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [selectedGroupId, setSelectedGroupIdState] = useState<string | null>(null);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [groupsError, setGroupsError] = useState<string | undefined>(undefined);
+  const [showOrbitSelector, setShowOrbitSelector] = useState(false);
+
+  // Contact picker modal state
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [availableContacts, setAvailableContacts] = useState<OrbitalUser[]>([]);
 
   // Session caches for messages (persists user-posted messages during session)
   const [threadMessagesCache, setThreadMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
@@ -78,27 +137,98 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     checkLoginStatus();
   }, [isAuthenticated]);
 
-  // Fetch threads when logged in
+  // Load groups and check for selected orbit after login
   useEffect(() => {
     if (!isLoggedIn) {
       return;
     }
 
+    async function loadGroupsAndCheckSelection() {
+      setIsLoadingGroups(true);
+      setGroupsError(undefined);
+
+      try {
+        // Load user's groups
+        const userGroups = await getGroups();
+        setGroups(userGroups);
+
+        // Check for previously selected group
+        const savedGroupId = await getSelectedGroupId();
+
+        if (savedGroupId && userGroups.some(g => g.groupId === savedGroupId)) {
+          // User has a valid saved selection - use it
+          setSelectedGroupIdState(savedGroupId);
+          setShowOrbitSelector(false);
+        } else {
+          // No saved selection or invalid - show orbit selector modal
+          setShowOrbitSelector(true);
+        }
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+        setGroupsError('Failed to load your orbits. Please try again.');
+      } finally {
+        setIsLoadingGroups(false);
+      }
+    }
+
+    loadGroupsAndCheckSelection();
+  }, [isLoggedIn, getGroups, getSelectedGroupId]);
+
+  // Fetch chats when logged in (orbit-agnostic - chats are global)
+  useEffect(() => {
+    if (!isLoggedIn) {
+      return;
+    }
+
+    async function fetchChats() {
+      try {
+        // Load all chats - chats are global, not orbit-specific
+        const allChats = getAllChats();
+        setChats([...allChats]);
+      } catch (err) {
+        console.error('Failed to fetch chats:', err);
+      }
+    }
+
+    fetchChats();
+  }, [isLoggedIn]); // Only depends on login, NOT selectedGroupId
+
+  // Load contacts when logged in (for Create Chat picker)
+  useEffect(() => {
+    if (!isLoggedIn) {
+      return;
+    }
+
+    // Load all contacts (excluding current user)
+    const contacts = getAllContacts('testuser');
+    setAvailableContacts([...contacts]);
+  }, [isLoggedIn]);
+
+  // Fetch threads when logged in AND orbit is selected (orbit-specific)
+  useEffect(() => {
+    if (!isLoggedIn || !selectedGroupId) {
+      return;
+    }
+
+    // Capture the value for use in async function (TypeScript narrowing)
+    const groupId = selectedGroupId;
+
     async function fetchThreads() {
       try {
-        // TODO: Replace with real API call to Orbital backend
-        // const response = await window.Signal.OrbitalAPI.getThreads();
+        // TODO: Replace with real API call to Orbital backend filtered by groupId
+        // const response = await window.Signal.OrbitalAPI.getThreads({ groupId });
         // setThreads(response.threads);
 
-        // For now, use mock data
-        setThreads([...MOCK_THREADS]);
+        // For now, use mock data filtered by orbit
+        const orbitThreads = getThreadsByOrbit(groupId);
+        setThreads([...orbitThreads]);
       } catch (err) {
         console.error('Failed to fetch threads:', err);
       }
     }
 
     fetchThreads();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, selectedGroupId]);
 
   const handleThreadClick = useCallback((threadId: string) => {
     setActiveThreadId(threadId);
@@ -126,10 +256,70 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   }, []);
 
   const handleCreateChat = useCallback(() => {
-    // TODO: Implement create chat functionality
-    // For now, just log to console
-    console.log('Create chat clicked');
+    setShowContactPicker(true);
   }, []);
+
+  // Handle contact selection from picker
+  const handleSelectContacts = useCallback((contactIds: string[], groupName?: string) => {
+    setShowContactPicker(false);
+
+    if (contactIds.length === 1) {
+      // 1:1 DM - check for existing chat
+      const recipientId = contactIds[0];
+      const existingChat = findExistingChat(recipientId);
+
+      if (existingChat) {
+        // Open existing chat
+        setActiveChatId(existingChat.id);
+        setActiveThreadId(null);
+        const cachedMessages = chatMessagesCache[existingChat.id];
+        if (cachedMessages) {
+          setChatMessages([...cachedMessages]);
+        } else {
+          const chatMsgs = MOCK_CHAT_MESSAGES[existingChat.id] || [];
+          setChatMessages([...chatMsgs]);
+          setChatMessagesCache(prev => ({ ...prev, [existingChat.id]: [...chatMsgs] }));
+        }
+      } else {
+        // Create new chat
+        const recipient = getUserById(recipientId);
+        if (!recipient) return;
+
+        const newChat: OrbitalChat = {
+          id: `chat-${Date.now()}`,
+          recipientId,
+          name: recipient.name,
+          avatarUrl: recipient.avatarUrl,
+          lastMessage: '',
+          lastMessageTimestamp: Date.now(),
+          unreadCount: 0,
+          isOnline: recipient.isOnline,
+        };
+
+        setChats(prev => [newChat, ...prev]);
+        setActiveChatId(newChat.id);
+        setActiveThreadId(null);
+        setChatMessages([]);
+        setChatMessagesCache(prev => ({ ...prev, [newChat.id]: [] }));
+      }
+    } else if (contactIds.length > 1) {
+      // Group chat - create new
+      const newGroupChat: OrbitalChat = {
+        id: `group-${Date.now()}`,
+        recipientId: contactIds.join(','),
+        name: groupName || 'New Group',
+        lastMessage: '',
+        lastMessageTimestamp: Date.now(),
+        unreadCount: 0,
+      };
+
+      setChats(prev => [newGroupChat, ...prev]);
+      setActiveChatId(newGroupChat.id);
+      setActiveThreadId(null);
+      setChatMessages([]);
+      setChatMessagesCache(prev => ({ ...prev, [newGroupChat.id]: [] }));
+    }
+  }, [chatMessagesCache]);
 
   const handleSettingsClick = useCallback(() => {
     setShowSettings(true);
@@ -150,9 +340,10 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     const threadId = `thread-${Date.now()}`;
     const messageId = `message-${Date.now()}`;
 
-    // Create a new thread object
+    // Create a new thread object with orbitId
     const newThread: OrbitalThread = {
       id: threadId,
+      orbitId: selectedGroupId || DEMO_ORBIT_ID, // Associate with current orbit
       title,
       author: 'You', // TODO: Get from current user
       authorId: 'testuser',
@@ -191,8 +382,8 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     setThreadMessagesCache(prev => ({ ...prev, [threadId]: [rootMessage] }));
 
     // TODO: Send to backend API
-    console.log('Created new thread:', { title, body, mediaIds });
-  }, []);
+    console.log('Created new thread:', { title, body, mediaIds, orbitId: selectedGroupId });
+  }, [selectedGroupId]);
 
   const handleSendMessage = useCallback(async (body: string, mediaIds?: string[]) => {
     if (!activeThreadId) {
@@ -250,6 +441,47 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
   const handleLoginSuccess = useCallback(() => {
     setIsLoggedIn(true);
   }, []);
+
+  // Orbit selection handlers
+  const handleSelectOrbit = useCallback(async (groupId: string) => {
+    try {
+      await setSelectedGroupId(groupId);
+      setSelectedGroupIdState(groupId);
+      setShowOrbitSelector(false);
+      // Clear THREAD data when switching orbits (threads are orbit-specific)
+      setActiveThreadId(null);
+      setThreads([]);
+      setMessages([]);
+      setThreadMessagesCache({});
+      // DON'T clear chat data - chats are global (orbit-agnostic)
+      // Chat list, active chat, and chat messages persist across orbit switches
+      console.log('Selected orbit:', groupId);
+    } catch (err) {
+      console.error('Failed to select orbit:', err);
+      setGroupsError('Failed to switch orbit. Please try again.');
+    }
+  }, [setSelectedGroupId]);
+
+  const handleCreateOrbit = useCallback(() => {
+    // TODO: Navigate to create orbit flow or show modal
+    console.log('Create orbit clicked');
+    // For now, just switch to settings page with invites
+    setShowOrbitSelector(false);
+    setShowSettings(true);
+    setSettingsPage(OrbitalSettingsPage.Invites);
+  }, []);
+
+  const handleJoinOrbit = useCallback(() => {
+    // TODO: Navigate to join orbit flow or show modal
+    console.log('Join orbit clicked');
+    // For now, just switch to settings page with invites
+    setShowOrbitSelector(false);
+    setShowSettings(true);
+    setSettingsPage(OrbitalSettingsPage.Invites);
+  }, []);
+
+  // Derive current group from groups and selectedGroupId
+  const currentGroup = groups.find(g => g.groupId === selectedGroupId) || null;
 
   const [chatMessages, setChatMessages] = useState<OrbitalMessageType[]>([]);
 
@@ -363,8 +595,28 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
     );
   }
 
+  // Show orbit selector modal after login if no orbit is selected
+  if (showOrbitSelector) {
+    return (
+      <>
+        <TitlebarDragArea />
+        <div className="OrbitalInbox OrbitalInbox--orbit-selector">
+          <OrbitSelectorModal
+            i18n={i18n}
+            groups={groups}
+            isLoading={isLoadingGroups}
+            error={groupsError}
+            onSelectOrbit={handleSelectOrbit}
+            onCreateOrbit={handleCreateOrbit}
+            onJoinOrbit={handleJoinOrbit}
+          />
+        </div>
+      </>
+    );
+  }
+
   const activeThread = threads.find(t => t.id === activeThreadId);
-  const activeChat = MOCK_CHATS.find(c => c.id === activeChatId);
+  const activeChat = chats.find(c => c.id === activeChatId);
 
   return (
     <>
@@ -411,7 +663,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
             />
           ) : (
             <OrbitalChatList
-              chats={MOCK_CHATS}
+              chats={chats}
               activeChatId={activeChatId}
               i18n={i18n}
               onChatClick={handleChatClick}
@@ -430,11 +682,21 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
         {/* Main Content - Settings, Thread Detail, Chat Detail, or Create Thread */}
         <div className="OrbitalInbox__main">
           {showSettings ? (
-            <OrbitalSettings page={settingsPage} />
+            <OrbitalSettings
+              page={settingsPage}
+              groups={groups}
+              selectedGroupId={selectedGroupId}
+              currentGroup={currentGroup}
+              isLoadingGroups={isLoadingGroups}
+              groupsError={groupsError}
+              onSelectOrbit={handleSelectOrbit}
+              onCreateOrbit={handleCreateOrbit}
+              onJoinOrbit={handleJoinOrbit}
+            />
           ) : activeThread ? (
             <OrbitalThreadDetail
               threadId={activeThread.id}
-              groupId="mock-group-id"
+              groupId={selectedGroupId || 'unknown'}
               threadTitle={activeThread.title}
               threadAuthor={activeThread.author}
               threadTimestamp={activeThread.timestamp}
@@ -456,7 +718,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
           ) : activeChat ? (
             <OrbitalThreadDetail
               threadId={activeChat.id}
-              groupId="mock-group-id"
+              groupId={selectedGroupId || 'unknown'}
               threadTitle={`Direct Messages with ${activeChat.name}`}
               threadAuthor={activeChat.name}
               threadTimestamp={activeChat.lastMessageTimestamp}
@@ -482,7 +744,7 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
               </div>
               <OrbitalComposer
                 mode="thread"
-                groupId="mock-group-id"
+                groupId={selectedGroupId || 'unknown'}
                 i18n={i18n}
                 onSubmit={handleSubmitNewThread}
                 onCancel={handleCancelCreateThread}
@@ -519,6 +781,16 @@ export function OrbitalInbox({ i18n, isAuthenticated }: OrbitalInboxProps): JSX.
           )}
         </div>
       </div>
+
+      {/* Contact Picker Modal */}
+      {showContactPicker && (
+        <ContactPickerModal
+          i18n={i18n}
+          contacts={availableContacts}
+          onSelectContacts={handleSelectContacts}
+          onClose={() => setShowContactPicker(false)}
+        />
+      )}
       </FunProvider>
     </>
   );

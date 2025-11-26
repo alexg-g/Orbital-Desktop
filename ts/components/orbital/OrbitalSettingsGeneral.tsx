@@ -9,6 +9,7 @@ import {
   OrbitalSettingsButton,
 } from './OrbitalSettingsControl';
 import { getSetting, setSetting } from './settingsStorage';
+import { logout, getUsername } from '../../services/orbitalAuth.preload.js';
 
 export function OrbitalSettingsGeneral(): JSX.Element {
   // Local state for settings
@@ -23,9 +24,13 @@ export function OrbitalSettingsGeneral(): JSX.Element {
   const [isEditingName, setIsEditingName] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Account state
+  const [loggedInUsername, setLoggedInUsername] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   // Load settings on mount
   useEffect(() => {
-    const loadSettings = () => {
+    const loadSettings = async () => {
       try {
         setStartMinimized(getSetting('orbital.settings.general.startMinimized', false) ?? false);
         setShowInSystemTray(getSetting('orbital.settings.general.showInSystemTray', true) ?? true);
@@ -36,12 +41,37 @@ export function OrbitalSettingsGeneral(): JSX.Element {
         if (savedAvatarUrl) {
           setAvatarUrl(savedAvatarUrl);
         }
+
+        // Load logged-in username
+        const username = await getUsername();
+        setLoggedInUsername(username);
       } catch (error) {
         console.error('Failed to load general settings:', error);
       }
     };
     loadSettings();
   }, []);
+
+  // Handle logout
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to log out? You will need to log in again to access Orbital.'
+    );
+
+    if (!confirmed) return;
+
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      // Reload the app to show login screen
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to logout:', error);
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut]);
 
   const handleStartMinimizedChange = useCallback(async (value: boolean) => {
     setStartMinimized(value);
@@ -287,6 +317,22 @@ export function OrbitalSettingsGeneral(): JSX.Element {
           checked={autoUpdate}
           onChange={handleAutoUpdateChange}
         />
+      </OrbitalSettingsSection>
+
+      <OrbitalSettingsSection title="Account">
+        <div className="OrbitalSettingsGeneral__account">
+          {loggedInUsername && (
+            <p className="OrbitalSettingsGeneral__account-info">
+              Logged in as <strong>{loggedInUsername}</strong>
+            </p>
+          )}
+          <OrbitalSettingsButton
+            label={isLoggingOut ? 'Logging out...' : 'Log Out'}
+            onClick={handleLogout}
+            variant="danger"
+            disabled={isLoggingOut}
+          />
+        </div>
       </OrbitalSettingsSection>
     </div>
   );
