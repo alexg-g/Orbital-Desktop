@@ -5,26 +5,16 @@ const backendEnvTestPath = path.join(__dirname, '../../.env.test');
 const backendEnvLocalPath = path.join(__dirname, '../../.env.local');
 const backendEnvPath = path.join(__dirname, '../../.env');
 
-// Debug: Log DATABASE_URL before loading env files
-console.log('[DB CONFIG DEBUG] NODE_ENV:', process.env.NODE_ENV);
-console.log('[DB CONFIG DEBUG] DATABASE_URL before dotenv:', process.env.DATABASE_URL);
-
 // For tests, always use .env.test (highest priority)
 if (process.env.NODE_ENV === 'test' && fs.existsSync(backendEnvTestPath)) {
-  console.log('[DB CONFIG DEBUG] Loading .env.test for test environment');
   delete process.env.DATABASE_URL;
   require('dotenv').config({ path: backendEnvTestPath, override: true });
-  console.log('[DB CONFIG DEBUG] DATABASE_URL after loading .env.test:', process.env.DATABASE_URL);
 } else if (fs.existsSync(backendEnvLocalPath)) {
-  console.log('[DB CONFIG DEBUG] Loading .env.local with override: true');
   // Explicitly unset DATABASE_URL to prevent shell environment conflicts
   delete process.env.DATABASE_URL;
   require('dotenv').config({ path: backendEnvLocalPath, override: true });
-  console.log('[DB CONFIG DEBUG] DATABASE_URL after loading .env.local:', process.env.DATABASE_URL);
 } else {
-  console.log('[DB CONFIG DEBUG] Loading .env (fallback)');
   require('dotenv').config({ path: backendEnvPath });
-  console.log('[DB CONFIG DEBUG] DATABASE_URL after loading .env:', process.env.DATABASE_URL);
 }
 
 const { Pool } = require('pg');
@@ -37,11 +27,9 @@ const logger = require('../utils/logger');
  * Connects to Signal messages, threads, groups, and media tables.
  */
 
-// Debug: Log if DATABASE_URL is set
 if (!process.env.DATABASE_URL) {
-  console.error('WARNING: DATABASE_URL is not set! Tests will fail.');
-  console.error('Current working directory:', process.cwd());
-  console.error('NODE_ENV:', process.env.NODE_ENV);
+  console.error('FATAL: DATABASE_URL environment variable is not set');
+  process.exit(1);
 }
 
 const pool = new Pool({
