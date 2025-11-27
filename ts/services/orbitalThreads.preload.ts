@@ -2,9 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Orbital Threads Service
+ * Orbital Threads Service - LOCAL-FIRST ARCHITECTURE
  *
- * Handles thread and reply creation, listing, and retrieval.
+ * Per PRD requirements (FR-3.7, FR-3.8):
+ * - Client SQLCipher is the SOURCE OF TRUTH
+ * - Server acts as a 7-day relay for syncing between orbit members
+ * - Threads persist permanently on all orbit members' devices
+ *
+ * Flow:
+ * 1. CREATE: Store locally first → Return immediately → Sync to server in background
+ * 2. LIST: Read from local first → Return immediately → Sync from server in background
+ * 3. SYNC: Merge server threads into local (add missing threads from other members)
  *
  * Features:
  * - Create new threads in groups with title and body
@@ -13,11 +21,14 @@
  * - Get replies to a thread (paginated)
  * - Create replies to threads
  * - Support for media attachments
+ * - Offline support (works without network)
+ * - Background sync (non-blocking)
  *
  * Security:
  * - Thread titles and bodies encrypted client-side before sending to server
  * - Server only sees encrypted content (zero-knowledge)
  * - Media IDs reference encrypted media files
+ * - SQLCipher provides database-level encryption at rest
  *
  * Limits:
  * - Thread title: 200 characters max
@@ -28,9 +39,12 @@
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { URL } from 'node:url';
+import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
+import { DataReader, DataWriter } from '../sql/Client.preload.js';
+import type { OrbitalThreadType } from '../types/OrbitalThread.std.js';
 
 const log = createLogger('OrbitalThreads');
 
@@ -153,11 +167,14 @@ export type ThreadAPIError = {
 };
 
 /**
- * List threads for a group
+ * List threads for a group - LOCAL-FIRST
+ *
+ * Reads from local SQLCipher first (immediate response), then triggers
+ * background sync from server to merge any new threads from other orbit members.
  *
  * @param groupId Group ID to list threads from
  * @param options Pagination and sorting options
- * @returns Paginated list of threads
+ * @returns Paginated list of threads from local SQLCipher
  */
 export async function listThreads(
   groupId: string,
@@ -174,68 +191,51 @@ export async function listThreads(
   }
 
   try {
-    // Get JWT token for authentication
-    const { getJWT } = await import('./orbitalAuth.preload.js');
-    const jwtToken = await getJWT();
-
-    if (!jwtToken) {
-      throw new Error('Not authenticated. Please log in first.');
-    }
-
-    // Build query parameters
-    const queryParams = new URLSearchParams();
-    if (options?.limit !== undefined) {
-      queryParams.append('limit', String(options.limit));
-    }
-    if (options?.offset !== undefined) {
-      queryParams.append('offset', String(options.offset));
-    }
-    if (options?.sort) {
-      queryParams.append('sort', options.sort);
-    }
-
-    const queryString = queryParams.toString();
-    const url = `${ORBITAL_API_URL}/api/groups/${groupId}/threads${queryString ? `?${queryString}` : ''}`;
-
-    const response = await makeRequest({
-      url,
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${jwtToken}`,
-      },
+    // 1. Read from local SQLCipher FIRST (source of truth)
+    console.log('[DEBUG] listThreads: About to read from SQLCipher for groupId:', groupId);
+    const localThreads = await DataReader.getOrbitalThreadsByGroupId(groupId, {
+      limit: options?.limit,
+      offset: options?.offset,
     });
+    console.log('[DEBUG] listThreads: SQLCipher returned', localThreads.length, 'threads:', JSON.stringify(localThreads, null, 2));
 
-    if (response.status !== 200) {
-      const errorData = parseErrorResponse(response.data);
-      throw new Error(errorData.error || `Failed to list threads: ${response.status}`);
-    }
-
-    const data = JSON.parse(response.data);
-
-    const threads: ThreadInfo[] = (data.threads || []).map((t: any) => ({
-      threadId: t.thread_id,
-      groupId: t.group_id,
-      authorId: t.author_id,
-      authorUsername: t.author_username,
-      encryptedTitle: t.encrypted_title,
-      encryptedBody: t.encrypted_body,
-      replyCount: t.reply_count || 0,
-      createdAt: t.created_at,
-      mediaCount: t.media_count || 0,
+    // Convert OrbitalThreadType to ThreadInfo for UI compatibility
+    const threads: ThreadInfo[] = localThreads.map((t: OrbitalThreadType) => ({
+      threadId: t.id,
+      groupId: t.groupId,
+      authorId: t.authorId,
+      authorUsername: '', // Will be resolved by UI from orbit members
+      encryptedTitle: t.encryptedTitle,
+      encryptedBody: t.encryptedBody,
+      replyCount: t.replyCount,
+      createdAt: new Date(t.createdAt).toISOString(),
+      mediaCount: t.mediaCount,
     }));
+
+    // Sort if requested
+    if (options?.sort === 'created_asc') {
+      threads.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    } else {
+      // Default: created_desc (newest first)
+      threads.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
 
     const result: ListThreadsResult = {
       threads,
-      totalCount: data.total_count || threads.length,
-      hasMore: data.has_more || false,
+      totalCount: threads.length,
+      hasMore: false, // TODO: implement proper pagination
     };
 
-    log.info(`${logId}: Retrieved ${threads.length} threads`);
+    log.info(`${logId}: Retrieved ${threads.length} threads from local SQLCipher`);
+
+    // 2. Trigger background sync from server (non-blocking)
+    syncThreadsFromServer(groupId).catch(err => {
+      log.warn(`${logId}: Background sync failed:`, Errors.toLogFormat(err));
+    });
 
     return result;
   } catch (error) {
     log.error(`${logId}: Failed to list threads`, Errors.toLogFormat(error));
-    await handleOrbitalAPIError(error);
     throw error;
   }
 }
@@ -310,7 +310,10 @@ export async function getThread(threadId: string): Promise<ThreadDetail> {
 }
 
 /**
- * Create new thread
+ * Create new thread - LOCAL-FIRST
+ *
+ * Stores thread locally in SQLCipher first (immediate response), then syncs
+ * to server in background. Thread is immediately available in local storage.
  *
  * @param groupId Group ID to create thread in
  * @param title Plain text thread title (will be encrypted before sending)
@@ -344,66 +347,68 @@ export async function createThread(
   }
 
   try {
-    // Get JWT token for authentication
-    const { getJWT } = await import('./orbitalAuth.preload.js');
-    const jwtToken = await getJWT();
-
-    if (!jwtToken) {
-      throw new Error('Not authenticated. Please log in first.');
-    }
+    // 1. Generate thread ID locally
+    const threadId = uuidv4();
+    const createdAt = Date.now();
 
     // For now, pass title/body as-is
     // TODO: Encrypt with group key before sending
     const encryptedTitle = title;
-    const encryptedBody = body;
+    const encryptedBody = body || '';
 
-    const requestBody = JSON.stringify({
-      group_id: groupId,
-      encrypted_title: encryptedTitle,
-      encrypted_body: encryptedBody,
-      ...(mediaIds && mediaIds.length > 0 && { media_ids: mediaIds }),
-    });
+    // Get current user ID for author
+    const { getUserId } = await import('./orbitalAuth.preload.js');
+    const authorId = await getUserId() || 'unknown';
 
-    const response = await makeRequest({
-      url: `${ORBITAL_API_URL}/api/threads`,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${jwtToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: Buffer.from(requestBody),
-    });
-
-    if (response.status !== 201 && response.status !== 200) {
-      const errorData = parseErrorResponse(response.data);
-      throw new Error(errorData.error || `Failed to create thread: ${response.status}`);
-    }
-
-    const data = JSON.parse(response.data);
-
-    const media: MediaInfo[] | undefined = data.media
-      ? data.media.map((m: any) => ({
-          mediaId: m.media_id,
-          encryptedMetadata: m.encrypted_metadata,
-          sizeBytes: m.size_bytes,
-          uploadedAt: m.uploaded_at,
-          expiresAt: m.expires_at,
-        }))
-      : undefined;
-
-    const result: CreateThreadResult = {
-      threadId: data.thread_id,
-      groupId: data.group_id,
-      createdAt: data.created_at,
-      media,
+    // 2. Store in local SQLCipher FIRST (source of truth)
+    const thread: OrbitalThreadType = {
+      id: threadId,
+      groupId,
+      authorId,
+      encryptedTitle,
+      encryptedBody,
+      titleIv: '', // TODO: generate IV for encryption
+      bodyIv: '',  // TODO: generate IV for encryption
+      createdAt,
+      replyCount: 0,
+      mediaCount: mediaIds?.length || 0,
+      pendingSync: true, // Mark as pending sync to server
     };
 
-    log.info(`${logId}: Thread created successfully`, { threadId: result.threadId });
+    console.log('[DEBUG] About to save thread to SQLCipher:', JSON.stringify(thread, null, 2));
+    try {
+      await DataWriter.saveOrbitalThread(thread);
+      console.log('[DEBUG] Thread successfully saved to SQLCipher:', threadId);
+    } catch (saveError) {
+      console.error('[DEBUG] Failed to save thread to SQLCipher:', saveError);
+      throw saveError;
+    }
+
+    log.info(`${logId}: Thread saved to local SQLCipher`, { threadId });
+
+    // 3. Return immediately with local data
+    const result: CreateThreadResult = {
+      threadId,
+      groupId,
+      createdAt: new Date(createdAt).toISOString(),
+    };
+
+    // 4. Sync to server in background (non-blocking)
+    syncThreadToServer(threadId, groupId, encryptedTitle, encryptedBody, mediaIds)
+      .then(result => {
+        if (result.success) {
+          log.info(`${logId}: Thread synced to server`, { threadId });
+        } else {
+          log.warn(`${logId}: Thread sync to server failed: ${result.error}, will retry later`, { threadId });
+        }
+      })
+      .catch(err => {
+        log.warn(`${logId}: Thread sync to server failed, will retry later:`, Errors.toLogFormat(err));
+      });
 
     return result;
   } catch (error) {
     log.error(`${logId}: Failed to create thread`, Errors.toLogFormat(error));
-    await handleOrbitalAPIError(error);
     throw error;
   }
 }
@@ -536,6 +541,60 @@ export async function createReply(
       throw new Error('Not authenticated. Please log in first.');
     }
 
+    // Check if parent thread exists and ensure it's synced
+    const thread = DataReader.getOrbitalThread(threadId);
+    log.info(`${logId}: Looking up thread in local storage`, {
+      found: !!thread,
+      pendingSync: thread?.pendingSync,
+      groupId: thread?.groupId,
+      encryptedTitle: thread?.encryptedTitle?.substring(0, 20),
+    });
+
+    if (!thread) {
+      log.error(`${logId}: Thread not found in local storage`);
+      throw new Error('Thread not found. Please refresh and try again.');
+    }
+
+    // Always attempt to sync thread to server before creating reply
+    // The sync is idempotent - if thread already exists on server, it will succeed
+    log.info(`${logId}: Ensuring thread is synced to server (pendingSync: ${thread.pendingSync})`);
+
+    // Ensure encryptedTitle and encryptedBody are always strings
+    // Legacy threads in SQLite may have null/undefined for these fields
+    const encryptedTitleForSync = thread.encryptedTitle || 'Untitled';
+    const encryptedBodyForSync = thread.encryptedBody ?? '';
+
+    // Get groupId - fallback to selected group if thread doesn't have it (legacy data)
+    let groupIdForSync = thread.groupId;
+    if (!groupIdForSync) {
+      const { getSelectedGroupId } = await import('./orbitalGroups.preload.js');
+      groupIdForSync = await getSelectedGroupId();
+      log.info(`${logId}: Using selected group ID as fallback: ${groupIdForSync}`);
+    }
+
+    if (!groupIdForSync) {
+      throw new Error('Cannot create reply: No group ID available. Please select an orbit first.');
+    }
+
+    log.info(`${logId}: Sync data - title: "${encryptedTitleForSync.substring(0, 20)}...", body: "${encryptedBodyForSync.substring(0, 20)}..." (body length: ${encryptedBodyForSync.length}), groupId: ${groupIdForSync}`);
+
+    const syncResult = await syncThreadToServer(
+      threadId,  // Use threadId parameter, not thread.id (which may be undefined from SQLite row mapping)
+      groupIdForSync,
+      encryptedTitleForSync,
+      encryptedBodyForSync
+    );
+
+    if (!syncResult.success) {
+      log.error(`${logId}: Failed to sync parent thread: ${syncResult.error}`);
+      // Provide a user-friendly error message
+      throw new Error(
+        `Cannot create reply: The thread hasn't been synced to the server yet. ` +
+        `Error: ${syncResult.error}. Please try again later.`
+      );
+    }
+    log.info(`${logId}: Thread synced successfully`);
+
     // For now, pass body as-is
     // TODO: Encrypt with group key before sending
     const encryptedBody = body;
@@ -587,6 +646,324 @@ export async function createReply(
     await handleOrbitalAPIError(error);
     throw error;
   }
+}
+
+// =============================================================================
+// BACKGROUND SYNC
+// =============================================================================
+
+/**
+ * Result of syncing a thread to the server
+ */
+type SyncResult = {
+  success: boolean;
+  error?: string;
+};
+
+/**
+ * Sync a thread to the server
+ *
+ * Called after storing locally. Updates pendingSync status on success.
+ * Returns success/failure status for callers that need to handle sync results.
+ */
+async function syncThreadToServer(
+  threadId: string,
+  groupId: string,
+  encryptedTitle: string,
+  encryptedBody: string,
+  mediaIds?: string[]
+): Promise<SyncResult> {
+  const logId = `syncThreadToServer(${threadId})`;
+
+  try {
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      log.warn(`${logId}: No JWT token, skipping sync`);
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Ensure we never send null/undefined for body
+    const safeBody = encryptedBody ?? '';
+
+    const requestBody = JSON.stringify({
+      thread_id: threadId, // Use same ID as local
+      group_id: groupId,
+      encrypted_title: encryptedTitle,
+      encrypted_body: safeBody,
+      ...(mediaIds && mediaIds.length > 0 && { media_ids: mediaIds }),
+    });
+
+    // Log request details for debugging
+    log.info(`${logId}: Sending sync request`, {
+      url: `${ORBITAL_API_URL}/api/threads`,
+      thread_id: threadId,
+      group_id: groupId,
+      encrypted_title_length: encryptedTitle?.length ?? 'null',
+      encrypted_body_length: safeBody.length,
+      encrypted_title_preview: encryptedTitle?.substring(0, 30) ?? 'null',
+      encrypted_body_preview: safeBody.substring(0, 30),
+    });
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/threads`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: Buffer.from(requestBody),
+    });
+
+    if (response.status === 201 || response.status === 200) {
+      // Success - update local sync status
+      await DataWriter.updateOrbitalThreadSyncStatus(threadId, false);
+      log.info(`${logId}: Thread synced to server successfully`);
+      return { success: true };
+    } else {
+      // Parse error response for better error message
+      const errorData = parseErrorResponse(response.data);
+      const errorMsg = errorData.error || `Server returned ${response.status}`;
+      log.warn(`${logId}: Server sync failed - ${errorMsg}`);
+      // Thread remains in pendingSync state, will retry later
+      return { success: false, error: errorMsg };
+    }
+  } catch (error) {
+    log.error(`${logId}: Failed to sync thread to server`, Errors.toLogFormat(error));
+    // Thread remains in pendingSync state, will retry later
+    return { success: false, error: 'Network error' };
+  }
+}
+
+/**
+ * Sync threads from server to local SQLCipher
+ *
+ * Fetches threads from server and merges any new threads from other orbit members
+ * into local storage.
+ */
+async function syncThreadsFromServer(groupId: string): Promise<void> {
+  const logId = `syncThreadsFromServer(${groupId})`;
+
+  try {
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      log.warn(`${logId}: No JWT token, skipping sync`);
+      return;
+    }
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/threads/groups/${groupId}/threads`,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+      },
+    });
+
+    // Handle 404 gracefully - group may not exist on backend yet
+    if (response.status === 404) {
+      log.info(`${logId}: Group not found on backend, nothing to sync`);
+      return;
+    }
+
+    if (response.status !== 200) {
+      log.warn(`${logId}: Server returned status ${response.status}`);
+      return;
+    }
+
+    const data = JSON.parse(response.data);
+    const serverThreads = data.threads || [];
+
+    log.info(`${logId}: Received ${serverThreads.length} threads from server`);
+    console.log('[DEBUG] syncThreadsFromServer: Server response:', JSON.stringify(data, null, 2));
+
+    // Merge: add threads we don't have locally
+    let addedCount = 0;
+    for (const serverThread of serverThreads) {
+      const existingThread = await DataReader.getOrbitalThread(serverThread.thread_id);
+
+      if (!existingThread) {
+        // New thread from another orbit member - save locally
+        const thread: OrbitalThreadType = {
+          id: serverThread.thread_id,
+          groupId: serverThread.group_id,
+          authorId: serverThread.author_id,
+          encryptedTitle: serverThread.encrypted_title || '',
+          encryptedBody: serverThread.encrypted_body || '',
+          titleIv: '', // Server doesn't return IV yet
+          bodyIv: '',
+          createdAt: new Date(serverThread.created_at).getTime(),
+          lastReplyAt: serverThread.last_reply_at ? new Date(serverThread.last_reply_at).getTime() : undefined,
+          replyCount: serverThread.reply_count || 0,
+          mediaCount: serverThread.media_count || 0,
+          pendingSync: false, // Already on server
+        };
+
+        await DataWriter.saveOrbitalThread(thread);
+        addedCount++;
+        log.info(`${logId}: Added thread ${thread.id} from server`);
+      }
+    }
+
+    if (addedCount > 0) {
+      log.info(`${logId}: Added ${addedCount} new threads from server`);
+      // TODO: Emit event to trigger UI refresh
+    }
+  } catch (error) {
+    log.error(`${logId}: Failed to sync threads from server`, Errors.toLogFormat(error));
+  }
+}
+
+/**
+ * Sync all pending threads to server
+ *
+ * Called on app startup or when coming back online.
+ */
+export async function syncPendingThreads(): Promise<void> {
+  const logId = 'syncPendingThreads';
+
+  try {
+    const pendingThreads = await DataReader.getPendingSyncThreads();
+
+    if (pendingThreads.length === 0) {
+      log.info(`${logId}: No pending threads to sync`);
+      return;
+    }
+
+    log.info(`${logId}: Found ${pendingThreads.length} pending threads to sync`);
+
+    for (const thread of pendingThreads) {
+      await syncThreadToServer(
+        thread.id,
+        thread.groupId,
+        thread.encryptedTitle,
+        thread.encryptedBody
+      );
+    }
+
+    log.info(`${logId}: Finished syncing pending threads`);
+  } catch (error) {
+    log.error(`${logId}: Failed to sync pending threads`, Errors.toLogFormat(error));
+  }
+}
+
+// =============================================================================
+// LEGACY LOCAL THREAD STORAGE (deprecated - use SQLCipher instead)
+// =============================================================================
+
+/**
+ * @deprecated Use SQLCipher thread storage instead
+ * Thread stored locally (for offline support and backend fallback)
+ */
+export type LocalThread = {
+  threadId: string;
+  groupId: string;
+  authorId: string;
+  authorUsername: string;
+  title: string;
+  body: string;
+  replyCount: number;
+  createdAt: string;
+  hasMedia: boolean;
+  hasVideo: boolean;
+  hasImage: boolean;
+};
+
+/**
+ * Store a thread locally in SQLCipher
+ */
+export async function storeLocalThread(thread: LocalThread): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  // Get existing threads map or create new one (organized by groupId)
+  const existingThreads = itemStorage.get('orbitalLocalThreads') || {};
+  const groupThreads = existingThreads[thread.groupId] || [];
+
+  // Check if thread already exists (update it) or add new
+  const existingIndex = groupThreads.findIndex((t: LocalThread) => t.threadId === thread.threadId);
+  if (existingIndex >= 0) {
+    groupThreads[existingIndex] = thread;
+  } else {
+    // Add new thread at the beginning (newest first)
+    groupThreads.unshift(thread);
+  }
+
+  const updatedThreads = {
+    ...existingThreads,
+    [thread.groupId]: groupThreads,
+  };
+
+  await itemStorage.put('orbitalLocalThreads', updatedThreads);
+  log.info(`storeLocalThread: Stored thread ${thread.threadId} for group ${thread.groupId}`);
+}
+
+/**
+ * Get locally stored threads for a group
+ */
+export async function getLocalThreads(groupId: string): Promise<LocalThread[]> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const allThreads = itemStorage.get('orbitalLocalThreads') || {};
+  const groupThreads = allThreads[groupId] || [];
+
+  log.info(`getLocalThreads: Retrieved ${groupThreads.length} threads for group ${groupId}`);
+  return groupThreads;
+}
+
+/**
+ * Update reply count for a locally stored thread
+ */
+export async function updateLocalThreadReplyCount(groupId: string, threadId: string, replyCount: number): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const existingThreads = itemStorage.get('orbitalLocalThreads') || {};
+  const groupThreads = existingThreads[groupId] || [];
+
+  const threadIndex = groupThreads.findIndex((t: LocalThread) => t.threadId === threadId);
+  if (threadIndex >= 0) {
+    groupThreads[threadIndex].replyCount = replyCount;
+    const updatedThreads = {
+      ...existingThreads,
+      [groupId]: groupThreads,
+    };
+    await itemStorage.put('orbitalLocalThreads', updatedThreads);
+    log.info(`updateLocalThreadReplyCount: Updated thread ${threadId} reply count to ${replyCount}`);
+  }
+}
+
+/**
+ * Delete a locally stored thread
+ */
+export async function deleteLocalThread(groupId: string, threadId: string): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const existingThreads = itemStorage.get('orbitalLocalThreads') || {};
+  const groupThreads = existingThreads[groupId] || [];
+
+  const updatedGroupThreads = groupThreads.filter((t: LocalThread) => t.threadId !== threadId);
+
+  const updatedThreads = {
+    ...existingThreads,
+    [groupId]: updatedGroupThreads,
+  };
+
+  await itemStorage.put('orbitalLocalThreads', updatedThreads);
+  log.info(`deleteLocalThread: Deleted thread ${threadId} from group ${groupId}`);
+}
+
+/**
+ * Clear all locally stored threads for a group
+ */
+export async function clearLocalThreads(groupId: string): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const existingThreads = itemStorage.get('orbitalLocalThreads') || {};
+  delete existingThreads[groupId];
+
+  await itemStorage.put('orbitalLocalThreads', existingThreads);
+  log.info(`clearLocalThreads: Cleared all threads for group ${groupId}`);
 }
 
 // =============================================================================
