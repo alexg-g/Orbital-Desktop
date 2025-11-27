@@ -20,10 +20,11 @@ const router = express.Router();
  * Create new discussion thread
  */
 router.post('/', authenticate, asyncHandler(async (req, res) => {
-  const { group_id, encrypted_title, encrypted_body, root_message_id, media_ids } = req.body;
+  const { thread_id, group_id, encrypted_title, encrypted_body, root_message_id, media_ids } = req.body;
 
   // Validate required fields
-  if (!group_id || !encrypted_title || !encrypted_body) {
+  // Note: encrypted_body can be empty string (threads with title only)
+  if (!group_id || !encrypted_title || encrypted_body === undefined || encrypted_body === null) {
     throw validationError('Missing required fields: group_id, encrypted_title, encrypted_body');
   }
 
@@ -82,11 +83,22 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     }
 
     // Create thread (optionally linked to Signal message)
+    // Use client-specified thread_id if provided, otherwise let database generate one
+    // This supports local-first architecture where client generates IDs
     const result = await client.query(
-      `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, created_at`,
-      [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
+      thread_id
+        ? `INSERT INTO threads (id, group_id, root_message_id, author_id, encrypted_title, encrypted_body)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (id) DO UPDATE SET
+             encrypted_title = EXCLUDED.encrypted_title,
+             encrypted_body = EXCLUDED.encrypted_body
+           RETURNING id, created_at`
+        : `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, created_at`,
+      thread_id
+        ? [thread_id, group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
+        : [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
     );
 
     const thread = result.rows[0];
