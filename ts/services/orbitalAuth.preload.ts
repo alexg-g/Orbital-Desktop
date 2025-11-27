@@ -135,8 +135,10 @@ export async function signup(
   if (!password || password.length < 12) {
     throw new Error('Password must be at least 12 characters');
   }
-  if (!email || !email.includes('@')) {
-    throw new Error('Valid email address is required');
+  // Email validation with proper regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email.trim())) {
+    throw new Error('Please enter a valid email address');
   }
   if (!inviteCode || inviteCode.trim().length !== 8) {
     throw new Error('Invalid invite code format');
@@ -153,7 +155,7 @@ export async function signup(
 
   try {
     const response = await makeAuthRequest({
-      path: '/api/auth/register',
+      path: '/api/signup',
       method: 'POST',
       body: requestBody,
     });
@@ -173,6 +175,16 @@ export async function signup(
         username: authResponse.username,
         token: authResponse.token,
       };
+    }
+
+    // Handle rate limiting
+    if (response.status === 429) {
+      throw new Error('Too many attempts. Please wait 15 minutes and try again.');
+    }
+
+    // Handle server errors
+    if (response.status >= 500) {
+      throw new Error('Server error. Please try again later.');
     }
 
     // Handle specific error codes
@@ -251,7 +263,8 @@ export async function getUsername(): Promise<string | null> {
  */
 export async function isAuthenticated(): Promise<boolean> {
   const token = await getJWT();
-  console.log('[OrbitalAuth] isAuthenticated: token exists =', token !== null, 'token preview =', token ? token.substring(0, 20) + '...' : 'null');
+  // Security: Never log token contents
+  log.info('isAuthenticated check', { hasToken: token !== null });
   return token !== null;
 }
 
