@@ -5,7 +5,7 @@ import React, { useState, useCallback } from 'react';
 import type { LocalizerType } from '../../types/Util.std.js';
 import { Modal } from '../Modal.dom.js';
 import { ContactSelector } from './ContactSelector';
-import type { OrbitalUser } from './mockThreadData';
+import type { OrbitalUser } from './orbitalTypes';
 
 export type ContactPickerModalProps = {
   i18n: LocalizerType;

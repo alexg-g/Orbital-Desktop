@@ -10,6 +10,7 @@ export type OrbitalThread = {
   id: string;
   orbitId: string; // The orbit (group) this thread belongs to
   title: string;
+  body: string; // Original post content
   author: string;
   authorId: string;
   timestamp: number;
@@ -26,6 +27,7 @@ export type OrbitalThread = {
 export type OrbitalThreadListProps = {
   threads: ReadonlyArray<OrbitalThread>;
   activeThreadId?: string;
+  orbitName?: string;
   i18n: LocalizerType;
   onThreadClick: (threadId: string) => void;
   onCreateThread: () => void;
@@ -47,6 +49,7 @@ export type OrbitalThreadListProps = {
 export function OrbitalThreadList({
   threads,
   activeThreadId,
+  orbitName,
   i18n,
   onThreadClick,
   onCreateThread,
@@ -125,14 +128,16 @@ export function OrbitalThreadList({
   return (
     <div className="OrbitalThreadList">
       <div className="OrbitalThreadList__header">
-        <h2>Your Orbit</h2>
+        <h2 className="OrbitalThreadList__orbit-name" title={orbitName || 'Your Orbit'}>
+          {orbitName || 'Your Orbit'}
+        </h2>
         <div className="OrbitalThreadList__header-actions">
           <button
             type="button"
-            className="OrbitalComposer__button-primary"
+            className="OrbitalComposer__button-primary OrbitalThreadList__create-button"
             onClick={handleCreateThread}
           >
-            Create Thread
+            + Create Thread
           </button>
           <button
             type="button"

@@ -23,6 +23,8 @@ export type OrbitalSettingsProps = {
   onSelectOrbit?: (groupId: string) => void;
   onCreateOrbit?: () => void;
   onJoinOrbit?: () => void;
+  // Logout handler (for General page)
+  onLogout?: () => void;
 };
 
 const PAGE_TITLES: Record<OrbitalSettingsPage, string> = {
@@ -45,11 +47,12 @@ export function OrbitalSettings({
   onSelectOrbit = () => {},
   onCreateOrbit = () => {},
   onJoinOrbit = () => {},
+  onLogout,
 }: OrbitalSettingsProps): JSX.Element {
   const renderPage = (): JSX.Element => {
     switch (page) {
       case OrbitalSettingsPage.General:
-        return <OrbitalSettingsGeneral />;
+        return <OrbitalSettingsGeneral onLogout={onLogout} />;
       case OrbitalSettingsPage.Appearance:
         return <OrbitalSettingsAppearance />;
       case OrbitalSettingsPage.Notifications:
@@ -79,7 +82,7 @@ export function OrbitalSettings({
           />
         );
       default:
-        return <OrbitalSettingsGeneral />;
+        return <OrbitalSettingsGeneral onLogout={onLogout} />;
     }
   };
 

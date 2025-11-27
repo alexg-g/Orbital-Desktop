@@ -8,10 +8,16 @@ import {
   OrbitalSettingsSection,
   OrbitalSettingsButton,
 } from './OrbitalSettingsControl';
-import { getSetting, setSetting } from './settingsStorage';
+import { getSetting, setSetting, validateDisplayName, sanitizeDisplayName } from './settingsStorage';
 import { logout, getUsername } from '../../services/orbitalAuth.preload.js';
 
-export function OrbitalSettingsGeneral(): JSX.Element {
+export type OrbitalSettingsGeneralProps = {
+  onLogout?: () => void;
+};
+
+export function OrbitalSettingsGeneral({
+  onLogout,
+}: OrbitalSettingsGeneralProps): JSX.Element {
   // Local state for settings
   const [startMinimized, setStartMinimized] = useState(false);
   const [showInSystemTray, setShowInSystemTray] = useState(true);
@@ -27,6 +33,7 @@ export function OrbitalSettingsGeneral(): JSX.Element {
   // Account state
   const [loggedInUsername, setLoggedInUsername] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   // Load settings on mount
   useEffect(() => {
@@ -65,13 +72,15 @@ export function OrbitalSettingsGeneral(): JSX.Element {
     setIsLoggingOut(true);
     try {
       await logout();
-      // Reload the app to show login screen
-      window.location.reload();
+      // Notify parent to update auth state and show login screen
+      if (onLogout) {
+        onLogout();
+      }
     } catch (error) {
       console.error('Failed to logout:', error);
       setIsLoggingOut(false);
     }
-  }, [isLoggingOut]);
+  }, [isLoggingOut, onLogout]);
 
   const handleStartMinimizedChange = useCallback(async (value: boolean) => {
     setStartMinimized(value);
@@ -127,29 +136,35 @@ export function OrbitalSettingsGeneral(): JSX.Element {
         return;
       }
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image must be less than 5MB');
+      // Validate file size (max 1.5MB for base64 storage)
+      if (file.size > 1.5 * 1024 * 1024) {
+        alert('Image must be less than 1.5MB');
         return;
       }
 
-      // Create preview URL
-      const url = URL.createObjectURL(file);
-      setAvatarUrl(url);
-
-      try {
-        await setSetting('orbital.settings.general.avatarUrl', url);
-        console.log('Avatar selected and saved:', file.name);
-      } catch (error) {
-        console.error('Failed to save avatar URL:', error);
-      }
+      // Convert file to base64 data URL for persistent storage
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target?.result as string;
+        if (dataUrl) {
+          setAvatarUrl(dataUrl);
+          try {
+            await setSetting('orbital.settings.general.avatarUrl', dataUrl);
+            console.log('Avatar saved as base64:', file.name);
+          } catch (error) {
+            console.error('Failed to save avatar:', error);
+          }
+        }
+      };
+      reader.onerror = () => {
+        console.error('Failed to read avatar file');
+        alert('Failed to read image file');
+      };
+      reader.readAsDataURL(file);
     }
   }, []);
 
   const handleRemoveAvatar = useCallback(async () => {
-    if (avatarUrl) {
-      URL.revokeObjectURL(avatarUrl);
-    }
     setAvatarUrl(null);
 
     try {
@@ -161,30 +176,49 @@ export function OrbitalSettingsGeneral(): JSX.Element {
   }, [avatarUrl]);
 
   const handleNameChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setDisplayName(event.target.value);
+    const newValue = event.target.value;
+    setDisplayName(newValue);
+    // Clear error while typing
+    setNameError(null);
+  }, []);
+
+  const saveDisplayName = useCallback(async (name: string) => {
+    // Validate the name
+    const validation = validateDisplayName(name);
+    if (!validation.valid) {
+      setNameError(validation.error || 'Invalid name');
+      // Sanitize and save anyway to prevent losing the name
+      const sanitized = sanitizeDisplayName(name);
+      setDisplayName(sanitized);
+      try {
+        await setSetting('orbital.settings.general.displayName', sanitized);
+        console.log('Display name sanitized and saved:', sanitized);
+      } catch (error) {
+        console.error('Failed to save display name:', error);
+      }
+      return;
+    }
+
+    setNameError(null);
+    try {
+      await setSetting('orbital.settings.general.displayName', name);
+      console.log('Display name saved:', name);
+    } catch (error) {
+      console.error('Failed to save display name:', error);
+    }
   }, []);
 
   const handleNameBlur = useCallback(async () => {
     setIsEditingName(false);
-    try {
-      await setSetting('orbital.settings.general.displayName', displayName);
-      console.log('Display name saved:', displayName);
-    } catch (error) {
-      console.error('Failed to save display name:', error);
-    }
-  }, [displayName]);
+    await saveDisplayName(displayName);
+  }, [displayName, saveDisplayName]);
 
   const handleNameKeyDown = useCallback(async (event: React.KeyboardEvent) => {
     if (event.key === 'Enter') {
       setIsEditingName(false);
-      try {
-        await setSetting('orbital.settings.general.displayName', displayName);
-        console.log('Display name saved:', displayName);
-      } catch (error) {
-        console.error('Failed to save display name:', error);
-      }
+      await saveDisplayName(displayName);
     }
-  }, [displayName]);
+  }, [displayName, saveDisplayName]);
 
   const languageOptions = [
     { value: 'en', label: 'English' },
@@ -251,7 +285,8 @@ export function OrbitalSettingsGeneral(): JSX.Element {
                   onKeyDown={handleNameKeyDown}
                   className="OrbitalSettingsGeneral__name-input"
                   autoFocus
-                  maxLength={32}
+                  maxLength={15}
+                  placeholder="Enter your display name"
                 />
               ) : (
                 <button
@@ -264,6 +299,9 @@ export function OrbitalSettingsGeneral(): JSX.Element {
                 </button>
               )}
             </div>
+            {nameError && (
+              <p className="OrbitalSettingsGeneral__name-error">{nameError}</p>
+            )}
             <p className="OrbitalSettingsGeneral__profile-hint">
               Click on your avatar to change it, or click your name to edit it.
             </p>

@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
-import type { OrbitalChat } from './mockThreadData';
+import type { OrbitalChat } from './orbitalTypes';
 
 export type OrbitalChatListProps = {
   chats: ReadonlyArray<OrbitalChat>;

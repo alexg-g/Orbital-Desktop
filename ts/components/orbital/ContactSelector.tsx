@@ -3,7 +3,7 @@
 
 import React from 'react';
 import classNames from 'classnames';
-import type { OrbitalUser } from './mockThreadData';
+import type { OrbitalUser } from './orbitalTypes';
 
 export type ContactSelectorProps = {
   contacts: ReadonlyArray<OrbitalUser>;

@@ -89,3 +89,62 @@ export async function setSetting<T extends OrbitalSettingsValue>(
     throw error;
   }
 }
+
+// =============================================================================
+// USER PROFILE UTILITIES
+// =============================================================================
+
+/**
+ * Current user profile data from settings
+ */
+export type UserProfile = {
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+/**
+ * Validate a display name.
+ * Rules: alphanumeric, spaces, underscores only. Max 15 characters.
+ */
+export function validateDisplayName(name: string): { valid: boolean; error?: string } {
+  if (!name || name.trim().length === 0) {
+    return { valid: false, error: 'Display name cannot be empty' };
+  }
+
+  if (name.length > 15) {
+    return { valid: false, error: 'Display name must be 15 characters or less' };
+  }
+
+  // Only allow alphanumeric, spaces, and underscores
+  const validPattern = /^[a-zA-Z0-9_ ]+$/;
+  if (!validPattern.test(name)) {
+    return { valid: false, error: 'Display name can only contain letters, numbers, spaces, and underscores' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Sanitize a display name to meet validation requirements.
+ * Removes invalid characters and truncates to 15 characters.
+ */
+export function sanitizeDisplayName(name: string): string {
+  // Remove invalid characters
+  const sanitized = name.replace(/[^a-zA-Z0-9_ ]/g, '');
+  // Truncate to 15 characters
+  return sanitized.slice(0, 15).trim() || 'User';
+}
+
+/**
+ * Get the current user's profile from settings.
+ * Returns display name and avatar URL.
+ */
+export function getCurrentUserProfile(): UserProfile {
+  const displayName = getSetting('orbital.settings.general.displayName', 'You') ?? 'You';
+  const avatarUrl = getSetting('orbital.settings.general.avatarUrl', null) ?? null;
+
+  return {
+    displayName: typeof displayName === 'string' ? displayName : 'You',
+    avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : null,
+  };
+}
