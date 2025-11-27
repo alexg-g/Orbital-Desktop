@@ -13,7 +13,7 @@ import type { LocalizerType } from '../../types/Util.std.js';
 import { Button, ButtonVariant } from '../Button.dom.js';
 import { Input } from '../Input.dom.js';
 import { Spinner } from '../Spinner.dom.js';
-import { login } from '../../services/orbitalAuth.preload.js';
+import { login, signup } from '../../services/orbitalAuth.preload.js';
 
 export type PropsType = {
   i18n: LocalizerType;
@@ -106,18 +106,13 @@ export function OrbitalLogin({
         if (mode === 'login') {
           await login({ username: username.trim(), password });
         } else {
-          // TODO: Call signup API instead of login
-          // For now, this is a placeholder - the actual signup API would be:
-          // await signup({
-          //   username: username.trim(),
-          //   password,
-          //   email: email.trim(),
-          //   inviteCode: inviteCode.trim().toUpperCase(),
-          //   public_key: generatePublicKey()
-          // });
-
-          // Placeholder error for now since signup isn't wired up yet
-          throw new Error('Signup will be available once connected to backend');
+          // Call signup API with invite code
+          await signup({
+            username: username.trim(),
+            password,
+            email: email.trim(),
+            inviteCode: inviteCode.trim().toUpperCase(),
+          });
         }
 
         // Success - token now stored in SQLCipher

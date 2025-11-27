@@ -42,13 +42,28 @@ export type LoginCredentials = {
 };
 
 /**
- * Login response from server
+ * Signup credentials
  */
-type LoginResponse = {
+export type SignupCredentials = {
+  username: string;
+  password: string;
+  email: string;
+  inviteCode: string;
+};
+
+/**
+ * Login/Signup response from server
+ */
+type AuthResponse = {
   user_id: string;
   username: string;
   token: string;
 };
+
+/**
+ * Legacy type alias for backwards compatibility
+ */
+type LoginResponse = AuthResponse;
 
 /**
  * Login with username and password
@@ -96,6 +111,111 @@ export async function login(
     };
   } catch (error) {
     log.error('Login error', { error: Errors.toLogFormat(error) });
+    throw error;
+  }
+}
+
+/**
+ * Sign up with invite code
+ * Creates new account and stores JWT token in SQLCipher on success
+ *
+ * @param credentials - Email, invite code, username, and password
+ * @returns User info and token
+ * @throws Error if signup fails (invalid invite, user exists, etc.)
+ */
+export async function signup(
+  credentials: SignupCredentials
+): Promise<{ userId: string; username: string; token: string }> {
+  const { username, password, email, inviteCode } = credentials;
+
+  // Validate inputs
+  if (!username || username.trim().length < 3) {
+    throw new Error('Username must be at least 3 characters');
+  }
+  if (!password || password.length < 12) {
+    throw new Error('Password must be at least 12 characters');
+  }
+  if (!email || !email.includes('@')) {
+    throw new Error('Valid email address is required');
+  }
+  if (!inviteCode || inviteCode.trim().length !== 8) {
+    throw new Error('Invalid invite code format');
+  }
+
+  log.info('Attempting signup', { username, email });
+
+  const requestBody = JSON.stringify({
+    username: username.trim(),
+    password,
+    email: email.trim().toLowerCase(),
+    invite_code: inviteCode.trim().toUpperCase(),
+  });
+
+  try {
+    const response = await makeAuthRequest({
+      path: '/api/auth/register',
+      method: 'POST',
+      body: requestBody,
+    });
+
+    if (response.status === 201 || response.status === 200) {
+      const authResponse: AuthResponse = JSON.parse(response.data.toString());
+
+      // Store JWT token and user info in SQLCipher
+      await itemStorage.put('orbitalJwtToken', authResponse.token);
+      await itemStorage.put('orbitalUserId', authResponse.user_id);
+      await itemStorage.put('orbitalUsername', authResponse.username);
+
+      log.info('Signup successful', { username: authResponse.username });
+
+      return {
+        userId: authResponse.user_id,
+        username: authResponse.username,
+        token: authResponse.token,
+      };
+    }
+
+    // Handle specific error codes
+    const errorText = response.data.toString();
+    let errorData: { error?: string; code?: string } = {};
+    try {
+      errorData = JSON.parse(errorText);
+    } catch {
+      // Not JSON, use raw text
+    }
+
+    const errorCode = errorData.code || '';
+    const errorMessage = errorData.error || errorText;
+
+    // Map error codes to user-friendly messages
+    if (response.status === 400) {
+      if (errorCode === 'INVALID_INVITE' || errorMessage.includes('Invalid invite')) {
+        throw new Error('Invalid invite code. Please check and try again.');
+      }
+      if (errorCode === 'INVITE_EXPIRED' || errorMessage.includes('expired')) {
+        throw new Error('This invite code has expired.');
+      }
+      if (errorCode === 'INVITE_USED' || errorMessage.includes('already been used')) {
+        throw new Error('This invite code has already been used.');
+      }
+      if (errorCode === 'EMAIL_MISMATCH' || errorMessage.includes('email') && errorMessage.includes('different')) {
+        throw new Error('This invite code was sent to a different email address.');
+      }
+      if (errorMessage.includes('Username already') || errorCode === 'USERNAME_EXISTS') {
+        throw new Error('This username is already taken. Please choose another.');
+      }
+      if (errorMessage.includes('email already') || errorCode === 'EMAIL_EXISTS') {
+        throw new Error('An account with this email already exists.');
+      }
+    }
+
+    log.warn('Signup failed', { status: response.status, error: errorMessage });
+    throw new Error(errorMessage || `Signup failed: ${response.status}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+      throw new Error('Could not connect to Orbital server. Please check your internet connection.');
+    }
+    log.error('Signup error', { error: Errors.toLogFormat(error) });
     throw error;
   }
 }
