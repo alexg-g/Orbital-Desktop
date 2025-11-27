@@ -27,8 +27,6 @@ import {
   getTargetedMessageSource,
 } from '../selectors/conversations.dom.js';
 import { getDisplayMode, getSelectedThreadId } from '../ducks/nav.std.js';
-import { OrbitalThreadDetail } from '../../components/orbital/OrbitalThreadDetail.js';
-import { MOCK_THREADS, MOCK_MESSAGES } from '../../components/orbital/mockThreadData.js';
 
 function renderConversationView(props: SmartConversationViewProps) {
   return <SmartConversationView {...props} />;
@@ -42,73 +40,13 @@ function renderMiniPlayer(options: { shouldFlow: boolean }) {
   return <SmartMiniPlayer {...options} />;
 }
 
+// Legacy thread detail renderer - threads are now handled by OrbitalInbox
 function renderThreadDetail(
-  props: { threadId: string },
-  i18n: ReturnType<typeof getIntl>
+  _props: { threadId: string },
+  _i18n: ReturnType<typeof getIntl>
 ) {
-  const thread = MOCK_THREADS.find(t => t.id === props.threadId);
-  const messages = MOCK_MESSAGES[props.threadId] || [];
-
-  // Debug logging
-  console.log('[renderThreadDetail] threadId:', props.threadId);
-  console.log('[renderThreadDetail] thread found:', !!thread);
-  console.log('[renderThreadDetail] messages count:', messages.length);
-  console.log('[renderThreadDetail] messages:', messages);
-
-  if (!thread) {
-    return <div>Thread not found</div>;
-  }
-
-  // Mock functions for dependency injection
-  const mockGetQuotaInfo = async () => ({
-    storageUsedBytes: 0,
-    storageLimitBytes: 1024 * 1024 * 1024,
-    bandwidthUsedBytes: 0,
-    bandwidthLimitBytes: 5 * 1024 * 1024 * 1024,
-    bandwidthResetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    mediaCount: 0,
-    mediaLimit: 1000,
-  });
-
-  const mockCheckUploadAllowed = async () => ({
-    allowed: true,
-    reason: undefined,
-  });
-
-  const mockFormatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  };
-
-  const mockUploadMedia = async () => ({ mediaId: 'mock-id' });
-  const mockGetAbsoluteAttachmentPath = (path: string) => path;
-  const mockDownloadMedia = async () => '/mock/path';
-  const mockGetMediaDownloadStatus = async () => ({ status: 'complete' });
-  const mockDeleteMedia = async () => {};
-
-  return (
-    <OrbitalThreadDetail
-      threadId={props.threadId}
-      groupId="mock-group-id"
-      threadTitle={thread.title}
-      threadAuthor={thread.author}
-      threadTimestamp={thread.timestamp}
-      messages={messages}
-      currentUserId="testuser"
-      i18n={i18n}
-      onReply={() => {}}
-      onSendMessage={() => {}}
-      getQuotaInfo={mockGetQuotaInfo}
-      checkUploadAllowed={mockCheckUploadAllowed}
-      formatBytes={mockFormatBytes}
-      uploadMedia={mockUploadMedia}
-      getAbsoluteAttachmentPath={mockGetAbsoluteAttachmentPath}
-      downloadMedia={mockDownloadMedia}
-      getMediaDownloadStatus={mockGetMediaDownloadStatus}
-      deleteMedia={mockDeleteMedia}
-    />
-  );
+  // Thread detail is now handled by OrbitalInbox component
+  return <div>Thread view moved to Orbital</div>;
 }
 
 export const SmartChatsTab = memo(function SmartChatsTab() {

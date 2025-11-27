@@ -51,6 +51,7 @@ import type { AttachmentType } from '../types/Attachment.std.js';
 import type {
   OrbitalMediaAttachment,
   OrbitalMediaStorageStats} from '../types/OrbitalMedia.std.js';
+import type { OrbitalThreadType } from '../types/OrbitalThread.std.js';
 import type { DraftType } from '../types/Draft.std.js';
 
 // STUB: BadgeType removed for Orbital
@@ -966,6 +967,14 @@ type ReadableInterface = {
   getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
   getPendingDownloads: () => Array<OrbitalMediaAttachment>;
 
+  // Orbital Threads
+  getOrbitalThread: (threadId: string) => OrbitalThreadType | undefined;
+  getOrbitalThreadsByGroupId: (
+    groupId: string,
+    options?: { limit?: number; offset?: number }
+  ) => Array<OrbitalThreadType>;
+  getPendingSyncThreads: () => Array<OrbitalThreadType>;
+
   // Drafts
   getDraft: (contextId: string) => DraftType | undefined;
   getAllDrafts: () => Array<DraftType>;
@@ -1317,6 +1326,18 @@ type WritableInterface = {
   // Orbital Media
   saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
   updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
+
+  // Orbital Threads
+  saveOrbitalThread: (thread: OrbitalThreadType) => void;
+  updateOrbitalThreadSyncStatus: (threadId: string, pendingSync: boolean) => void;
+  updateOrbitalThreadReplyCount: (
+    threadId: string,
+    replyCount: number,
+    lastReplyAt?: number
+  ) => void;
+  deleteOrbitalThread: (threadId: string) => void;
+  deleteOrbitalThreadsByGroupId: (groupId: string) => void;
+  removeAllOrbitalThreads: () => number;
 
   // Drafts
   saveDraft: (draft: DraftType) => void;

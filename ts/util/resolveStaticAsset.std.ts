@@ -15,7 +15,12 @@ export function resolveStaticAssetUrl(path: string | undefined): string | undefi
     return undefined;
   }
 
-  // In Electron, convert to file:// URL
+  // Don't transform data URLs, absolute URLs, or file:// URLs
+  if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
+    return path;
+  }
+
+  // In Electron, convert relative paths to file:// URL
   if (typeof window !== 'undefined' && window.SignalContext?.getPath) {
     try {
       const installPath = window.SignalContext.getPath('install');

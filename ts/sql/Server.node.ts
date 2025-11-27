@@ -509,6 +509,11 @@ export const DataReader: ServerReadableInterface = {
   getStorageStats,
   getPendingDownloads,
 
+  // Orbital Threads
+  getOrbitalThread,
+  getOrbitalThreadsByGroupId,
+  getPendingSyncThreads,
+
   // Drafts
   getDraft,
   getAllDrafts,
@@ -736,6 +741,14 @@ export const DataWriter: ServerWritableInterface = {
   saveOrbitalMedia,
   updateMediaDownloadStatus,
   deleteOrbitalMedia,
+
+  // Orbital Threads
+  saveOrbitalThread,
+  updateOrbitalThreadSyncStatus,
+  updateOrbitalThreadReplyCount,
+  deleteOrbitalThread,
+  deleteOrbitalThreadsByGroupId,
+  removeAllOrbitalThreads,
 
   // Drafts
   saveDraft,
@@ -9090,6 +9103,308 @@ function deleteOrbitalMedia(
     WHERE media_id = $mediaId
   `
   ).run({ mediaId });
+}
+
+// =============================================================================
+// Orbital Threads
+// =============================================================================
+
+/**
+ * Thread row from SQLCipher database
+ */
+type OrbitalThreadRow = {
+  id: string;
+  group_id: string;
+  author_id: string;
+  encrypted_title: string;
+  encrypted_body: string;
+  title_iv: string;
+  body_iv: string;
+  created_at: number;
+  last_reply_at: number | null;
+  reply_count: number;
+  media_count: number;
+  pending_sync: number;
+};
+
+/**
+ * Thread type returned from database operations
+ */
+export type OrbitalThreadType = {
+  id: string;
+  groupId: string;
+  authorId: string;
+  encryptedTitle: string;
+  encryptedBody: string;
+  titleIv: string;
+  bodyIv: string;
+  createdAt: number;
+  lastReplyAt?: number;
+  replyCount: number;
+  mediaCount: number;
+  pendingSync: boolean;
+};
+
+/**
+ * Convert database row to thread type
+ */
+function orbitalThreadRowToType(row: OrbitalThreadRow): OrbitalThreadType {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    authorId: row.author_id,
+    encryptedTitle: row.encrypted_title,
+    encryptedBody: row.encrypted_body,
+    titleIv: row.title_iv,
+    bodyIv: row.body_iv,
+    createdAt: row.created_at,
+    lastReplyAt: row.last_reply_at ?? undefined,
+    replyCount: row.reply_count,
+    mediaCount: row.media_count,
+    pendingSync: row.pending_sync === 1,
+  };
+}
+
+/**
+ * Get a single thread by ID
+ */
+function getOrbitalThread(
+  db: ReadableDB,
+  threadId: string
+): OrbitalThreadType | undefined {
+  const row = db
+    .prepare<{ threadId: string }>(
+      `
+      SELECT
+        id,
+        group_id,
+        author_id,
+        encrypted_title,
+        encrypted_body,
+        title_iv,
+        body_iv,
+        created_at,
+        last_reply_at,
+        reply_count,
+        media_count,
+        pending_sync
+      FROM orbital_threads
+      WHERE id = $threadId
+    `
+    )
+    .get({ threadId });
+
+  if (!row) {
+    return undefined;
+  }
+
+  return orbitalThreadRowToType(row as OrbitalThreadRow);
+}
+
+/**
+ * Get threads for a group with pagination
+ */
+function getOrbitalThreadsByGroupId(
+  db: ReadableDB,
+  groupId: string,
+  options?: { limit?: number; offset?: number }
+): Array<OrbitalThreadType> {
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+
+  const rows = db
+    .prepare<{ groupId: string; limit: number; offset: number }>(
+      `
+      SELECT
+        id,
+        group_id,
+        author_id,
+        encrypted_title,
+        encrypted_body,
+        title_iv,
+        body_iv,
+        created_at,
+        last_reply_at,
+        reply_count,
+        media_count,
+        pending_sync
+      FROM orbital_threads
+      WHERE group_id = $groupId
+      ORDER BY created_at DESC
+      LIMIT $limit OFFSET $offset
+    `
+    )
+    .all({ groupId, limit, offset });
+
+  return rows.map(row => orbitalThreadRowToType(row as OrbitalThreadRow));
+}
+
+/**
+ * Get threads that are pending sync
+ */
+function getPendingSyncThreads(
+  db: ReadableDB
+): Array<OrbitalThreadType> {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        id,
+        group_id,
+        author_id,
+        encrypted_title,
+        encrypted_body,
+        title_iv,
+        body_iv,
+        created_at,
+        last_reply_at,
+        reply_count,
+        media_count,
+        pending_sync
+      FROM orbital_threads
+      WHERE pending_sync = 1
+      ORDER BY created_at ASC
+    `
+    )
+    .all();
+
+  return rows.map(row => orbitalThreadRowToType(row as OrbitalThreadRow));
+}
+
+/**
+ * Save or update a thread
+ */
+function saveOrbitalThread(
+  db: WritableDB,
+  thread: OrbitalThreadType
+): void {
+  db.prepare(
+    `
+    INSERT OR REPLACE INTO orbital_threads (
+      id,
+      group_id,
+      author_id,
+      encrypted_title,
+      encrypted_body,
+      title_iv,
+      body_iv,
+      created_at,
+      last_reply_at,
+      reply_count,
+      media_count,
+      pending_sync
+    ) VALUES (
+      $id,
+      $groupId,
+      $authorId,
+      $encryptedTitle,
+      $encryptedBody,
+      $titleIv,
+      $bodyIv,
+      $createdAt,
+      $lastReplyAt,
+      $replyCount,
+      $mediaCount,
+      $pendingSync
+    )
+  `
+  ).run({
+    id: thread.id,
+    groupId: thread.groupId,
+    authorId: thread.authorId,
+    encryptedTitle: thread.encryptedTitle,
+    encryptedBody: thread.encryptedBody,
+    titleIv: thread.titleIv,
+    bodyIv: thread.bodyIv,
+    createdAt: thread.createdAt,
+    lastReplyAt: thread.lastReplyAt ?? null,
+    replyCount: thread.replyCount,
+    mediaCount: thread.mediaCount,
+    pendingSync: thread.pendingSync ? 1 : 0,
+  });
+}
+
+/**
+ * Update thread sync status
+ */
+function updateOrbitalThreadSyncStatus(
+  db: WritableDB,
+  threadId: string,
+  pendingSync: boolean
+): void {
+  db.prepare(
+    `
+    UPDATE orbital_threads
+    SET pending_sync = $pendingSync
+    WHERE id = $threadId
+  `
+  ).run({
+    threadId,
+    pendingSync: pendingSync ? 1 : 0,
+  });
+}
+
+/**
+ * Update thread reply count
+ */
+function updateOrbitalThreadReplyCount(
+  db: WritableDB,
+  threadId: string,
+  replyCount: number,
+  lastReplyAt?: number
+): void {
+  db.prepare(
+    `
+    UPDATE orbital_threads
+    SET
+      reply_count = $replyCount,
+      last_reply_at = $lastReplyAt
+    WHERE id = $threadId
+  `
+  ).run({
+    threadId,
+    replyCount,
+    lastReplyAt: lastReplyAt ?? null,
+  });
+}
+
+/**
+ * Delete a thread
+ */
+function deleteOrbitalThread(
+  db: WritableDB,
+  threadId: string
+): void {
+  db.prepare(
+    `
+    DELETE FROM orbital_threads
+    WHERE id = $threadId
+  `
+  ).run({ threadId });
+}
+
+/**
+ * Delete all threads for a group
+ */
+function deleteOrbitalThreadsByGroupId(
+  db: WritableDB,
+  groupId: string
+): void {
+  db.prepare(
+    `
+    DELETE FROM orbital_threads
+    WHERE group_id = $groupId
+  `
+  ).run({ groupId });
+}
+
+/**
+ * Remove all orbital threads from the database
+ * Returns the number of threads deleted
+ */
+function removeAllOrbitalThreads(db: WritableDB): number {
+  const result = db.prepare('DELETE FROM orbital_threads').run();
+  return result.changes;
 }
 
 // =============================================================================

@@ -60,7 +60,6 @@ import { NavTab, SettingsPage, ProfileEditorPage, DisplayMode } from '../types/N
 import type { Location } from '../types/Nav.std.js';
 import { ChatsThreadsToggle } from './ChatsThreadsToggle.dom.js';
 import { OrbitalThreadList } from './orbital/OrbitalThreadList.js';
-import { MOCK_THREADS } from './orbital/mockThreadData.js';
 import type { RenderConversationListItemContextMenuProps } from './conversationList/BaseConversationListItem.dom.js';
 import { AxoDropdownMenu } from '../axo/AxoDropdownMenu.dom.js';
 import type { ChatFolder } from '../types/ChatFolder.std.js';
@@ -896,7 +895,7 @@ export function LeftPane({
           {modeSpecificProps.mode === LeftPaneMode.Inbox &&
           displayMode === DisplayMode.Threads ? (
             <OrbitalThreadList
-              threads={MOCK_THREADS}
+              threads={[]}
               activeThreadId={selectedThreadId}
               i18n={i18n}
               onThreadClick={(threadId: string) => {
@@ -905,6 +904,10 @@ export function LeftPane({
               onCreateThread={() => {
                 // TODO: Open create thread modal
                 console.log('Create thread clicked');
+              }}
+              onSettingsClick={() => {
+                // TODO: Open settings
+                console.log('Settings clicked');
               }}
             />
           ) : (

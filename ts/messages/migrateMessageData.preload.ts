@@ -119,7 +119,16 @@ export async function _migrateMessageData({
 
   const saveStartTime = Date.now();
 
-  const ourAci = itemStorage.user.getCheckedAci();
+  // Check if user has ACI (Signal account) - skip migration if not
+  // Orbital uses its own auth system and may not have a Signal ACI
+  const ourAci = itemStorage.user.getAci();
+  if (!ourAci) {
+    log.info('No ACI found - skipping Signal message migration (Orbital-only mode)');
+    return {
+      done: true,
+      numProcessed: 0,
+    };
+  }
   const { failedIndices: failedToSaveIndices } = await saveMessagesIndividually(
     upgradedMessages,
     {
@@ -164,6 +173,12 @@ export async function migrateBatchOfMessages({
 }: {
   numMessagesPerBatch: number;
 }): ReturnType<typeof _migrateMessageData> {
+  // Skip migration if no Signal account (ACI) - Orbital uses its own auth
+  const aci = itemStorage.user.getAci();
+  if (!aci) {
+    log.info('migrateBatchOfMessages: No ACI found, skipping Signal message migration');
+    return { done: true, numProcessed: 0 };
+  }
   return migrationQueue.add(() =>
     _migrateMessageData({
       numMessagesPerBatch,
@@ -177,6 +192,13 @@ export async function migrateBatchOfMessages({
 }
 
 export async function migrateAllMessages(): Promise<void> {
+  // Skip migration if no Signal account (ACI) - Orbital uses its own auth
+  const aci = itemStorage.user.getAci();
+  if (!aci) {
+    log.info('migrateAllMessages: No ACI found, skipping Signal message migration');
+    return;
+  }
+
   let batch: BatchResultType | undefined;
   let total = 0;
   while (!batch?.done) {

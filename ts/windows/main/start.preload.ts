@@ -36,6 +36,12 @@ import {
   isPollSendEnabled,
   type PollCreateType,
 } from '../../types/Polls.dom.js';
+import {
+  clearOrbitalStorage,
+  getOrbitalStorageInfo,
+  isOrbitalLoggedIn,
+  getCurrentOrbitalUser,
+} from '../../services/orbitalReset.preload.js';
 
 const { has } = lodash;
 
@@ -134,6 +140,11 @@ if (
       }
       await enqueuePollCreateForSend(conversation, poll);
     },
+    // Orbital debug functions
+    orbitalReset: () => clearOrbitalStorage(),
+    orbitalGetStorageInfo: () => getOrbitalStorageInfo(),
+    orbitalIsLoggedIn: () => isOrbitalLoggedIn(),
+    orbitalGetCurrentUser: () => getCurrentOrbitalUser(),
     ...(window.SignalContext.config.ciMode === 'benchmark'
       ? {
           benchmarkConversationOpen,
