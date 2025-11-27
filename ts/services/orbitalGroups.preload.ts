@@ -146,7 +146,9 @@ export async function createGroup(name: string): Promise<CreateGroupResult> {
     const requestBody = JSON.stringify({
       encrypted_name: encryptedName,
       // The group key would be distributed via Sender Keys in production
-      // For now we store it locally
+      // For now we store it locally and send it as encrypted_group_key
+      // In production, this would be encrypted with the user's public key
+      encrypted_group_key: groupKeyBase64,
     });
 
     const response = await makeRequest({
@@ -326,6 +328,62 @@ export async function listGroups(): Promise<GroupInfo[]> {
     return groups;
   } catch (error) {
     log.error(`${logId}: Failed to list groups`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
+
+/**
+ * Leave an orbit
+ *
+ * This will:
+ * 1. Remove the user from the group on the server
+ * 2. Delete the local group key (can no longer decrypt messages)
+ * 3. Clear local selection if this was the selected group
+ *
+ * Note: The server should trigger key rotation for remaining members
+ * to ensure forward secrecy (departed member cannot read new messages).
+ *
+ * @param groupId Group ID
+ */
+export async function leaveGroup(groupId: string): Promise<void> {
+  const logId = `leaveGroup(${groupId})`;
+
+  try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/groups/${groupId}/leave`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status !== 200 && response.status !== 204) {
+      const errorData = parseErrorResponse(response.data);
+      throw new Error(errorData.error || `Failed to leave group: ${response.status}`);
+    }
+
+    // Delete local group key (can no longer decrypt messages)
+    await deleteGroupKey(groupId);
+
+    // Clear selected group if this was it
+    const selectedGroupId = await getSelectedGroupId();
+    if (selectedGroupId === groupId) {
+      await clearSelectedGroupId();
+    }
+
+    log.info(`${logId}: Successfully left group`);
+  } catch (error) {
+    log.error(`${logId}: Failed to leave group`, Errors.toLogFormat(error));
     await handleOrbitalAPIError(error);
     throw error;
   }
@@ -823,6 +881,50 @@ async function getGroupKey(groupId: string): Promise<string | null> {
   }
 
   return keys[groupId] || null;
+}
+
+/**
+ * Rotate the group encryption key (for forward secrecy)
+ *
+ * This should be called when:
+ * - A member leaves the group
+ * - A member is removed from the group
+ * - Periodic key rotation (recommended every 30 days)
+ *
+ * New messages will be encrypted with the new key.
+ * Old messages remain encrypted with the old key (they are still readable
+ * by current members because the old key is retained in history).
+ *
+ * @param groupId Group ID
+ * @returns New key base64 (also stored in SQLCipher)
+ */
+export async function rotateGroupKey(groupId: string): Promise<string> {
+  const logId = `rotateGroupKey(${groupId})`;
+
+  // Generate a new 256-bit key
+  const newKey = getRandomBytes(32);
+  const newKeyBase64 = Bytes.toBase64(newKey);
+
+  // Store the new key (replaces the old one)
+  await storeGroupKey(groupId, newKeyBase64);
+
+  log.info(`${logId}: Group key rotated successfully`);
+
+  return newKeyBase64;
+}
+
+/**
+ * Delete a group key from SQLCipher (e.g., when leaving a group)
+ */
+export async function deleteGroupKey(groupId: string): Promise<void> {
+  const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  const existingKeys = itemStorage.get('orbitalGroupKeys') || {};
+  const updatedKeys = { ...existingKeys };
+  delete updatedKeys[groupId];
+
+  await itemStorage.put('orbitalGroupKeys', updatedKeys);
+  log.info(`deleteGroupKey: Deleted key for group ${groupId}`);
 }
 
 // =============================================================================

@@ -376,12 +376,14 @@ export function encryptAesGcm(
 export function decryptAesGcm(
   key: Uint8Array,
   iv: Uint8Array,
-  ciphertext: Uint8Array
+  ciphertext: Uint8Array,
+  aad?: Uint8Array
 ): Uint8Array {
   return decrypt(CipherType.AES256GCM, {
     key,
     ciphertext,
     iv,
+    aad,
   });
 }
 

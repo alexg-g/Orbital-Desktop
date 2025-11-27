@@ -46,7 +46,9 @@ export type WebSocketEventType =
   | 'new_message'
   | 'new_thread'
   | 'new_reply'
-  | 'media_uploaded';
+  | 'media_uploaded'
+  | 'member_left'
+  | 'key_rotated';
 
 /**
  * WebSocket event structure
