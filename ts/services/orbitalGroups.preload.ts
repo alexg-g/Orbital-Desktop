@@ -222,8 +222,15 @@ export async function joinGroup(inviteCode: string): Promise<JoinGroupResult> {
       throw new Error('Not authenticated. Please log in first.');
     }
 
+    // For MVP, we send a placeholder encrypted_group_key
+    // In production, this would be the group key encrypted with
+    // the joining user's public key (proper key exchange via Issue #49)
+    // The backend will return the actual group_key in the response
+    const placeholderKey = Bytes.toBase64(getRandomBytes(32));
+
     const requestBody = JSON.stringify({
       invite_code: cleanCode,
+      encrypted_group_key: placeholderKey,
     });
 
     const response = await makeRequest({

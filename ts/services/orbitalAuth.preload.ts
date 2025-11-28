@@ -21,6 +21,7 @@
 
 import * as https from 'node:https';
 import * as http from 'node:http';
+import * as crypto from 'node:crypto';
 import { URL } from 'node:url';
 import { createLogger } from '../logging/log.std.js';
 import { itemStorage } from '../textsecure/Storage.preload.js';
@@ -146,11 +147,17 @@ export async function signup(
 
   log.info('Attempting signup', { username, email });
 
+  // Generate a public key for key exchange
+  // For MVP, we use a simple JWK structure that will be stored server-side
+  // TODO: Use proper Signal Protocol key generation in Issue #49
+  const publicKey = await generateSignupPublicKey();
+
   const requestBody = JSON.stringify({
     username: username.trim(),
     password,
     email: email.trim().toLowerCase(),
-    invite_code: inviteCode.trim().toUpperCase(),
+    inviteCode: inviteCode.trim().toUpperCase(),
+    public_key: publicKey,
   });
 
   try {
@@ -366,6 +373,56 @@ export async function logout(): Promise<void> {
  */
 export async function clearJWT(): Promise<void> {
   await logout();
+}
+
+/**
+ * Generate a public key for user signup
+ * Uses Web Crypto API to generate an ECDH key pair
+ * Returns the public key in JWK format for server storage
+ *
+ * TODO: Integrate with Signal Protocol proper key management (Issue #49)
+ */
+async function generateSignupPublicKey(): Promise<object> {
+  try {
+    // Use libsignal's key generation for proper Signal Protocol compatibility
+    const { generateKeyPair } = await import('../Curve.node.js');
+    const keyPair = generateKeyPair();
+
+    // Get the public key bytes
+    const publicKeyBytes = keyPair.publicKey.serialize();
+
+    // Convert to a JWK-like structure for server storage
+    // Note: This is a simplified format for MVP
+    // The actual key can be used for Signal Protocol key exchange
+    const publicKeyJwk = {
+      kty: 'OKP',
+      crv: 'X25519',
+      x: Buffer.from(publicKeyBytes).toString('base64url'),
+      kid: `orbital-${Date.now()}`,
+    };
+
+    // Store the private key in SQLCipher for later use
+    const privateKeyBytes = keyPair.privateKey.serialize();
+    await itemStorage.put('orbitalIdentityPrivateKey', Buffer.from(privateKeyBytes).toString('base64'));
+    await itemStorage.put('orbitalIdentityPublicKey', Buffer.from(publicKeyBytes).toString('base64'));
+
+    log.info('Generated signup key pair');
+
+    return publicKeyJwk;
+  } catch (error) {
+    log.error('Failed to generate key pair, using fallback', { error: Errors.toLogFormat(error) });
+
+    // Fallback: generate a simple random key structure
+    // This allows signup to proceed but key exchange will need to be redone
+    const randomBytes = crypto.randomBytes(32);
+
+    return {
+      kty: 'OKP',
+      crv: 'X25519',
+      x: Buffer.from(randomBytes).toString('base64url'),
+      kid: `orbital-fallback-${Date.now()}`,
+    };
+  }
 }
 
 /**

@@ -192,7 +192,6 @@ export function OrbitalSettingsGeneral({
       setDisplayName(sanitized);
       try {
         await setSetting('orbital.settings.general.displayName', sanitized);
-        console.log('Display name sanitized and saved:', sanitized);
       } catch (error) {
         console.error('Failed to save display name:', error);
       }
@@ -202,7 +201,6 @@ export function OrbitalSettingsGeneral({
     setNameError(null);
     try {
       await setSetting('orbital.settings.general.displayName', name);
-      console.log('Display name saved:', name);
     } catch (error) {
       console.error('Failed to save display name:', error);
     }

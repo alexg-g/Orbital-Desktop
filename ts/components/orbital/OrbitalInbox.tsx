@@ -24,7 +24,8 @@ import { EmojiSkinTone } from '../fun/data/emojis.std';
 import { TitlebarDragArea } from '../TitlebarDragArea.dom';
 import { OrbitSelectorModal } from './OrbitSelectorModal';
 import { CreateGroupModal } from './CreateGroupModal';
-import type { GroupInfo, CreateGroupResult } from '../../services/orbitalGroups.preload.js';
+import { JoinGroupModal } from './JoinGroupModal';
+import type { GroupInfo, CreateGroupResult, JoinGroupResult } from '../../services/orbitalGroups.preload.js';
 import type {
   ThreadInfo,
   ReplyInfo,
@@ -38,7 +39,7 @@ import {
   getLocalThreads,
   type LocalThread,
 } from './localThreadStorage';
-import { getCurrentUserProfile } from './settingsStorage';
+import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache } from './settingsStorage';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -405,6 +406,7 @@ export function OrbitalInbox({
   const [groupsError, setGroupsError] = useState<string | undefined>(undefined);
   const [showOrbitSelector, setShowOrbitSelector] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showJoinGroup, setShowJoinGroup] = useState(false);
 
   // Contact picker modal state
   const [showContactPicker, setShowContactPicker] = useState(false);
@@ -444,6 +446,14 @@ export function OrbitalInbox({
         const userId = await getUserId();
         setCurrentUserId(userId);
         console.log('[OrbitalInbox] Loaded current user ID:', userId);
+
+        // Set the userId cache in settingsStorage so it can scope settings properly
+        if (userId) {
+          setUserIdCache(userId);
+          // Migrate settings from global keys to user-scoped keys
+          // This preserves existing settings when upgrading to multi-user support
+          await migrateUserSettings();
+        }
       } catch (err) {
         console.error('[OrbitalInbox] Failed to load user ID:', err);
       }
@@ -1215,6 +1225,9 @@ export function OrbitalInbox({
   const handleLogout = useCallback(() => {
     // Clear auth state
     setIsLoggedIn(false);
+    setCurrentUserId(null);
+    // Clear cached user ID for settings storage
+    clearUserIdCache();
     // Reset all data state
     setGroups([]);
     setSelectedGroupIdState(null);
@@ -1295,13 +1308,27 @@ export function OrbitalInbox({
   }, [getGroups, setSelectedGroupId]);
 
   const handleJoinOrbit = useCallback(() => {
-    // TODO: Navigate to join orbit flow or show modal
-    console.log('Join orbit clicked');
-    // For now, just switch to settings page with invites
+    // Show the JoinGroupModal
     setShowOrbitSelector(false);
-    setShowSettings(true);
-    setSettingsPage(OrbitalSettingsPage.Invites);
+    setShowSettings(false);
+    setShowJoinGroup(true);
   }, []);
+
+  // Handler for successful group join
+  const handleGroupJoined = useCallback(async (result: JoinGroupResult) => {
+    console.log('Successfully joined group:', result.groupId);
+    setShowJoinGroup(false);
+    // Refresh groups list
+    if (getGroups) {
+      const updatedGroups = await getGroups();
+      setGroups(updatedGroups);
+    }
+    // Select the newly joined group
+    if (setSelectedGroupId) {
+      await setSelectedGroupId(result.groupId);
+      setSelectedGroupIdState(result.groupId);
+    }
+  }, [getGroups, setSelectedGroupId]);
 
   // Derive current group from groups and selectedGroupId
   const currentGroup = groups.find(g => g.groupId === selectedGroupId) || null;
@@ -1608,6 +1635,16 @@ export function OrbitalInbox({
           onClose={() => setShowCreateGroup(false)}
           onGroupCreated={handleGroupCreated}
           createGroup={createGroup}
+        />
+      )}
+
+      {/* Join Group Modal */}
+      {showJoinGroup && joinGroup && (
+        <JoinGroupModal
+          i18n={i18n}
+          onClose={() => setShowJoinGroup(false)}
+          onGroupJoined={handleGroupJoined}
+          joinGroup={joinGroup}
         />
       )}
 

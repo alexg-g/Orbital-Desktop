@@ -220,18 +220,62 @@ export async function listThreads(
       threads.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
 
+    log.info(`${logId}: Retrieved ${threads.length} threads from local SQLCipher`);
+
+    // 2. If local storage is empty (new user/fresh join), wait for sync to complete
+    // This ensures new orbit members see existing threads immediately
+    if (threads.length === 0) {
+      log.info(`${logId}: Local storage empty, waiting for server sync...`);
+      try {
+        await syncThreadsFromServer(groupId);
+
+        // Re-read from local after sync
+        const syncedThreads = await DataReader.getOrbitalThreadsByGroupId(groupId, {
+          limit: options?.limit,
+          offset: options?.offset,
+        });
+
+        const syncedResult: ThreadInfo[] = syncedThreads.map((t: OrbitalThreadType) => ({
+          threadId: t.id,
+          groupId: t.groupId,
+          authorId: t.authorId,
+          authorUsername: '',
+          encryptedTitle: t.encryptedTitle,
+          encryptedBody: t.encryptedBody,
+          replyCount: t.replyCount,
+          createdAt: new Date(t.createdAt).toISOString(),
+          mediaCount: t.mediaCount,
+        }));
+
+        // Sort synced results
+        if (options?.sort === 'created_asc') {
+          syncedResult.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        } else {
+          syncedResult.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }
+
+        log.info(`${logId}: After sync, found ${syncedResult.length} threads`);
+
+        return {
+          threads: syncedResult,
+          totalCount: syncedResult.length,
+          hasMore: false,
+        };
+      } catch (err) {
+        log.warn(`${logId}: Server sync failed for empty local, returning empty:`, Errors.toLogFormat(err));
+      }
+    } else {
+      // 3. Local has data - trigger background sync (non-blocking) for updates
+      syncThreadsFromServer(groupId).catch(err => {
+        log.warn(`${logId}: Background sync failed:`, Errors.toLogFormat(err));
+      });
+    }
+
     const result: ListThreadsResult = {
       threads,
       totalCount: threads.length,
       hasMore: false, // TODO: implement proper pagination
     };
-
-    log.info(`${logId}: Retrieved ${threads.length} threads from local SQLCipher`);
-
-    // 2. Trigger background sync from server (non-blocking)
-    syncThreadsFromServer(groupId).catch(err => {
-      log.warn(`${logId}: Background sync failed:`, Errors.toLogFormat(err));
-    });
 
     return result;
   } catch (error) {
