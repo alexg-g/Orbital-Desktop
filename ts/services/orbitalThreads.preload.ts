@@ -45,6 +45,8 @@ import * as Errors from '../types/errors.std.js';
 import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
 import { DataReader, DataWriter } from '../sql/Client.preload.js';
 import type { OrbitalThreadType } from '../types/OrbitalThread.std.js';
+import { encryptAesGcm, decryptAesGcm, getRandomBytes } from '../Crypto.node.js';
+import * as Bytes from '../Bytes.std.js';
 
 const log = createLogger('OrbitalThreads');
 
@@ -52,6 +54,11 @@ const log = createLogger('OrbitalThreads');
  * Orbital API base URL
  */
 const ORBITAL_API_URL = process.env.ORBITAL_API_URL || 'https://api.orbitl.org';
+
+/**
+ * AES-GCM IV length (12 bytes recommended by NIST for GCM)
+ */
+const AES_GCM_IV_LENGTH = 12;
 
 /**
  * Thread and reply limits
@@ -64,6 +71,106 @@ export const THREAD_LIMITS = {
   REPLIES_PER_PAGE_DEFAULT: 50,
   REPLIES_PER_PAGE_MAX: 100,
 };
+
+// =============================================================================
+// ENCRYPTION HELPERS
+// =============================================================================
+
+/**
+ * Get the group encryption key from SQLCipher storage
+ *
+ * @param groupId Group/orbit ID
+ * @returns Group key as Uint8Array or null if not found
+ */
+async function getGroupKey(groupId: string): Promise<Uint8Array | null> {
+  try {
+    const { itemStorage } = await import('../textsecure/Storage.preload.js');
+    const keys = itemStorage.get('orbitalGroupKeys');
+    if (!keys || !keys[groupId]) {
+      log.error(`getGroupKey: No key found for group ${groupId}`);
+      return null;
+    }
+    return Bytes.fromBase64(keys[groupId]);
+  } catch (error) {
+    log.error('getGroupKey: Failed to retrieve group key:', Errors.toLogFormat(error));
+    return null;
+  }
+}
+
+/**
+ * Encrypt text content with group key using AES-256-GCM
+ *
+ * @param groupId Group ID (used as AAD for binding)
+ * @param plaintext Plain text to encrypt
+ * @returns Object with encrypted content (base64) and IV (base64)
+ */
+async function encryptContent(
+  groupId: string,
+  plaintext: string
+): Promise<{ encrypted: string; iv: string }> {
+  const groupKey = await getGroupKey(groupId);
+  if (!groupKey) {
+    throw new Error('No group key found. Cannot encrypt content.');
+  }
+
+  // Convert plaintext to bytes
+  const plaintextBytes = Bytes.fromString(plaintext);
+
+  // Generate random 12-byte IV (NIST recommendation for GCM)
+  const iv = getRandomBytes(AES_GCM_IV_LENGTH);
+
+  // Use groupId as AAD to bind encryption to this specific group
+  // Prevents cross-group message manipulation
+  const aad = Bytes.fromString(groupId);
+
+  // Encrypt with AES-256-GCM
+  const ciphertext = encryptAesGcm(groupKey, iv, plaintextBytes, aad);
+
+  return {
+    encrypted: Bytes.toBase64(ciphertext),
+    iv: Bytes.toBase64(iv),
+  };
+}
+
+/**
+ * Decrypt text content with group key using AES-256-GCM
+ *
+ * @param groupId Group ID (used as AAD for verification)
+ * @param encryptedBase64 Encrypted content (base64)
+ * @param ivBase64 Initialization vector (base64)
+ * @returns Decrypted plaintext or empty string on failure
+ */
+async function decryptContent(
+  groupId: string,
+  encryptedBase64: string,
+  ivBase64: string
+): Promise<string> {
+  try {
+    const groupKey = await getGroupKey(groupId);
+    if (!groupKey) {
+      log.warn('decryptContent: No group key found');
+      return '[Encrypted - Key Not Available]';
+    }
+
+    // Convert from base64
+    const ciphertext = Bytes.fromBase64(encryptedBase64);
+    const iv = Bytes.fromBase64(ivBase64);
+
+    // Use groupId as AAD to verify message was encrypted for this group
+    const aad = Bytes.fromString(groupId);
+
+    // Decrypt with AES-256-GCM
+    const plaintextBytes = decryptAesGcm(groupKey, iv, ciphertext, aad);
+    return Bytes.toString(plaintextBytes);
+  } catch (error) {
+    log.error('decryptContent: Decryption failed:', Errors.toLogFormat(error));
+    return '[Decryption Failed]';
+  }
+}
+
+// =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
 
 /**
  * Thread information
@@ -200,17 +307,33 @@ export async function listThreads(
     console.log('[DEBUG] listThreads: SQLCipher returned', localThreads.length, 'threads:', JSON.stringify(localThreads, null, 2));
 
     // Convert OrbitalThreadType to ThreadInfo for UI compatibility
-    const threads: ThreadInfo[] = localThreads.map((t: OrbitalThreadType) => ({
-      threadId: t.id,
-      groupId: t.groupId,
-      authorId: t.authorId,
-      authorUsername: '', // Will be resolved by UI from orbit members
-      encryptedTitle: t.encryptedTitle,
-      encryptedBody: t.encryptedBody,
-      replyCount: t.replyCount,
-      createdAt: new Date(t.createdAt).toISOString(),
-      mediaCount: t.mediaCount,
-    }));
+    // Decrypt title and body if they have IVs (encrypted), otherwise pass through (legacy plaintext)
+    const threads: ThreadInfo[] = await Promise.all(
+      localThreads.map(async (t: OrbitalThreadType) => {
+        let decryptedTitle = t.encryptedTitle;
+        let decryptedBody = t.encryptedBody;
+
+        // If IVs exist, content is encrypted - decrypt it
+        if (t.titleIv && t.titleIv.length > 0) {
+          decryptedTitle = await decryptContent(t.groupId, t.encryptedTitle, t.titleIv);
+        }
+        if (t.bodyIv && t.bodyIv.length > 0) {
+          decryptedBody = await decryptContent(t.groupId, t.encryptedBody, t.bodyIv);
+        }
+
+        return {
+          threadId: t.id,
+          groupId: t.groupId,
+          authorId: t.authorId,
+          authorUsername: '', // Will be resolved by UI from orbit members
+          encryptedTitle: decryptedTitle, // Now contains decrypted plaintext
+          encryptedBody: decryptedBody,   // Now contains decrypted plaintext
+          replyCount: t.replyCount,
+          createdAt: new Date(t.createdAt).toISOString(),
+          mediaCount: t.mediaCount,
+        };
+      })
+    );
 
     // Sort if requested
     if (options?.sort === 'created_asc') {
@@ -235,17 +358,32 @@ export async function listThreads(
           offset: options?.offset,
         });
 
-        const syncedResult: ThreadInfo[] = syncedThreads.map((t: OrbitalThreadType) => ({
-          threadId: t.id,
-          groupId: t.groupId,
-          authorId: t.authorId,
-          authorUsername: '',
-          encryptedTitle: t.encryptedTitle,
-          encryptedBody: t.encryptedBody,
-          replyCount: t.replyCount,
-          createdAt: new Date(t.createdAt).toISOString(),
-          mediaCount: t.mediaCount,
-        }));
+        const syncedResult: ThreadInfo[] = await Promise.all(
+          syncedThreads.map(async (t: OrbitalThreadType) => {
+            let decryptedTitle = t.encryptedTitle;
+            let decryptedBody = t.encryptedBody;
+
+            // Decrypt if encrypted
+            if (t.titleIv && t.titleIv.length > 0) {
+              decryptedTitle = await decryptContent(t.groupId, t.encryptedTitle, t.titleIv);
+            }
+            if (t.bodyIv && t.bodyIv.length > 0) {
+              decryptedBody = await decryptContent(t.groupId, t.encryptedBody, t.bodyIv);
+            }
+
+            return {
+              threadId: t.id,
+              groupId: t.groupId,
+              authorId: t.authorId,
+              authorUsername: '',
+              encryptedTitle: decryptedTitle,
+              encryptedBody: decryptedBody,
+              replyCount: t.replyCount,
+              createdAt: new Date(t.createdAt).toISOString(),
+              mediaCount: t.mediaCount,
+            };
+          })
+        );
 
         // Sort synced results
         if (options?.sort === 'created_asc') {
@@ -395,24 +533,25 @@ export async function createThread(
     const threadId = uuidv4();
     const createdAt = Date.now();
 
-    // For now, pass title/body as-is
-    // TODO: Encrypt with group key before sending
-    const encryptedTitle = title;
-    const encryptedBody = body || '';
+    // 2. Encrypt title and body with group key
+    const { encrypted: encryptedTitle, iv: titleIv } = await encryptContent(groupId, title);
+    const { encrypted: encryptedBody, iv: bodyIv } = await encryptContent(groupId, body || '');
+
+    log.info(`${logId}: Content encrypted - title IV: ${titleIv.substring(0, 16)}..., body IV: ${bodyIv.substring(0, 16)}...`);
 
     // Get current user ID for author
     const { getUserId } = await import('./orbitalAuth.preload.js');
     const authorId = await getUserId() || 'unknown';
 
-    // 2. Store in local SQLCipher FIRST (source of truth)
+    // 3. Store in local SQLCipher FIRST (source of truth)
     const thread: OrbitalThreadType = {
       id: threadId,
       groupId,
       authorId,
       encryptedTitle,
       encryptedBody,
-      titleIv: '', // TODO: generate IV for encryption
-      bodyIv: '',  // TODO: generate IV for encryption
+      titleIv,
+      bodyIv,
       createdAt,
       replyCount: 0,
       mediaCount: mediaIds?.length || 0,
@@ -430,15 +569,15 @@ export async function createThread(
 
     log.info(`${logId}: Thread saved to local SQLCipher`, { threadId });
 
-    // 3. Return immediately with local data
+    // 4. Return immediately with local data
     const result: CreateThreadResult = {
       threadId,
       groupId,
       createdAt: new Date(createdAt).toISOString(),
     };
 
-    // 4. Sync to server in background (non-blocking)
-    syncThreadToServer(threadId, groupId, encryptedTitle, encryptedBody, mediaIds)
+    // 5. Sync to server in background (non-blocking)
+    syncThreadToServer(threadId, groupId, encryptedTitle, encryptedBody, titleIv, bodyIv, mediaIds)
       .then(result => {
         if (result.success) {
           log.info(`${logId}: Thread synced to server`, { threadId });
@@ -478,6 +617,13 @@ export async function getReplies(
   }
 
   try {
+    // Get the thread to find the groupId (needed for decryption)
+    const thread = await DataReader.getOrbitalThread(threadId);
+    if (!thread) {
+      throw new Error('Thread not found. Cannot decrypt replies.');
+    }
+    const groupId = thread.groupId;
+
     // Get JWT token for authentication
     const { getJWT } = await import('./orbitalAuth.preload.js');
     const jwtToken = await getJWT();
@@ -513,24 +659,36 @@ export async function getReplies(
 
     const data = JSON.parse(response.data);
 
-    const replies: ReplyInfo[] = (data.replies || []).map((r: any) => ({
-      replyId: r.reply_id,
-      threadId: r.thread_id,
-      authorId: r.author_id,
-      authorUsername: r.author_username,
-      encryptedBody: r.encrypted_body,
-      createdAt: r.created_at,
-      mediaCount: r.media_count || 0,
-      media: r.media
-        ? r.media.map((m: any) => ({
-            mediaId: m.media_id,
-            encryptedMetadata: m.encrypted_metadata,
-            sizeBytes: m.size_bytes,
-            uploadedAt: m.uploaded_at,
-            expiresAt: m.expires_at,
-          }))
-        : undefined,
-    }));
+    // Decrypt reply bodies if they have IVs
+    const replies: ReplyInfo[] = await Promise.all(
+      (data.replies || []).map(async (r: any) => {
+        let decryptedBody = r.encrypted_body;
+
+        // If body_iv exists, decrypt the body
+        if (r.body_iv && r.body_iv.length > 0) {
+          decryptedBody = await decryptContent(groupId, r.encrypted_body, r.body_iv);
+        }
+
+        return {
+          replyId: r.reply_id,
+          threadId: r.thread_id,
+          authorId: r.author_id,
+          authorUsername: r.author_username,
+          encryptedBody: decryptedBody, // Now contains decrypted plaintext
+          createdAt: r.created_at,
+          mediaCount: r.media_count || 0,
+          media: r.media
+            ? r.media.map((m: any) => ({
+                mediaId: m.media_id,
+                encryptedMetadata: m.encrypted_metadata,
+                sizeBytes: m.size_bytes,
+                uploadedAt: m.uploaded_at,
+                expiresAt: m.expires_at,
+              }))
+            : undefined,
+        };
+      })
+    );
 
     const result: ListRepliesResult = {
       replies,
@@ -626,7 +784,9 @@ export async function createReply(
       threadId,  // Use threadId parameter, not thread.id (which may be undefined from SQLite row mapping)
       groupIdForSync,
       encryptedTitleForSync,
-      encryptedBodyForSync
+      encryptedBodyForSync,
+      thread.titleIv || undefined,
+      thread.bodyIv || undefined
     );
 
     if (!syncResult.success) {
@@ -639,12 +799,13 @@ export async function createReply(
     }
     log.info(`${logId}: Thread synced successfully`);
 
-    // For now, pass body as-is
-    // TODO: Encrypt with group key before sending
-    const encryptedBody = body;
+    // Encrypt reply body with group key
+    const { encrypted: encryptedBody, iv: bodyIv } = await encryptContent(groupIdForSync, body);
+    log.info(`${logId}: Reply body encrypted - IV: ${bodyIv.substring(0, 16)}...`);
 
     const requestBody = JSON.stringify({
       encrypted_body: encryptedBody,
+      body_iv: bodyIv, // Send IV so server can relay it to other clients
       ...(mediaIds && mediaIds.length > 0 && { media_ids: mediaIds }),
     });
 
@@ -715,6 +876,8 @@ async function syncThreadToServer(
   groupId: string,
   encryptedTitle: string,
   encryptedBody: string,
+  titleIv?: string,
+  bodyIv?: string,
   mediaIds?: string[]
 ): Promise<SyncResult> {
   const logId = `syncThreadToServer(${threadId})`;
@@ -736,6 +899,8 @@ async function syncThreadToServer(
       group_id: groupId,
       encrypted_title: encryptedTitle,
       encrypted_body: safeBody,
+      ...(titleIv && { title_iv: titleIv }),
+      ...(bodyIv && { body_iv: bodyIv }),
       ...(mediaIds && mediaIds.length > 0 && { media_ids: mediaIds }),
     });
 
@@ -883,7 +1048,9 @@ export async function syncPendingThreads(): Promise<void> {
         thread.id,
         thread.groupId,
         thread.encryptedTitle,
-        thread.encryptedBody
+        thread.encryptedBody,
+        thread.titleIv || undefined,
+        thread.bodyIv || undefined
       );
     }
 
