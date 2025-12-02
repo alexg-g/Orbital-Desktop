@@ -22,6 +22,7 @@ export type OrbitalThread = {
   lastReplyTimestamp?: number;
   lastReplyAuthor?: string;
   avatarUrl?: string;
+  mediaIds?: string[]; // Media IDs for the original post
 };
 
 export type OrbitalThreadListProps = {

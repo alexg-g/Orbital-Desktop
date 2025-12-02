@@ -11,6 +11,7 @@ import {
   createThread,
   getReplies,
   createReply,
+  syncOrbitHistory,
 } from '../../services/orbitalThreads.preload.js';
 import {
   listGroups,
@@ -29,6 +30,7 @@ import {
 import {
   downloadMediaFromOrbital,
   getMediaDownloadStatus,
+  downloadAllPendingMedia as downloadAllPendingMediaService,
 } from '../../services/orbitalMediaDownload.preload.js';
 import { getAbsoluteAttachmentPath } from '../../util/migrations.preload.js';
 import { uploadMediaToOrbital } from '../../services/orbitalMediaUpload.preload.js';
@@ -105,6 +107,19 @@ async function sendChatMessageWrapper(conversationId: string, text: string) {
   return sendMessage(conversationId, encryptedEnvelope);
 }
 
+// Wrapper for downloadAllPendingMedia to match expected signature
+async function downloadAllPendingMedia(options: {
+  onProgress: (progress: number, current: number, total: number) => void;
+  getAbsoluteAttachmentPath: (path: string) => string;
+}) {
+  const result = await downloadAllPendingMediaService({
+    onProgress: options.onProgress,
+    getAbsoluteAttachmentPath: options.getAbsoluteAttachmentPath,
+    concurrency: 3,
+  });
+  return { successful: result.successful, failed: result.failed };
+}
+
 export const SmartOrbitalInbox = memo(function SmartOrbitalInbox(): JSX.Element {
   const i18n = useSelector(getIntl);
 
@@ -143,6 +158,9 @@ export const SmartOrbitalInbox = memo(function SmartOrbitalInbox(): JSX.Element 
       fetchChatMessages={fetchChatMessagesWrapper}
       sendChatMessage={sendChatMessageWrapper}
       decodeChatEnvelope={decryptEnvelope}
+      // Sync functions for orbit history (used when joining an orbit)
+      syncOrbitHistory={syncOrbitHistory}
+      downloadAllPendingMedia={downloadAllPendingMedia}
     />
   );
 });

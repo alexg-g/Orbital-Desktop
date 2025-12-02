@@ -763,6 +763,86 @@
       color: $orbital-dark-text-primary;
     }
   }
+
+  // Syncing state - shown while syncing orbit history
+  &--syncing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-xl;
+    text-align: center;
+  }
+
+  &__sync-status {
+    margin-bottom: $orbital-space-lg;
+  }
+
+  &__sync-phase {
+    margin: 0 0 $orbital-space-xs;
+    font-size: $orbital-font-size-md;
+    font-weight: bold;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__sync-count {
+    margin: 0;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    font-family: $orbital-font-mono;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__progress-bar {
+    width: 100%;
+    max-width: 280px;
+    height: 10px;
+    background-color: $orbital-surface;
+    border: 1px solid $orbital-border-strong;
+    border-radius: $orbital-radius-base; // 3px - retro squared-off feel
+    overflow: hidden;
+    margin-bottom: $orbital-space-lg;
+    // Inset shadow for beveled/sunken 2000s look
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+
+    @include mixins.dark-theme {
+      background-color: $orbital-dark-surface;
+      border-color: $orbital-dark-border-strong;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  &__progress-fill {
+    height: 100%;
+    // SOLID COLOR ONLY - No gradients per brand guidelines
+    background: $orbital-blue;
+    border-radius: $orbital-radius-sm; // 2px - slightly squared
+    transition: width $orbital-duration-fast ease; // 150ms - quick retro feel
+    // Subtle top highlight for beveled "raised" look (like Windows XP progress bars)
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-blue;
+    }
+  }
+
+  &__sync-hint {
+    margin: 0;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    line-height: $orbital-line-height-normal;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
 }
 
 // =============================================================================

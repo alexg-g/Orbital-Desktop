@@ -3,7 +3,6 @@
 // Copyright 2025 Orbital
 
 import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { Button } from 'react-aria-components';
 import type { LocalizerType } from '../../types/Util.std.js';
 import { FunPicker } from '../fun/FunPicker.dom.js';
@@ -103,7 +102,7 @@ export function OrbitalComposer({
   onSubmit,
   onSelectGif,
   onSelectSticker,
-  i18n,
+  i18n: _i18n,
   getQuotaInfo,
   checkUploadAllowed,
   formatBytes,
@@ -233,8 +232,11 @@ export function OrbitalComposer({
 
   const handleSubmit = useCallback(async () => {
     if (mode === 'thread') {
-      // Thread mode requires title
+      // Thread mode requires title AND (body OR media)
       if (!title.trim()) {
+        return;
+      }
+      if (!body.trim() && selectedFiles.length === 0 && uploadedMediaIds.length === 0) {
         return;
       }
 
@@ -261,8 +263,8 @@ export function OrbitalComposer({
       setBody('');
       editorApiRef.current?.clear();
     } else {
-      // Reply mode only needs body
-      if (!body.trim()) {
+      // Reply mode requires body OR files/media
+      if (!body.trim() && selectedFiles.length === 0 && uploadedMediaIds.length === 0) {
         return;
       }
 
@@ -389,9 +391,6 @@ export function OrbitalComposer({
       const mediaIds: string[] = [];
       const errors: Record<string, string> = {};
 
-      // Generate thread ID for new threads (for uploads to be associated with)
-      const threadId = providedThreadId || uuidv4();
-
       for (const selectedFile of filesToUpload) {
         const fileId = `${selectedFile.name}-${selectedFile.size}`;
 
@@ -446,12 +445,13 @@ export function OrbitalComposer({
     setUploadedMediaIds(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Check if there's any content to submit
+  // Check if there's any content to submit (text, files, or media)
   const hasContent =
     body.trim().length > 0 ||
     selectedGif !== null ||
     selectedSticker !== null ||
-    selectedFiles.length > 0;
+    selectedFiles.length > 0 ||
+    uploadedMediaIds.length > 0;
 
   const isSubmitDisabled =
     uploadingMedia ||
@@ -665,28 +665,12 @@ export function OrbitalComposer({
             className="OrbitalComposer__icon-btn"
             aria-label="Attach file"
             title={
-              canUploadMedia ? 'Attach file' : 'Storage quota full - cannot upload'
+              canUploadMedia ? 'Attach photos, videos, or files' : 'Storage quota full - cannot upload'
             }
             onClick={handleOpenMediaPicker}
             disabled={!canUploadMedia}
           >
             📎
-          </button>
-          <button
-            type="button"
-            className="OrbitalComposer__icon-btn"
-            aria-label="Record video"
-            title="Record video"
-          >
-            🎥
-          </button>
-          <button
-            type="button"
-            className="OrbitalComposer__icon-btn"
-            aria-label="Add photo"
-            title="Add photo"
-          >
-            📷
           </button>
 
           {/* Fun Picker: Emojis, GIFs, and Stickers */}

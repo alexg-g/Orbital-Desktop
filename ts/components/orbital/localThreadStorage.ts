@@ -25,6 +25,7 @@ export type LocalThread = {
   hasVideo: boolean;
   hasImage: boolean;
   avatarUrl?: string; // User's avatar URL at time of posting
+  mediaIds?: string[]; // Media IDs for the original post
 };
 
 /**

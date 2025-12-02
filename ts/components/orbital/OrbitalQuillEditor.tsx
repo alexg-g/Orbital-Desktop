@@ -21,6 +21,7 @@ export type OrbitalQuillEditorProps = {
   onReady?: (editor: {
     insertText: (text: string) => void;
     insertEmoji: (emoji: string) => void;
+    clear: () => void;
   }) => void;
 };
 

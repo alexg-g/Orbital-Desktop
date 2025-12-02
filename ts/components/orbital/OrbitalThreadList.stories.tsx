@@ -14,7 +14,10 @@ const meta: Meta<typeof OrbitalThreadList> = {
   args: {
     i18n,
     onThreadClick: action('onThreadClick'),
-    onCreateThread: action('onCreateThread')}};
+    onCreateThread: action('onCreateThread'),
+    onSettingsClick: action('onSettingsClick'),
+  },
+};
 
 export default meta;
 type Story = StoryObj<typeof OrbitalThreadList>;
@@ -23,7 +26,9 @@ type Story = StoryObj<typeof OrbitalThreadList>;
 const mockThreads: ReadonlyArray<OrbitalThread> = [
   {
     id: '1',
+    orbitId: 'orbit-1',
     title: 'Summer vacation photos are up!',
+    body: 'Check out all the amazing photos from our trip!',
     author: 'Mom',
     authorId: 'user-1',
     timestamp: Date.now() - 1000 * 60 * 30, // 30 minutes ago
@@ -38,7 +43,9 @@ const mockThreads: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: '2',
+    orbitId: 'orbit-1',
     title: 'Recipe for grandma\'s cookies',
+    body: 'Does anyone have the secret recipe?',
     author: 'Sarah',
     authorId: 'user-2',
     timestamp: Date.now() - 1000 * 60 * 60 * 2, // 2 hours ago
@@ -53,7 +60,9 @@ const mockThreads: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: '3',
+    orbitId: 'orbit-1',
     title: 'Check out this funny video',
+    body: 'You have to see this hilarious moment!',
     author: 'Alex',
     authorId: 'user-3',
     timestamp: Date.now() - 1000 * 60 * 60 * 5, // 5 hours ago
@@ -66,7 +75,9 @@ const mockThreads: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: '4',
+    orbitId: 'orbit-1',
     title: 'Planning the family reunion',
+    body: 'Let\'s start planning for next summer!',
     author: 'Uncle Bob',
     authorId: 'user-4',
     timestamp: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
@@ -81,7 +92,9 @@ const mockThreads: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: '5',
+    orbitId: 'orbit-1',
     title: 'Emma\'s first day of school',
+    body: 'Our little one is growing up so fast!',
     author: 'Jessica',
     authorId: 'user-5',
     timestamp: Date.now() - 1000 * 60 * 60 * 24 * 2, // 2 days ago
@@ -96,7 +109,9 @@ const mockThreads: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: '6',
+    orbitId: 'orbit-1',
     title: 'Looking for recommendations on camping gear',
+    body: 'Planning a camping trip, need gear suggestions.',
     author: 'David',
     authorId: 'user-6',
     timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3, // 3 days ago

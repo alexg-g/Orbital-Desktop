@@ -173,6 +173,16 @@ async function decryptContent(
 // =============================================================================
 
 /**
+ * Sync progress information
+ */
+export type SyncProgress = {
+  phase: 'threads' | 'complete';
+  current: number;
+  total: number;
+  percent: number;
+};
+
+/**
  * Thread information
  */
 export type ThreadInfo = {
@@ -185,6 +195,7 @@ export type ThreadInfo = {
   replyCount: number;
   createdAt: string;
   mediaCount?: number;
+  media?: MediaInfo[]; // Optional media info (available from detailed thread list)
 };
 
 /**
@@ -524,6 +535,13 @@ export async function createThread(
     throw new Error(`Thread title must be ${THREAD_LIMITS.TITLE_MAX_LENGTH} characters or less`);
   }
 
+  // Require body OR media (allow media-only threads with title)
+  const hasBody = body && body.trim().length > 0;
+  const hasMedia = mediaIds && mediaIds.length > 0;
+  if (!hasBody && !hasMedia) {
+    throw new Error('Thread must have text content or attached media');
+  }
+
   if (body && body.length > THREAD_LIMITS.BODY_MAX_LENGTH) {
     throw new Error(`Thread body must be ${THREAD_LIMITS.BODY_MAX_LENGTH} characters or less`);
   }
@@ -726,11 +744,14 @@ export async function createReply(
     throw new Error('Thread ID is required');
   }
 
-  if (!body || body.trim().length === 0) {
-    throw new Error('Reply body is required');
+  // Require body OR media (allow media-only replies)
+  const hasBody = body && body.trim().length > 0;
+  const hasMedia = mediaIds && mediaIds.length > 0;
+  if (!hasBody && !hasMedia) {
+    throw new Error('Reply must have text content or attached media');
   }
 
-  if (body.length > THREAD_LIMITS.BODY_MAX_LENGTH) {
+  if (body && body.length > THREAD_LIMITS.BODY_MAX_LENGTH) {
     throw new Error(`Reply body must be ${THREAD_LIMITS.BODY_MAX_LENGTH} characters or less`);
   }
 
@@ -744,7 +765,7 @@ export async function createReply(
     }
 
     // Check if parent thread exists and ensure it's synced
-    const thread = DataReader.getOrbitalThread(threadId);
+    const thread = await DataReader.getOrbitalThread(threadId);
     log.info(`${logId}: Looking up thread in local storage`, {
       found: !!thread,
       pendingSync: thread?.pendingSync,
@@ -767,15 +788,15 @@ export async function createReply(
     const encryptedBodyForSync = thread.encryptedBody ?? '';
 
     // Get groupId - fallback to selected group if thread doesn't have it (legacy data)
-    let groupIdForSync = thread.groupId;
+    let groupIdForSync: string = thread.groupId || '';
     if (!groupIdForSync) {
       const { getSelectedGroupId } = await import('./orbitalGroups.preload.js');
-      groupIdForSync = await getSelectedGroupId();
+      const selectedGroupId = await getSelectedGroupId();
+      if (!selectedGroupId) {
+        throw new Error('Cannot create reply: No group ID available. Please select an orbit first.');
+      }
+      groupIdForSync = selectedGroupId;
       log.info(`${logId}: Using selected group ID as fallback: ${groupIdForSync}`);
-    }
-
-    if (!groupIdForSync) {
-      throw new Error('Cannot create reply: No group ID available. Please select an orbit first.');
     }
 
     log.info(`${logId}: Sync data - title: "${encryptedTitleForSync.substring(0, 20)}...", body: "${encryptedBodyForSync.substring(0, 20)}..." (body length: ${encryptedBodyForSync.length}), groupId: ${groupIdForSync}`);
@@ -1022,6 +1043,121 @@ async function syncThreadsFromServer(groupId: string): Promise<void> {
     }
   } catch (error) {
     log.error(`${logId}: Failed to sync threads from server`, Errors.toLogFormat(error));
+  }
+}
+
+/**
+ * Sync full orbit history with progress tracking
+ *
+ * Used when a new member joins an orbit to sync all historical threads.
+ * Reports progress via callback for UI updates.
+ *
+ * @param groupId - The orbit/group ID to sync
+ * @param onProgress - Optional callback for progress updates
+ * @returns Sync statistics
+ */
+export async function syncOrbitHistory(
+  groupId: string,
+  onProgress?: (progress: {
+    phase: 'threads' | 'complete';
+    current: number;
+    total: number;
+    percent: number;
+  }) => void
+): Promise<{
+  threadsAdded: number;
+  threadsFailed: number;
+  totalThreads: number;
+}> {
+  const logId = `syncOrbitHistory(${groupId})`;
+
+  try {
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      log.warn(`${logId}: No JWT token, cannot sync`);
+      return { threadsAdded: 0, threadsFailed: 0, totalThreads: 0 };
+    }
+
+    // Report starting
+    onProgress?.({ phase: 'threads', current: 0, total: 0, percent: 0 });
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/threads/groups/${groupId}/threads`,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+      },
+    });
+
+    if (response.status === 404) {
+      log.info(`${logId}: Group not found on backend, nothing to sync`);
+      onProgress?.({ phase: 'complete', current: 0, total: 0, percent: 100 });
+      return { threadsAdded: 0, threadsFailed: 0, totalThreads: 0 };
+    }
+
+    if (response.status !== 200) {
+      log.warn(`${logId}: Server returned status ${response.status}`);
+      return { threadsAdded: 0, threadsFailed: 0, totalThreads: 0 };
+    }
+
+    const data = JSON.parse(response.data);
+    const serverThreads = data.threads || [];
+    const totalThreads = serverThreads.length;
+
+    log.info(`${logId}: Received ${totalThreads} threads from server`);
+
+    let threadsAdded = 0;
+    let threadsFailed = 0;
+
+    // Process each thread and report progress
+    for (let i = 0; i < serverThreads.length; i++) {
+      const serverThread = serverThreads[i];
+
+      try {
+        const existingThread = await DataReader.getOrbitalThread(serverThread.thread_id);
+
+        if (!existingThread) {
+          // New thread from another orbit member - save locally
+          const thread: OrbitalThreadType = {
+            id: serverThread.thread_id,
+            groupId: serverThread.group_id,
+            authorId: serverThread.author_id,
+            encryptedTitle: serverThread.encrypted_title || '',
+            encryptedBody: serverThread.encrypted_body || '',
+            titleIv: '',
+            bodyIv: '',
+            createdAt: new Date(serverThread.created_at).getTime(),
+            lastReplyAt: serverThread.last_reply_at ? new Date(serverThread.last_reply_at).getTime() : undefined,
+            replyCount: serverThread.reply_count || 0,
+            mediaCount: serverThread.media_count || 0,
+            pendingSync: false,
+          };
+
+          await DataWriter.saveOrbitalThread(thread);
+          threadsAdded++;
+          log.info(`${logId}: Added thread ${thread.id} from server`);
+        }
+      } catch (error) {
+        threadsFailed++;
+        log.error(`${logId}: Failed to save thread`, Errors.toLogFormat(error));
+      }
+
+      // Report progress
+      const percent = Math.round(((i + 1) / totalThreads) * 100);
+      onProgress?.({ phase: 'threads', current: i + 1, total: totalThreads, percent });
+    }
+
+    // Report completion
+    onProgress?.({ phase: 'complete', current: totalThreads, total: totalThreads, percent: 100 });
+
+    log.info(`${logId}: Sync complete. Added: ${threadsAdded}, Failed: ${threadsFailed}, Total: ${totalThreads}`);
+
+    return { threadsAdded, threadsFailed, totalThreads };
+  } catch (error) {
+    log.error(`${logId}: Failed to sync orbit history`, Errors.toLogFormat(error));
+    return { threadsAdded: 0, threadsFailed: 0, totalThreads: 0 };
   }
 }
 

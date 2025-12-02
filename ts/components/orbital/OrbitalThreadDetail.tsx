@@ -90,32 +90,51 @@ export function OrbitalThreadDetail({
     new Map()
   );
 
-  // Fetch media metadata for this thread
+  // Fetch media metadata for messages that have mediaIds
   useEffect(() => {
-    async function fetchThreadMedia() {
+    async function fetchMediaByIds() {
       try {
-        // Access DataReader from window.Signal
-        const dataReader = window.Signal?.DataReader as {
-          getThreadMedia?: (threadId: string) => Promise<Array<OrbitalMediaAttachment>>;
-        } | undefined;
+        // Collect all unique mediaIds from messages
+        const allMediaIds = new Set<string>();
+        for (const message of messages) {
+          if (message.mediaIds && message.mediaIds.length > 0) {
+            for (const mediaId of message.mediaIds) {
+              allMediaIds.add(mediaId);
+            }
+          }
+        }
 
-        if (!dataReader?.getThreadMedia) {
-          console.warn('DataReader.getThreadMedia not available');
+        if (allMediaIds.size === 0) {
+          setMediaMap(new Map());
           return;
         }
 
-        const threadMedia = await dataReader.getThreadMedia(threadId);
-        const map = new Map(threadMedia.map(m => [m.mediaId, m]));
+        // Access DataReader from window.Signal
+        const dataReader = window.Signal?.DataReader as {
+          getOrbitalMedia?: (mediaId: string) => OrbitalMediaAttachment | null;
+        } | undefined;
+
+        if (!dataReader?.getOrbitalMedia) {
+          console.warn('DataReader.getOrbitalMedia not available');
+          return;
+        }
+
+        // Fetch each media item by its ID
+        const map = new Map<string, OrbitalMediaAttachment>();
+        for (const mediaId of allMediaIds) {
+          const media = dataReader.getOrbitalMedia(mediaId);
+          if (media) {
+            map.set(mediaId, media);
+          }
+        }
         setMediaMap(map);
       } catch (error) {
-        console.error('Failed to fetch thread media:', error);
+        console.error('Failed to fetch media by IDs:', error);
       }
     }
 
-    if (threadId) {
-      fetchThreadMedia();
-    }
-  }, [threadId]);
+    fetchMediaByIds();
+  }, [messages]);
 
   const handleSubmitReply = useCallback(
     (body: string, mediaIds: string[]) => {

@@ -254,6 +254,10 @@ export function OrbitalMessage({
                           ? () => openLightbox(imageMedia.indexOf(media))
                           : undefined
                       }
+                      downloadMedia={downloadMedia}
+                      getMediaDownloadStatus={getMediaDownloadStatus}
+                      deleteMedia={deleteMedia}
+                      formatBytes={formatBytes}
                     />
                   ))}
                 </div>
@@ -282,6 +286,10 @@ export function OrbitalMessage({
                           ? () => openLightbox(0)
                           : undefined
                       }
+                      downloadMedia={downloadMedia}
+                      getMediaDownloadStatus={getMediaDownloadStatus}
+                      deleteMedia={deleteMedia}
+                      formatBytes={formatBytes}
                     />
                   </div>
                   <div className="OrbitalMessage__media--three-side">
@@ -306,6 +314,10 @@ export function OrbitalMessage({
                             ? () => openLightbox(imageMedia.indexOf(media))
                             : undefined
                         }
+                        downloadMedia={downloadMedia}
+                        getMediaDownloadStatus={getMediaDownloadStatus}
+                        deleteMedia={deleteMedia}
+                        formatBytes={formatBytes}
                       />
                     ))}
                   </div>
@@ -336,6 +348,10 @@ export function OrbitalMessage({
                           ? () => openLightbox(imageMedia.indexOf(media))
                           : undefined
                       }
+                      downloadMedia={downloadMedia}
+                      getMediaDownloadStatus={getMediaDownloadStatus}
+                      deleteMedia={deleteMedia}
+                      formatBytes={formatBytes}
                     />
                   ))}
                 </div>

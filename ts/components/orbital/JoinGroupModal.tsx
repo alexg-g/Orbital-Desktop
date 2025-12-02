@@ -13,9 +13,19 @@ export type JoinGroupModalProps = {
   onGroupJoined: (result: JoinGroupResult) => void;
   // Dependency injection for Node.js operations
   joinGroup: (inviteCode: string) => Promise<JoinGroupResult>;
+  // Sync functions with progress (optional for backward compatibility)
+  syncOrbitHistory?: (
+    groupId: string,
+    onProgress: (progress: { phase: string; current: number; total: number; percent: number }) => void
+  ) => Promise<{ threadsAdded: number; totalThreads: number }>;
+  downloadAllPendingMedia?: (options: {
+    onProgress: (progress: number, current: number, total: number) => void;
+    getAbsoluteAttachmentPath: (path: string) => string;
+  }) => Promise<{ successful: number; failed: number }>;
+  getAbsoluteAttachmentPath?: (path: string) => string;
 };
 
-type ModalState = 'input' | 'loading' | 'success' | 'error';
+type ModalState = 'input' | 'loading' | 'syncing' | 'success' | 'error';
 
 /**
  * JoinGroupModal - Modal for joining an orbit with an invite code
@@ -33,11 +43,20 @@ export function JoinGroupModal({
   onClose,
   onGroupJoined,
   joinGroup,
+  syncOrbitHistory,
+  downloadAllPendingMedia,
+  getAbsoluteAttachmentPath,
 }: JoinGroupModalProps): JSX.Element {
   const [inviteCode, setInviteCode] = useState('');
   const [modalState, setModalState] = useState<ModalState>('input');
   const [error, setError] = useState<string | null>(null);
   const [joinedResult, setJoinedResult] = useState<JoinGroupResult | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{
+    phase: 'threads' | 'media' | 'complete';
+    current: number;
+    total: number;
+    percent: number;
+  }>({ phase: 'threads', current: 0, total: 0, percent: 0 });
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -85,13 +104,46 @@ export function JoinGroupModal({
     try {
       const result = await joinGroup(inviteCode);
       setJoinedResult(result);
+
+      // If sync functions are provided, sync orbit history and media
+      if (syncOrbitHistory && downloadAllPendingMedia && getAbsoluteAttachmentPath) {
+        setModalState('syncing');
+        setSyncProgress({ phase: 'threads', current: 0, total: 0, percent: 0 });
+
+        // Sync threads
+        await syncOrbitHistory(result.group.groupId, (progress) => {
+          setSyncProgress({
+            phase: 'threads',
+            current: progress.current,
+            total: progress.total,
+            percent: progress.total > 0 ? Math.round((progress.current / progress.total) * 50) : 0,
+          });
+        });
+
+        // Download media (contributes to the second 50% of progress)
+        setSyncProgress({ phase: 'media', current: 0, total: 0, percent: 50 });
+        await downloadAllPendingMedia({
+          onProgress: (progress: number, current: number, total: number) => {
+            setSyncProgress({
+              phase: 'media',
+              current,
+              total,
+              percent: 50 + Math.round(progress * 0.5),
+            });
+          },
+          getAbsoluteAttachmentPath,
+        });
+
+        setSyncProgress({ phase: 'complete', current: 0, total: 0, percent: 100 });
+      }
+
       setModalState('success');
       onGroupJoined(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join orbit');
       setModalState('error');
     }
-  }, [inviteCode, joinGroup, onGroupJoined, validateCode]);
+  }, [inviteCode, joinGroup, onGroupJoined, validateCode, syncOrbitHistory, downloadAllPendingMedia, getAbsoluteAttachmentPath]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && modalState === 'input') {
@@ -193,6 +245,57 @@ export function JoinGroupModal({
             </div>
           </div>
           <p>Verifying invite code...</p>
+        </div>
+      </Modal>
+    );
+  }
+
+  // Render syncing state
+  if (modalState === 'syncing') {
+    return (
+      <Modal
+        modalName="JoinGroupModal"
+        i18n={i18n}
+        onClose={onClose}
+        title="Syncing Orbit History..."
+        noMouseClose
+        noEscapeClose
+      >
+        <div className="JoinGroupModal JoinGroupModal--syncing">
+          <div className="JoinGroupModal__sync-status">
+            {syncProgress.phase === 'threads' && (
+              <>
+                <p className="JoinGroupModal__sync-phase">Syncing threads...</p>
+                {syncProgress.total > 0 && (
+                  <p className="JoinGroupModal__sync-count">
+                    {syncProgress.current} of {syncProgress.total}
+                  </p>
+                )}
+              </>
+            )}
+            {syncProgress.phase === 'media' && (
+              <>
+                <p className="JoinGroupModal__sync-phase">Downloading media...</p>
+                {syncProgress.total > 0 && (
+                  <p className="JoinGroupModal__sync-count">
+                    {syncProgress.current} of {syncProgress.total}
+                  </p>
+                )}
+              </>
+            )}
+            {syncProgress.phase === 'complete' && (
+              <p className="JoinGroupModal__sync-phase">Sync complete!</p>
+            )}
+          </div>
+          <div className="JoinGroupModal__progress-bar">
+            <div
+              className="JoinGroupModal__progress-fill"
+              style={{ width: `${syncProgress.percent}%` }}
+            />
+          </div>
+          <p className="JoinGroupModal__sync-hint">
+            This may take a moment for orbits with lots of content.
+          </p>
         </div>
       </Modal>
     );

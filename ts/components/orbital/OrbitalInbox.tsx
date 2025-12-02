@@ -5,7 +5,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
 import { OrbitalThreadList, type OrbitalThread } from './OrbitalThreadList';
 import { OrbitalThreadDetail, type OrbitalMessageType } from './OrbitalThreadDetail';
-import { OrbitalComposer } from './OrbitalComposer';
+import { OrbitalComposer, type UploadMediaFunction as ComposerUploadMediaFunction } from './OrbitalComposer';
 import { OrbitalLogin } from './OrbitalLogin';
 import { OrbitalChatList } from './OrbitalChatList';
 import type { OrbitalChat, OrbitalUser } from './orbitalTypes';
@@ -75,7 +75,7 @@ export type CreateReplyFunction = (
 
 // Group API types
 export type CreateGroupFunction = (name: string) => Promise<CreateGroupResult>;
-export type JoinGroupFunction = (inviteCode: string) => Promise<{ groupId: string }>;
+export type JoinGroupFunction = (inviteCode: string) => Promise<JoinGroupResult>;
 
 // Quota and media types
 export type GetQuotaInfoFunction = (groupId: string) => Promise<QuotaInfo>;
@@ -96,6 +96,16 @@ export type GetMediaDownloadStatusFunction = (mediaId: string) => Promise<{
 export type DeleteMediaFunction = (mediaId: string) => Promise<void>;
 export type GetAbsoluteAttachmentPathFunction = (relativePath: string) => string;
 export type GetContactsFunction = (groupId: string) => Promise<OrbitalUser[]>;
+
+// Sync types for orbit history
+export type SyncOrbitHistoryFunction = (
+  groupId: string,
+  onProgress: (progress: { phase: string; current: number; total: number; percent: number }) => void
+) => Promise<{ threadsAdded: number; totalThreads: number }>;
+export type DownloadAllPendingMediaFunction = (options: {
+  onProgress: (progress: number, current: number, total: number) => void;
+  getAbsoluteAttachmentPath: (path: string) => string;
+}) => Promise<{ successful: number; failed: number }>;
 
 // WebSocket types
 export type WebSocketConnectFunction = () => Promise<boolean>;
@@ -157,6 +167,9 @@ export type OrbitalInboxProps = {
   fetchChatMessages?: FetchChatMessagesFunction;
   sendChatMessage?: SendChatMessageFunction;
   decodeChatEnvelope?: DecodeChatEnvelopeFunction;
+  // Sync functions for orbit history (used when joining an orbit)
+  syncOrbitHistory?: SyncOrbitHistoryFunction;
+  downloadAllPendingMedia?: DownloadAllPendingMediaFunction;
 };
 
 /**
@@ -195,6 +208,9 @@ function mapThreadInfoToOrbitalThread(
   const isCurrentUser = currentUserId !== null && thread.authorId === currentUserId;
   const currentProfile = isCurrentUser ? getCurrentUserProfile() : null;
 
+  // Extract mediaIds from media info if available
+  const mediaIds = thread.media?.map(m => m.mediaId);
+
   return {
     id: thread.threadId,
     orbitId: thread.groupId,
@@ -209,6 +225,7 @@ function mapThreadInfoToOrbitalThread(
     hasImage: (thread.mediaCount || 0) > 0,
     isUnread: false, // TODO: Track read status
     avatarUrl: isCurrentUser ? (currentProfile!.avatarUrl || undefined) : undefined,
+    mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
   };
 }
 
@@ -285,6 +302,7 @@ function mapLocalThreadToOrbitalThread(
     hasImage: thread.hasImage,
     isUnread: false,
     avatarUrl: isCurrentUser ? (currentProfile!.avatarUrl || undefined) : thread.avatarUrl,
+    mediaIds: thread.mediaIds,
   };
 }
 
@@ -362,11 +380,14 @@ export function OrbitalInbox({
   wsConnect = defaultWsConnect,
   wsDisconnect = defaultWsDisconnect,
   wsSubscribe = defaultWsSubscribe,
-  wsIsConnected = defaultWsIsConnected,
+  wsIsConnected: _wsIsConnected = defaultWsIsConnected,
   // Chat/Signal relay
   fetchChatMessages = defaultFetchChatMessages,
   sendChatMessage = defaultSendChatMessage,
   decodeChatEnvelope = defaultDecodeChatEnvelope,
+  // Sync functions for orbit history
+  syncOrbitHistory,
+  downloadAllPendingMedia,
 }: OrbitalInboxProps): JSX.Element {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -857,6 +878,7 @@ export function OrbitalInbox({
             body: thread.body,
             level: 0, // Original post is level 0
             hasMedia: thread.hasMedia,
+            mediaIds: thread.mediaIds,
             avatarUrl: thread.avatarUrl,
           };
           allMessages.push(originalPost);
@@ -877,6 +899,7 @@ export function OrbitalInbox({
             body: thread.body,
             level: 0,
             hasMedia: thread.hasMedia,
+            mediaIds: thread.mediaIds,
             avatarUrl: thread.avatarUrl,
           };
           setMessages([originalPost]);
@@ -899,6 +922,7 @@ export function OrbitalInbox({
           body: thread.body,
           level: 0,
           hasMedia: thread.hasMedia,
+          mediaIds: thread.mediaIds,
           avatarUrl: thread.avatarUrl,
         };
         setMessages([originalPost]);
@@ -1035,6 +1059,7 @@ export function OrbitalInbox({
           hasImage: mediaIds.length > 0,
           isUnread: false,
           avatarUrl: userProfile.avatarUrl || undefined,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
         };
 
         // Also store thread locally for persistence across app restarts
@@ -1051,6 +1076,7 @@ export function OrbitalInbox({
           hasVideo: false,
           hasImage: mediaIds.length > 0,
           avatarUrl: userProfile.avatarUrl || undefined,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
         };
         await storeLocalThread(localThread);
         console.log('[OrbitalInbox] Thread stored locally:', result.threadId);
@@ -1098,6 +1124,7 @@ export function OrbitalInbox({
           hasImage: mediaIds.length > 0,
           isUnread: false,
           avatarUrl: userProfile.avatarUrl || undefined,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
         };
 
         const rootMessage: OrbitalMessageType = {
@@ -1316,7 +1343,7 @@ export function OrbitalInbox({
 
   // Handler for successful group join
   const handleGroupJoined = useCallback(async (result: JoinGroupResult) => {
-    console.log('Successfully joined group:', result.groupId);
+    console.log('Successfully joined group:', result.group.groupId);
     setShowJoinGroup(false);
     // Refresh groups list
     if (getGroups) {
@@ -1325,8 +1352,8 @@ export function OrbitalInbox({
     }
     // Select the newly joined group
     if (setSelectedGroupId) {
-      await setSelectedGroupId(result.groupId);
-      setSelectedGroupIdState(result.groupId);
+      await setSelectedGroupId(result.group.groupId);
+      setSelectedGroupIdState(result.group.groupId);
     }
   }, [getGroups, setSelectedGroupId]);
 
@@ -1597,7 +1624,7 @@ export function OrbitalInbox({
                 getQuotaInfo={getQuotaInfo}
                 checkUploadAllowed={checkUploadAllowed}
                 formatBytes={formatBytes}
-                uploadMedia={uploadMedia}
+                uploadMedia={uploadMedia as unknown as ComposerUploadMediaFunction}
                 getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
                 contextId="new-thread"
                 draftOperations={draftOperations}
@@ -1645,6 +1672,9 @@ export function OrbitalInbox({
           onClose={() => setShowJoinGroup(false)}
           onGroupJoined={handleGroupJoined}
           joinGroup={joinGroup}
+          syncOrbitHistory={syncOrbitHistory}
+          downloadAllPendingMedia={downloadAllPendingMedia}
+          getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
         />
       )}
 

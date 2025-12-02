@@ -273,6 +273,25 @@ export type StorageAccessType = {
    */
   orbitalAutoDownloadOnWifi: boolean;
 
+  // Orbital identity keys for E2EE
+  orbitalIdentityPrivateKey: string | undefined;
+  orbitalIdentityPublicKey: string | undefined;
+
+  // Orbital mock invites (development/testing)
+  orbitalMockInvites: unknown | undefined;
+
+  // Orbital selected group ID
+  orbitalSelectedGroupId: string | undefined;
+
+  // Orbital local thread storage
+  orbitalLocalThreads: unknown | undefined;
+
+  // Orbital user settings
+  orbitalUserSettings: unknown | undefined;
+
+  // Orbital drafts storage
+  orbitalDrafts: unknown | undefined;
+
   // Deprecated
   'challenge:retry-message-ids': never;
   nextSignedKeyRotationTime: number;

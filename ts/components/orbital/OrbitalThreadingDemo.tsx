@@ -149,6 +149,7 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
             i18n={i18n}
             onThreadClick={handleThreadClick}
             onCreateThread={handleCreateThread}
+            onSettingsClick={() => {}}
           />
         </div>
 
@@ -197,7 +198,9 @@ export function OrbitalThreadingDemo({ i18n }: { i18n: LocalizerType }): JSX.Ele
 const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   {
     id: 'thread-1',
+    orbitId: 'orbit-1',
     title: "Emma's First Steps!",
+    body: 'She finally did it! Our little one took her first steps today.',
     author: 'Mom',
     authorId: 'user-mom',
     timestamp: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
@@ -211,7 +214,9 @@ const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-2',
+    orbitId: 'orbit-1',
     title: 'Family Dinner This Weekend?',
+    body: 'Anyone free for dinner on Saturday?',
     author: 'Dad',
     authorId: 'user-dad',
     timestamp: Date.now() - 5 * 60 * 60 * 1000, // 5 hours ago
@@ -225,7 +230,9 @@ const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-3',
+    orbitId: 'orbit-1',
     title: 'Check out these vacation photos',
+    body: 'Just got back from Hawaii! Here are some highlights.',
     author: 'Aunt Sarah',
     authorId: 'user-aunt',
     timestamp: Date.now() - 24 * 60 * 60 * 1000, // Yesterday
@@ -237,7 +244,9 @@ const MOCK_THREADS: ReadonlyArray<OrbitalThread> = [
   },
   {
     id: 'thread-4',
+    orbitId: 'orbit-1',
     title: 'Recipe for Grandmas cookies?',
+    body: 'Does anyone have the recipe for those amazing chocolate chip cookies?',
     author: 'Cousin',
     authorId: 'user-cousin',
     timestamp: Date.now() - 48 * 60 * 60 * 1000, // 2 days ago
