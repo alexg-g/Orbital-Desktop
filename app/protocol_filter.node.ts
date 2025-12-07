@@ -5,6 +5,18 @@ import type { ProtocolRequest, ProtocolResponse, Session } from 'electron';
 
 import { isAbsolute, normalize } from 'node:path';
 import { existsSync, realpathSync } from 'node:fs';
+
+/**
+ * ORBITAL MODIFICATION: Allowed WebSocket domains for Orbital backend
+ * These are the only domains that WebSocket connections are permitted to.
+ * This maintains Signal's defense-in-depth security while enabling Orbital's
+ * required WebSocket functionality.
+ */
+const ALLOWED_WEBSOCKET_HOSTS = [
+  'localhost:3000',      // Development
+  '127.0.0.1:3000',      // Development (IP)
+  'api.orbitl.org',      // Production
+];
 import {
   getAvatarsPath,
   getBadgesPath,
@@ -150,6 +162,55 @@ function _disabledHandler(
   callback({ error: -10 });
 }
 
+/**
+ * ORBITAL MODIFICATION: Check if a WebSocket URL is allowed
+ * Only permits connections to trusted Orbital backend domains.
+ */
+function _isAllowedWebSocketHost(url: string): boolean {
+  try {
+    // Convert ws:// or wss:// to http:// for URL parsing
+    const httpUrl = url.replace(/^wss?:\/\//, 'http://');
+    const parsed = new URL(httpUrl);
+    const hostWithPort = parsed.host; // Includes port if specified
+
+    const isAllowed = ALLOWED_WEBSOCKET_HOSTS.some(
+      allowedHost => hostWithPort === allowedHost
+    );
+
+    if (!isAllowed) {
+      log.warn(
+        `Blocked WebSocket connection to disallowed host: ${hostWithPort}`
+      );
+    }
+
+    return isAllowed;
+  } catch (error) {
+    log.warn(`Failed to parse WebSocket URL: ${url}`);
+    return false;
+  }
+}
+
+/**
+ * ORBITAL MODIFICATION: WebSocket handler that allows only trusted domains
+ */
+function _createWebSocketHandler() {
+  return (request: ProtocolRequest, callback: CallbackType): void => {
+    if (!request.url) {
+      callback({ error: -300 }); // Invalid URL
+      return;
+    }
+
+    if (_isAllowedWebSocketHost(request.url)) {
+      // Allow the connection by passing through (don't intercept)
+      // Return -2 to indicate "not handled, let Chromium handle it"
+      callback({ error: -2 });
+    } else {
+      // Block disallowed domains
+      callback({ error: -10 }); // Access Denied
+    }
+  };
+}
+
 export function installWebHandler({
   session,
   enableHttp,
@@ -169,10 +230,15 @@ export function installWebHandler({
   protocol.interceptFileProtocol('javascript', _disabledHandler);
   protocol.interceptFileProtocol('mailto', _disabledHandler);
 
+  // ORBITAL MODIFICATION: Use domain-allowlisted WebSocket handler
+  // This allows WebSocket connections only to trusted Orbital backend domains
+  // while maintaining Signal's defense-in-depth security for all other domains
+  protocol.interceptFileProtocol('ws', _createWebSocketHandler());
+  protocol.interceptFileProtocol('wss', _createWebSocketHandler());
+
   if (!enableHttp) {
     protocol.interceptFileProtocol('http', _disabledHandler);
     protocol.interceptFileProtocol('https', _disabledHandler);
-    protocol.interceptFileProtocol('ws', _disabledHandler);
-    protocol.interceptFileProtocol('wss', _disabledHandler);
+    // Note: ws/wss are now handled by _createWebSocketHandler above
   }
 }

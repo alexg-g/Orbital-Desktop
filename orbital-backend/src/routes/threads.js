@@ -20,7 +20,7 @@ const router = express.Router();
  * Create new discussion thread
  */
 router.post('/', authenticate, asyncHandler(async (req, res) => {
-  const { thread_id, group_id, encrypted_title, encrypted_body, root_message_id, media_ids } = req.body;
+  const { thread_id, group_id, encrypted_title, encrypted_body, title_iv, body_iv, root_message_id, media_ids } = req.body;
 
   // Validate required fields
   // Note: encrypted_body can be empty string (threads with title only)
@@ -87,18 +87,20 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
     // This supports local-first architecture where client generates IDs
     const result = await client.query(
       thread_id
-        ? `INSERT INTO threads (id, group_id, root_message_id, author_id, encrypted_title, encrypted_body)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        ? `INSERT INTO threads (id, group_id, root_message_id, author_id, encrypted_title, encrypted_body, title_iv, body_iv)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (id) DO UPDATE SET
              encrypted_title = EXCLUDED.encrypted_title,
-             encrypted_body = EXCLUDED.encrypted_body
+             encrypted_body = EXCLUDED.encrypted_body,
+             title_iv = EXCLUDED.title_iv,
+             body_iv = EXCLUDED.body_iv
            RETURNING id, created_at`
-        : `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body)
-           VALUES ($1, $2, $3, $4, $5)
+        : `INSERT INTO threads (group_id, root_message_id, author_id, encrypted_title, encrypted_body, title_iv, body_iv)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id, created_at`,
       thread_id
-        ? [thread_id, group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
-        : [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body]
+        ? [thread_id, group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body, title_iv || null, body_iv || null]
+        : [group_id, root_message_id || null, req.user.userId, encrypted_title, encrypted_body, title_iv || null, body_iv || null]
     );
 
     const thread = result.rows[0];
@@ -131,6 +133,13 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
       }));
     }
 
+    // Get author username for WebSocket broadcast
+    const authorResult = await client.query(
+      'SELECT username FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    const authorUsername = authorResult.rows[0]?.username || null;
+
     await client.query('COMMIT');
 
     logger.info('Thread created', {
@@ -158,8 +167,11 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
           thread_id: thread.id,
           group_id: group_id,
           author_id: req.user.userId,
+          author_name: authorUsername,
           encrypted_title: encrypted_title,
           encrypted_body: encrypted_body,
+          title_iv: title_iv || null,
+          body_iv: body_iv || null,
           created_at: thread.created_at,
           media: associatedMedia
         });
@@ -208,7 +220,7 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
   const result = await db.query(
     `SELECT
        t.id, t.group_id, t.author_id, t.encrypted_title, t.encrypted_body,
-       t.created_at,
+       t.title_iv, t.body_iv, t.created_at,
        u.username as author_username,
        COUNT(r.id) as reply_count
      FROM threads t
@@ -234,6 +246,8 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
     author_username: row.author_username,
     encrypted_title: row.encrypted_title,
     encrypted_body: row.encrypted_body,
+    title_iv: row.title_iv,
+    body_iv: row.body_iv,
     reply_count: parseInt(row.reply_count, 10),
     created_at: row.created_at
   }));
@@ -258,7 +272,7 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
   // Fetch thread
   const result = await db.query(
     `SELECT t.id, t.group_id, t.author_id, t.encrypted_title, t.encrypted_body,
-            t.created_at, u.username as author_username
+            t.title_iv, t.body_iv, t.created_at, u.username as author_username
      FROM threads t
      LEFT JOIN users u ON u.id = t.author_id
      WHERE t.id = $1`,
@@ -294,6 +308,8 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
     author_username: thread.author_username,
     encrypted_title: thread.encrypted_title,
     encrypted_body: thread.encrypted_body,
+    title_iv: thread.title_iv,
+    body_iv: thread.body_iv,
     reply_count: parseInt(countResult.rows[0].count, 10),
     created_at: thread.created_at
   });
@@ -335,7 +351,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
 
   // Fetch replies
   const result = await db.query(
-    `SELECT r.id, r.thread_id, r.author_id, r.encrypted_body, r.created_at,
+    `SELECT r.id, r.thread_id, r.author_id, r.encrypted_body, r.body_iv, r.created_at,
             u.username as author_username
      FROM replies r
      LEFT JOIN users u ON u.id = r.author_id
@@ -357,6 +373,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
     author_id: row.author_id,
     author_username: row.author_username,
     encrypted_body: row.encrypted_body,
+    body_iv: row.body_iv,
     created_at: row.created_at
   }));
 
@@ -376,7 +393,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
  */
 router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) => {
   const { threadId } = req.params;
-  const { encrypted_body, message_id, media_ids } = req.body;
+  const { encrypted_body, body_iv, message_id, media_ids } = req.body;
 
   if (!encrypted_body) {
     throw validationError('Missing required field: encrypted_body');
@@ -450,10 +467,10 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
 
     // Create reply
     const result = await client.query(
-      `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body, body_iv)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, created_at`,
-      [threadId, message_id || null, req.user.userId, encrypted_body]
+      [threadId, message_id || null, req.user.userId, encrypted_body, body_iv || null]
     );
 
     const reply = result.rows[0];
@@ -486,6 +503,13 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
       }));
     }
 
+    // Get author username for WebSocket broadcast
+    const authorResult = await client.query(
+      'SELECT username FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    const authorUsername = authorResult.rows[0]?.username || null;
+
     await client.query('COMMIT');
 
     logger.info('Reply created', {
@@ -514,7 +538,9 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
           thread_id: threadId,
           group_id: groupId,
           author_id: req.user.userId,
+          author_name: authorUsername,
           encrypted_body: encrypted_body,
+          body_iv: body_iv || null,
           created_at: reply.created_at,
           media: associatedMedia
         });

@@ -67,6 +67,8 @@ CREATE TABLE threads (
     author_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     encrypted_title TEXT NOT NULL,
     encrypted_body TEXT NOT NULL,
+    title_iv VARCHAR(64),
+    body_iv VARCHAR(64),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -81,6 +83,7 @@ CREATE TABLE replies (
     message_id UUID REFERENCES signal_messages(id) ON DELETE CASCADE,
     author_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     encrypted_body TEXT NOT NULL,
+    body_iv VARCHAR(64),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

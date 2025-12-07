@@ -336,7 +336,7 @@ export async function listThreads(
           threadId: t.id,
           groupId: t.groupId,
           authorId: t.authorId,
-          authorUsername: '', // Will be resolved by UI from orbit members
+          authorUsername: t.authorUsername || '', // Use stored username from sync
           encryptedTitle: decryptedTitle, // Now contains decrypted plaintext
           encryptedBody: decryptedBody,   // Now contains decrypted plaintext
           replyCount: t.replyCount,
@@ -386,7 +386,7 @@ export async function listThreads(
               threadId: t.id,
               groupId: t.groupId,
               authorId: t.authorId,
-              authorUsername: '',
+              authorUsername: t.authorUsername || '',
               encryptedTitle: decryptedTitle,
               encryptedBody: decryptedBody,
               replyCount: t.replyCount,
@@ -557,15 +557,17 @@ export async function createThread(
 
     log.info(`${logId}: Content encrypted - title IV: ${titleIv.substring(0, 16)}..., body IV: ${bodyIv.substring(0, 16)}...`);
 
-    // Get current user ID for author
-    const { getUserId } = await import('./orbitalAuth.preload.js');
+    // Get current user ID and username for author
+    const { getUserId, getUsername } = await import('./orbitalAuth.preload.js');
     const authorId = await getUserId() || 'unknown';
+    const authorUsername = await getUsername() || '';
 
     // 3. Store in local SQLCipher FIRST (source of truth)
     const thread: OrbitalThreadType = {
       id: threadId,
       groupId,
       authorId,
+      authorUsername,
       encryptedTitle,
       encryptedBody,
       titleIv,
@@ -1020,10 +1022,11 @@ async function syncThreadsFromServer(groupId: string): Promise<void> {
           id: serverThread.thread_id,
           groupId: serverThread.group_id,
           authorId: serverThread.author_id,
+          authorUsername: serverThread.author_username || '',
           encryptedTitle: serverThread.encrypted_title || '',
           encryptedBody: serverThread.encrypted_body || '',
-          titleIv: '', // Server doesn't return IV yet
-          bodyIv: '',
+          titleIv: serverThread.title_iv || '',
+          bodyIv: serverThread.body_iv || '',
           createdAt: new Date(serverThread.created_at).getTime(),
           lastReplyAt: serverThread.last_reply_at ? new Date(serverThread.last_reply_at).getTime() : undefined,
           replyCount: serverThread.reply_count || 0,
@@ -1124,10 +1127,11 @@ export async function syncOrbitHistory(
             id: serverThread.thread_id,
             groupId: serverThread.group_id,
             authorId: serverThread.author_id,
+            authorUsername: serverThread.author_username || '',
             encryptedTitle: serverThread.encrypted_title || '',
             encryptedBody: serverThread.encrypted_body || '',
-            titleIv: '',
-            bodyIv: '',
+            titleIv: serverThread.title_iv || '',
+            bodyIv: serverThread.body_iv || '',
             createdAt: new Date(serverThread.created_at).getTime(),
             lastReplyAt: serverThread.last_reply_at ? new Date(serverThread.last_reply_at).getTime() : undefined,
             replyCount: serverThread.reply_count || 0,

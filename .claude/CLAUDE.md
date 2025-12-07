@@ -45,6 +45,114 @@ pnpm run clean-stale-js
 pnpm run dev
 ```
 
+## Local Testing Environment
+
+Orbital uses **native PostgreSQL** (via Homebrew) for local development and testing. This provides a simpler, faster development experience without Docker overhead.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Native PostgreSQL (port 5432)            │
+│                                                             │
+│  ┌─────────────────────┐    ┌─────────────────────────┐    │
+│  │  orbital (dev)      │    │  orbital_test (testing) │    │
+│  │  User: orbital_user │    │  User: orbital_test_user│    │
+│  └─────────────────────┘    └─────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    orbital-backend                          │
+│  - .env        → Development database (orbital)             │
+│  - .env.test   → Test database (orbital_test)               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Prerequisites
+
+```bash
+# Install PostgreSQL
+brew install postgresql@16
+
+# Start PostgreSQL service
+brew services start postgresql@16
+
+# Verify it's running
+pg_isready
+```
+
+### Database Setup
+
+**Development Database:**
+```bash
+# Create dev user and database (one-time setup)
+psql -c "CREATE USER orbital_user WITH PASSWORD 'orbital_dev_password' CREATEDB;"
+psql -c "CREATE DATABASE orbital OWNER orbital_user;"
+
+# Apply schema
+cd orbital-backend
+psql -U orbital_user -d orbital -f schema.sql
+```
+
+**Test Database:**
+```bash
+cd orbital-backend
+npm run test:setup  # Automated setup script
+```
+
+### Running the Backend
+
+```bash
+cd orbital-backend
+
+# Start development server
+npm run dev
+
+# Backend will be available at:
+#   HTTP:      http://localhost:3000
+#   WebSocket: ws://localhost:3000/v1/websocket
+#   Health:    http://localhost:3000/health
+```
+
+### Running Tests
+
+```bash
+cd orbital-backend
+
+# Run all tests
+npm test
+
+# Run integration tests only
+npm run test:integration
+
+# Run unit tests only
+npm run test:unit
+```
+
+### Test User Credentials
+
+For local development/testing:
+- **Username:** testuser
+- **Password:** TestUser12345
+
+Create test user:
+```bash
+# Generate bcrypt hash and insert user
+cd orbital-backend
+node -e "const bcrypt = require('bcrypt'); bcrypt.hash('TestUser12345', 10).then(h => console.log(h));"
+# Copy the hash, then:
+psql -U orbital_user -d orbital -c "INSERT INTO users (username, password_hash, public_key) VALUES ('testuser', '<hash>', '{}'::jsonb);"
+```
+
+### Environment Files
+
+| File | Purpose |
+|------|---------|
+| `.env` | Development config (port 5432, orbital database) |
+| `.env.test` | Test config (port 5432, orbital_test database) |
+| `.env.local` | Local overrides (gitignored) |
+
 This directory contains 8 specialized agent personas for the Orbital project. Each agent references the [Product Requirements Document (PRD)](/planning-docs/PRODUCT-REQUIREMENTS-DOCUMENT.md) as the single source of truth.
 
 ## Agent Overview

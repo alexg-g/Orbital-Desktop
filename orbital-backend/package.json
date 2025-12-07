@@ -13,7 +13,10 @@
     "test:setup": "node scripts/setup-test-db.js",
     "lint": "eslint src/**/*.js",
     "migrate": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down"
+    "migrate:down": "node-pg-migrate down",
+    "db:shell": "/opt/homebrew/opt/postgresql@15/bin/psql postgresql://orbital_user:orbital_dev_password@localhost:5432/orbital",
+    "db:reset": "/opt/homebrew/opt/postgresql@15/bin/psql postgresql://orbital_user:orbital_dev_password@localhost:5432/orbital -f schema.sql",
+    "db:tables": "/opt/homebrew/opt/postgresql@15/bin/psql postgresql://orbital_user:orbital_dev_password@localhost:5432/orbital -c '\\dt'"
   },
   "keywords": [
     "signal-protocol",

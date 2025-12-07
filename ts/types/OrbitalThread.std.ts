@@ -42,6 +42,12 @@ export type OrbitalThreadType = {
   authorId: string;
 
   /**
+   * Author's username (cached at sync time)
+   * Allows offline display of thread authors
+   */
+  authorUsername: string;
+
+  /**
    * Thread title (encrypted with group key, base64)
    * Max ~200 characters plaintext
    */

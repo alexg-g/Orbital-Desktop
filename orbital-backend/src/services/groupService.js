@@ -266,13 +266,16 @@ async function joinGroup(userId, inviteCode, encryptedGroupKey) {
     const userNormalizedEmail = userResult.rows[0].normalized_email;
 
     // Find the invite code (check not expired, not used)
+    // Also get the group key from the creator's member record
     const codeResult = await client.query(
       `SELECT ic.id, ic.group_id, ic.expires_at, ic.used_by, ic.normalized_target_email,
-              g.encrypted_name, g.max_members
+              g.encrypted_name, g.max_members, g.created_by,
+              m.encrypted_group_key as creator_group_key
        FROM invite_codes ic
        INNER JOIN groups g ON g.id = ic.group_id
+       LEFT JOIN members m ON m.group_id = g.id AND m.user_id = g.created_by
        WHERE ic.code = $1
-       FOR UPDATE`,
+       FOR UPDATE OF ic, g`,
       [inviteCode.toUpperCase()]
     );
 
@@ -351,11 +354,23 @@ async function joinGroup(userId, inviteCode, encryptedGroupKey) {
       inviteCode
     });
 
+    // DEBUG: Log key prefix for key transfer verification
+    const keyPrefix = code.creator_group_key ? code.creator_group_key.substring(0, 8) : 'NULL';
+    logger.info('[KEY-TRANSFER-DEBUG] joinGroup: Returning key prefix', {
+      keyPrefix: keyPrefix + '...',
+      groupId,
+      hasKey: !!code.creator_group_key
+    });
+    console.log(`[KEY-TRANSFER-DEBUG] Backend joinGroup: Returning key prefix: ${keyPrefix}... for group ${groupId}`);
+
     return {
       group_id: groupId,
       encrypted_name: code.encrypted_name,
       member_count: currentCount + 1,
-      joined_at: new Date().toISOString()
+      joined_at: new Date().toISOString(),
+      // Return the group key so the joining user can decrypt content
+      // For MVP, this is the plaintext key from the creator's record
+      group_key: code.creator_group_key
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -378,9 +393,12 @@ async function joinGroup(userId, inviteCode, encryptedGroupKey) {
 async function getUserGroups(userId) {
   if (!userId) throw new Error('userId is required');
 
+  // FIX: Always return the CREATOR's group key, not the joiner's key
+  // The creator's key is the one used for encryption, all members must use it
   const result = await db.query(
     `SELECT g.id, g.encrypted_name, g.created_by, g.max_members,
-            m.joined_at, m.encrypted_group_key,
+            m.joined_at,
+            creator_member.encrypted_group_key as encrypted_group_key,
             COUNT(m2.user_id) as member_count,
             (SELECT code FROM invite_codes ic
              WHERE ic.group_id = g.id AND ic.used_by IS NULL AND ic.expires_at > NOW()
@@ -388,8 +406,9 @@ async function getUserGroups(userId) {
      FROM groups g
      INNER JOIN members m ON m.group_id = g.id
      LEFT JOIN members m2 ON m2.group_id = g.id
+     LEFT JOIN members creator_member ON creator_member.group_id = g.id AND creator_member.user_id = g.created_by
      WHERE m.user_id = $1
-     GROUP BY g.id, m.joined_at, m.encrypted_group_key
+     GROUP BY g.id, m.joined_at, creator_member.encrypted_group_key
      ORDER BY m.joined_at DESC`,
     [userId]
   );
@@ -486,6 +505,66 @@ async function getActiveInviteCodes(groupId, userId) {
 }
 
 /**
+ * Get invite history for a group (including used and expired)
+ * Returns all invite codes with their computed status
+ * @param {string} groupId - Group ID
+ * @param {string} userId - Requesting user ID (must be creator)
+ * @returns {Promise<Array>} - List of all invite codes with status
+ */
+async function getInviteHistory(groupId, userId) {
+  if (!groupId) throw new Error('groupId is required');
+  if (!userId) throw new Error('userId is required');
+
+  // Verify user is creator
+  const groupResult = await db.query(
+    'SELECT created_by FROM groups WHERE id = $1',
+    [groupId]
+  );
+
+  if (groupResult.rowCount === 0) {
+    throw new Error('GROUP_NOT_FOUND');
+  }
+
+  if (groupResult.rows[0].created_by !== userId) {
+    throw new Error('FORBIDDEN_NOT_CREATOR');
+  }
+
+  // Get all invite codes for this group (last 30 days for history)
+  const result = await db.query(
+    `SELECT id, code, created_at, expires_at, target_email, used_by, used_at
+     FROM invite_codes
+     WHERE group_id = $1 AND created_at > NOW() - INTERVAL '30 days'
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [groupId]
+  );
+
+  const now = new Date();
+
+  return result.rows.map(row => {
+    // Compute status
+    let status;
+    if (row.used_by) {
+      status = 'accepted';
+    } else if (new Date(row.expires_at) < now) {
+      status = 'expired';
+    } else {
+      status = 'pending';
+    }
+
+    return {
+      id: row.id,
+      code: row.code,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      target_email: row.target_email,
+      status,
+      used_at: row.used_at
+    };
+  });
+}
+
+/**
  * Get all member IDs for a group
  * Used for WebSocket broadcast operations
  * @param {string} groupId - Group ID
@@ -530,6 +609,7 @@ module.exports = {
   getGroupMembers,
   getGroupMemberIds,
   getActiveInviteCodes,
+  getInviteHistory,
   cleanupExpiredCodes,
   generateInviteCode,
   MAX_MEMBERS,

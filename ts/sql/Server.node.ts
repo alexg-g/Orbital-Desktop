@@ -9116,6 +9116,7 @@ type OrbitalThreadRow = {
   id: string;
   group_id: string;
   author_id: string;
+  author_username: string;
   encrypted_title: string;
   encrypted_body: string;
   title_iv: string;
@@ -9134,6 +9135,7 @@ export type OrbitalThreadType = {
   id: string;
   groupId: string;
   authorId: string;
+  authorUsername: string;
   encryptedTitle: string;
   encryptedBody: string;
   titleIv: string;
@@ -9153,6 +9155,7 @@ function orbitalThreadRowToType(row: OrbitalThreadRow): OrbitalThreadType {
     id: row.id,
     groupId: row.group_id,
     authorId: row.author_id,
+    authorUsername: row.author_username,
     encryptedTitle: row.encrypted_title,
     encryptedBody: row.encrypted_body,
     titleIv: row.title_iv,
@@ -9179,6 +9182,7 @@ function getOrbitalThread(
         id,
         group_id,
         author_id,
+        author_username,
         encrypted_title,
         encrypted_body,
         title_iv,
@@ -9219,6 +9223,7 @@ function getOrbitalThreadsByGroupId(
         id,
         group_id,
         author_id,
+        author_username,
         encrypted_title,
         encrypted_body,
         title_iv,
@@ -9252,6 +9257,7 @@ function getPendingSyncThreads(
         id,
         group_id,
         author_id,
+        author_username,
         encrypted_title,
         encrypted_body,
         title_iv,
@@ -9284,6 +9290,7 @@ function saveOrbitalThread(
       id,
       group_id,
       author_id,
+      author_username,
       encrypted_title,
       encrypted_body,
       title_iv,
@@ -9297,6 +9304,7 @@ function saveOrbitalThread(
       $id,
       $groupId,
       $authorId,
+      $authorUsername,
       $encryptedTitle,
       $encryptedBody,
       $titleIv,
@@ -9312,6 +9320,7 @@ function saveOrbitalThread(
     id: thread.id,
     groupId: thread.groupId,
     authorId: thread.authorId,
+    authorUsername: thread.authorUsername,
     encryptedTitle: thread.encryptedTitle,
     encryptedBody: thread.encryptedBody,
     titleIv: thread.titleIv,

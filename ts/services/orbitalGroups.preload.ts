@@ -25,10 +25,11 @@
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { URL } from 'node:url';
+import { hkdf } from '@signalapp/libsignal-client';
 import { createLogger } from '../logging/log.std.js';
 import * as Errors from '../types/errors.std.js';
 import { handleOrbitalAPIError } from './orbitalErrorHandler.preload.js';
-import { getRandomBytes } from '../Crypto.node.js';
+import { getRandomBytes, encryptAesGcm, decryptAesGcm, sha256 } from '../Crypto.node.js';
 import * as Bytes from '../Bytes.std.js';
 
 const log = createLogger('OrbitalGroups');
@@ -104,6 +105,7 @@ export type JoinGroupResult = {
 export type GroupAPIError = {
   error: string;
   code?: string;
+  message?: string;
 };
 
 /**
@@ -138,6 +140,9 @@ export async function createGroup(name: string): Promise<CreateGroupResult> {
     // For now, we use a simple symmetric key approach
     const groupKey = getRandomBytes(32);
     const groupKeyBase64 = Bytes.toBase64(groupKey);
+
+    // DEBUG: Log key prefix for key transfer verification
+    console.log(`[KEY-TRANSFER-DEBUG] createGroup: Generated key prefix: ${groupKeyBase64.substring(0, 8)}...`);
 
     // Encrypt the group name
     // Simple encryption for now - in production use proper crypto
@@ -246,8 +251,8 @@ export async function joinGroup(inviteCode: string): Promise<JoinGroupResult> {
     if (response.status !== 200) {
       const errorData = parseErrorResponse(response.data);
 
-      // Map server errors to user-friendly messages
-      const userFriendlyError = mapJoinError(errorData.code || errorData.error);
+      // Use server message if available, otherwise map error codes
+      const userFriendlyError = errorData.message || mapJoinError(errorData.code || errorData.error);
       throw new Error(userFriendlyError);
     }
 
@@ -256,7 +261,11 @@ export async function joinGroup(inviteCode: string): Promise<JoinGroupResult> {
     // Receive and store the group key
     // In production, this would come via X3DH key exchange
     if (data.group_key) {
+      // DEBUG: Log key prefix for key transfer verification
+      console.log(`[KEY-TRANSFER-DEBUG] joinGroup: Received key prefix: ${data.group_key.substring(0, 8)}...`);
       await storeGroupKey(data.group_id, data.group_key);
+    } else {
+      console.log(`[KEY-TRANSFER-DEBUG] joinGroup: WARNING - No group_key in response!`);
     }
 
     // Decrypt the group name
@@ -317,6 +326,12 @@ export async function listGroups(): Promise<GroupInfo[]> {
     const groups: GroupInfo[] = [];
 
     for (const groupData of data.groups || []) {
+      // Store the group key if present (ensures key is available for encryption/decryption)
+      if (groupData.encrypted_group_key) {
+        await storeGroupKey(groupData.group_id, groupData.encrypted_group_key);
+        log.info(`${logId}: Stored group key for ${groupData.group_id}`);
+      }
+
       // Decrypt the group name
       const groupName = await decryptGroupNameForGroup(groupData.group_id, groupData.encrypted_name);
 
@@ -381,6 +396,9 @@ export async function leaveGroup(groupId: string): Promise<void> {
 
     // Delete local group key (can no longer decrypt messages)
     await deleteGroupKey(groupId);
+
+    // Clear cached group name
+    await clearCachedGroupName(groupId);
 
     // Clear selected group if this was it
     const selectedGroupId = await getSelectedGroupId();
@@ -813,47 +831,266 @@ export async function regenerateInviteCode(groupId: string): Promise<InviteCodeI
 // =============================================================================
 
 /**
- * Encrypt a group name with a group key
- * Simple XOR encryption for now - in production use AES-GCM
+ * HKDF context strings for key separation (Option C from Signal Protocol Specialist)
+ * Using distinct contexts ensures the name encryption key is cryptographically
+ * independent from the content encryption key.
  */
-function encryptGroupName(plainText: string, key: Uint8Array): string {
-  const textBytes = new TextEncoder().encode(plainText);
-  const encrypted = new Uint8Array(textBytes.length);
+const HKDF_INFO_GROUP_NAME = 'Orbital-GroupName-v1';
+const HKDF_SALT_LENGTH = 32;
+const DERIVED_KEY_LENGTH = 32; // AES-256
+const GCM_IV_LENGTH = 12; // Standard for AES-GCM
 
-  for (let i = 0; i < textBytes.length; i++) {
-    encrypted[i] = textBytes[i] ^ key[i % key.length];
-  }
-
-  return Bytes.toBase64(encrypted);
+/**
+ * Derive a separate key for group name encryption using HKDF
+ *
+ * This implements key separation as recommended by the Signal Protocol Specialist:
+ * - The master group key is used as Input Key Material (IKM)
+ * - HKDF with context "Orbital-GroupName-v1" derives a purpose-specific key
+ * - This ensures the name key is cryptographically independent from content keys
+ *
+ * @param masterGroupKey The master group key (32 bytes)
+ * @returns Derived key for name encryption (32 bytes)
+ */
+function deriveGroupNameKey(masterGroupKey: Uint8Array): Uint8Array {
+  const salt = new Uint8Array(HKDF_SALT_LENGTH); // Zero salt for deterministic derivation
+  const info = Bytes.fromString(HKDF_INFO_GROUP_NAME);
+  return hkdf(DERIVED_KEY_LENGTH, masterGroupKey, info, salt);
 }
 
 /**
- * Decrypt a group name with a group key
+ * Derive a deterministic IV from groupId using SHA-256
+ *
+ * This implements the Signal Protocol Specialist's recommendation:
+ * - Deterministic IV derived from groupId (no random component)
+ * - Safe because we never reuse the same key with different plaintexts for the same groupId
+ * - Group name is static per group, so deterministic IV is appropriate
+ * - Avoids need to store IV separately
+ *
+ * @param groupId The group identifier
+ * @returns 12-byte IV for AES-GCM
  */
-function decryptGroupName(encryptedBase64: string, key: Uint8Array): string {
-  const encrypted = Bytes.fromBase64(encryptedBase64);
-  const decrypted = new Uint8Array(encrypted.length);
-
-  for (let i = 0; i < encrypted.length; i++) {
-    decrypted[i] = encrypted[i] ^ key[i % key.length];
-  }
-
-  return new TextDecoder().decode(decrypted);
+function deriveGroupNameIV(groupId: string): Uint8Array {
+  const groupIdBytes = Bytes.fromString(groupId);
+  const hash = sha256(groupIdBytes);
+  // Take first 12 bytes for GCM IV
+  return hash.subarray(0, GCM_IV_LENGTH);
 }
 
 /**
- * Decrypt group name using stored key
+ * Encrypt a group name with AES-256-GCM
+ *
+ * Uses HKDF-derived key for key separation and random IV (prepended to ciphertext).
+ * The IV is always prepended because during group creation, we don't have the groupId yet.
+ *
+ * Format: [12-byte IV][ciphertext with auth tag]
+ *
+ * @param plainText The group name to encrypt
+ * @param masterGroupKey The master group key (32 bytes)
+ * @returns Base64-encoded [IV + ciphertext]
+ */
+function encryptGroupName(plainText: string, masterGroupKey: Uint8Array): string {
+  const nameKey = deriveGroupNameKey(masterGroupKey);
+  const iv = getRandomBytes(GCM_IV_LENGTH);
+  const plainBytes = Bytes.fromString(plainText);
+
+  const ciphertext = encryptAesGcm(nameKey, iv, plainBytes);
+
+  // Prepend IV to ciphertext (standard AES-GCM format)
+  const result = new Uint8Array(iv.length + ciphertext.length);
+  result.set(iv);
+  result.set(ciphertext, iv.length);
+
+  return Bytes.toBase64(result);
+}
+
+/**
+ * Decrypt a group name with AES-256-GCM
+ *
+ * Expects format: [12-byte IV][ciphertext with auth tag]
+ *
+ * @param encryptedBase64 Base64-encoded [IV + ciphertext]
+ * @param masterGroupKey The master group key (32 bytes)
+ * @returns Decrypted group name
+ * @throws Error if decryption fails (authentication failure, corrupted data, wrong key)
+ */
+function decryptGroupName(encryptedBase64: string, masterGroupKey: Uint8Array): string {
+  const nameKey = deriveGroupNameKey(masterGroupKey);
+  const data = Bytes.fromBase64(encryptedBase64);
+
+  if (data.length < GCM_IV_LENGTH + 16) { // IV + minimum auth tag
+    throw new Error('Invalid encrypted data: too short');
+  }
+
+  // Extract IV from first 12 bytes
+  const iv = data.subarray(0, GCM_IV_LENGTH);
+  const ciphertext = data.subarray(GCM_IV_LENGTH);
+
+  const plainBytes = decryptAesGcm(nameKey, iv, ciphertext);
+  return Bytes.toString(plainBytes);
+}
+
+/**
+ * Try to decrypt with legacy XOR for backward compatibility
+ * This handles existing encrypted names from before the AES-GCM upgrade
+ */
+function tryLegacyDecrypt(encryptedBase64: string, key: Uint8Array): string | null {
+  try {
+    const encrypted = Bytes.fromBase64(encryptedBase64);
+    const decrypted = new Uint8Array(encrypted.length);
+
+    for (let i = 0; i < encrypted.length; i++) {
+      decrypted[i] = encrypted[i] ^ key[i % key.length];
+    }
+
+    const result = new TextDecoder().decode(decrypted);
+
+    // Validate result contains only printable characters
+    const hasInvalidChars = /[\x00-\x1F\x7F\uFFFD]/.test(result);
+    if (hasInvalidChars || result.length === 0) {
+      return null;
+    }
+
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decrypt group name using stored key with fallback support
+ *
+ * This implements the hybrid approach (Option C):
+ * 1. Check local cache first for decrypted name
+ * 2. Try AES-GCM decryption with derived key
+ * 3. Fall back to legacy XOR for backward compatibility
+ * 4. If all fails, try syncing key from server (auto-repair)
+ * 5. Return placeholder if all decryption fails
+ * 6. Cache successful decryption for resilience
+ *
+ * @param groupId The group identifier
+ * @param encryptedName Base64-encoded encrypted name
+ * @returns Decrypted group name or fallback
  */
 async function decryptGroupNameForGroup(groupId: string, encryptedName: string): Promise<string> {
+  // Check cache first
+  const cached = await getCachedGroupName(groupId);
+  if (cached) {
+    return cached;
+  }
+
   const groupKeyBase64 = await getGroupKey(groupId);
 
   if (!groupKeyBase64) {
-    // If we don't have the key, return placeholder
-    return '[Encrypted Group]';
+    log.warn(`decryptGroupNameForGroup: No key found for group ${groupId}, attempting sync from server`);
+    // Try to sync key from server
+    const synced = await syncGroupKey(groupId);
+    if (synced) {
+      // Retry with new key
+      const newKey = await getGroupKey(groupId);
+      if (newKey) {
+        return decryptGroupNameWithKey(groupId, encryptedName, newKey);
+      }
+    }
+    return 'My Orbit';
   }
 
-  const groupKey = Bytes.fromBase64(groupKeyBase64);
-  return decryptGroupName(encryptedName, groupKey);
+  const result = await decryptGroupNameWithKey(groupId, encryptedName, groupKeyBase64);
+
+  // If decryption returned placeholder, try syncing key from server
+  if (result === 'My Orbit') {
+    log.info(`decryptGroupNameForGroup: Decryption failed for ${groupId}, attempting key sync from server`);
+    const synced = await syncGroupKey(groupId);
+    if (synced) {
+      const newKey = await getGroupKey(groupId);
+      if (newKey && newKey !== groupKeyBase64) {
+        log.info(`decryptGroupNameForGroup: Key synced, retrying decryption for ${groupId}`);
+        return decryptGroupNameWithKey(groupId, encryptedName, newKey);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Internal helper to decrypt group name with a specific key
+ */
+async function decryptGroupNameWithKey(groupId: string, encryptedName: string, groupKeyBase64: string): Promise<string> {
+  try {
+    const groupKey = Bytes.fromBase64(groupKeyBase64);
+
+    // Try AES-GCM decryption first (new format)
+    try {
+      const decryptedName = decryptGroupName(encryptedName, groupKey);
+      // Cache the successful decryption
+      await cacheGroupName(groupId, decryptedName);
+      return decryptedName;
+    } catch (gcmError) {
+      log.info(`decryptGroupNameWithKey: AES-GCM failed for group ${groupId}, trying legacy format`);
+    }
+
+    // Try legacy XOR decryption for backward compatibility
+    const legacyResult = tryLegacyDecrypt(encryptedName, groupKey);
+    if (legacyResult) {
+      log.info(`decryptGroupNameWithKey: Legacy decryption succeeded for group ${groupId}`);
+      // Cache the result
+      await cacheGroupName(groupId, legacyResult);
+      return legacyResult;
+    }
+
+    log.warn(`decryptGroupNameWithKey: All decryption methods failed for group ${groupId}`);
+    return 'My Orbit';
+  } catch (error) {
+    log.error(`decryptGroupNameWithKey: Failed to decrypt name for group ${groupId}:`, Errors.toLogFormat(error));
+    return 'My Orbit';
+  }
+}
+
+// =============================================================================
+// GROUP NAME CACHE (SQLCipher)
+// =============================================================================
+
+/**
+ * Cache a decrypted group name in SQLCipher
+ * Provides resilience if encryption key is temporarily unavailable
+ */
+async function cacheGroupName(groupId: string, name: string): Promise<void> {
+  try {
+    const { itemStorage } = await import('../textsecure/Storage.preload.js');
+    const cache = itemStorage.get('orbitalGroupNameCache') || {};
+    cache[groupId] = name;
+    await itemStorage.put('orbitalGroupNameCache', cache);
+  } catch (error) {
+    log.warn('cacheGroupName: Failed to cache group name', Errors.toLogFormat(error));
+  }
+}
+
+/**
+ * Get a cached group name from SQLCipher
+ */
+async function getCachedGroupName(groupId: string): Promise<string | null> {
+  try {
+    const { itemStorage } = await import('../textsecure/Storage.preload.js');
+    const cache = itemStorage.get('orbitalGroupNameCache') || {};
+    return cache[groupId] || null;
+  } catch (error) {
+    log.warn('getCachedGroupName: Failed to get cached name', Errors.toLogFormat(error));
+    return null;
+  }
+}
+
+/**
+ * Clear cached group name (e.g., when leaving a group)
+ */
+async function clearCachedGroupName(groupId: string): Promise<void> {
+  try {
+    const { itemStorage } = await import('../textsecure/Storage.preload.js');
+    const cache = itemStorage.get('orbitalGroupNameCache') || {};
+    delete cache[groupId];
+    await itemStorage.put('orbitalGroupNameCache', cache);
+  } catch (error) {
+    log.warn('clearCachedGroupName: Failed to clear cached name', Errors.toLogFormat(error));
+  }
 }
 
 // =============================================================================
@@ -861,10 +1098,32 @@ async function decryptGroupNameForGroup(groupId: string, encryptedName: string):
 // =============================================================================
 
 /**
+ * AES-256 key length in bytes
+ */
+const AES_256_KEY_LENGTH = 32;
+
+/**
  * Store a group key in SQLCipher
+ * Validates the key is a proper 32-byte (256-bit) AES key before storing.
  */
 async function storeGroupKey(groupId: string, keyBase64: string): Promise<void> {
   const { itemStorage } = await import('../textsecure/Storage.preload.js');
+
+  // Validate key format before storing
+  try {
+    const keyBytes = Bytes.fromBase64(keyBase64);
+    if (keyBytes.length !== AES_256_KEY_LENGTH) {
+      log.error(`storeGroupKey: Invalid key length for group ${groupId}. Expected ${AES_256_KEY_LENGTH} bytes, got ${keyBytes.length} bytes. Key will not decrypt correctly.`);
+      // Don't store invalid keys - this would break encryption
+      return;
+    }
+    log.info(`storeGroupKey: Storing valid ${keyBytes.length}-byte key for group ${groupId}`);
+    // DEBUG: Log key prefix for key transfer verification
+    console.log(`[KEY-TRANSFER-DEBUG] storeGroupKey: Storing key prefix: ${keyBase64.substring(0, 8)}... for group ${groupId}`);
+  } catch (error) {
+    log.error(`storeGroupKey: Invalid base64 key for group ${groupId}:`, Errors.toLogFormat(error));
+    return;
+  }
 
   // Get existing keys map or create new one
   const existingKeys = itemStorage.get('orbitalGroupKeys') || {};
@@ -932,6 +1191,64 @@ export async function deleteGroupKey(groupId: string): Promise<void> {
 
   await itemStorage.put('orbitalGroupKeys', updatedKeys);
   log.info(`deleteGroupKey: Deleted key for group ${groupId}`);
+}
+
+/**
+ * Sync the group key from the backend server
+ *
+ * This is useful when:
+ * - Decryption fails (key may be out of sync)
+ * - User logged in on a new device
+ * - Key was corrupted locally
+ *
+ * @param groupId Group ID
+ * @returns true if key was synced successfully, false otherwise
+ */
+export async function syncGroupKey(groupId: string): Promise<boolean> {
+  const logId = `syncGroupKey(${groupId})`;
+
+  try {
+    // Get JWT token for authentication
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      log.error(`${logId}: Not authenticated`);
+      return false;
+    }
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/groups/${groupId}/key`,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+      },
+    });
+
+    if (response.status !== 200) {
+      log.error(`${logId}: Failed to fetch key: ${response.status}`);
+      return false;
+    }
+
+    const data = JSON.parse(response.data);
+
+    if (!data.group_key) {
+      log.error(`${logId}: No key returned from server`);
+      return false;
+    }
+
+    // Store the fetched key
+    await storeGroupKey(groupId, data.group_key);
+
+    // Clear the cached group name so it will be re-decrypted with the new key
+    await clearCachedGroupName(groupId);
+
+    log.info(`${logId}: Successfully synced group key from server`);
+    return true;
+  } catch (error) {
+    log.error(`${logId}: Failed to sync group key`, Errors.toLogFormat(error));
+    return false;
+  }
 }
 
 // =============================================================================

@@ -27,10 +27,39 @@ import * as Errors from '../types/errors.std.js';
 const log = createLogger('OrbitalWebSocket');
 
 /**
+ * Allowed WebSocket hosts for security validation
+ * Must match the allowlist in protocol_filter.node.ts
+ */
+const ALLOWED_WEBSOCKET_HOSTS = [
+  'localhost:3000',      // Development
+  '127.0.0.1:3000',      // Development (IP)
+  'api.orbitl.org',      // Production
+];
+
+/**
  * WebSocket server URL
  */
 const WEBSOCKET_URL =
   process.env.ORBITAL_WS_URL || 'wss://api.orbitl.org/v1/websocket';
+
+/**
+ * Validate that a WebSocket URL is on the allowed hosts list
+ * This provides defense-in-depth alongside protocol_filter.node.ts
+ */
+function isAllowedWebSocketURL(url: string): boolean {
+  try {
+    // Convert ws:// or wss:// to http:// for URL parsing
+    const httpUrl = url.replace(/^wss?:\/\//, 'http://');
+    const parsed = new URL(httpUrl);
+    const hostWithPort = parsed.host;
+
+    return ALLOWED_WEBSOCKET_HOSTS.some(
+      allowedHost => hostWithPort === allowedHost
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Reconnection configuration
@@ -97,6 +126,15 @@ export async function connect(): Promise<boolean> {
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
     log.info('WebSocket already connecting or connected');
     return true;
+  }
+
+  // Security: Validate WebSocket URL is on allowlist
+  if (!isAllowedWebSocketURL(WEBSOCKET_URL)) {
+    log.error('Blocked connection to disallowed WebSocket URL', {
+      url: WEBSOCKET_URL,
+    });
+    connectionState = 'disconnected';
+    return false;
   }
 
   try {

@@ -180,6 +180,42 @@ router.get('/:groupId/members', authenticate, asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/groups/:groupId/key
+ * Get the group encryption key for the current user
+ * Used to sync/repair local key storage
+ *
+ * Response:
+ * - group_key: string (the encryption key from user's member record)
+ */
+router.get('/:groupId/key', authenticate, asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
+
+  // Fetch user's group key from members table
+  const result = await db.query(
+    `SELECT m.encrypted_group_key
+     FROM members m
+     WHERE m.group_id = $1 AND m.user_id = $2`,
+    [groupId, req.user.userId]
+  );
+
+  if (result.rowCount === 0) {
+    throw forbiddenError('Not a member of this group');
+  }
+
+  const groupKey = result.rows[0].encrypted_group_key;
+
+  logger.info('Group key fetched for sync', {
+    groupId,
+    userId: req.user.userId,
+    hasKey: !!groupKey
+  });
+
+  res.status(200).json({
+    group_key: groupKey
+  });
+}));
+
+/**
  * GET /api/groups/:groupId/quota
  * Get group storage quota status
  *

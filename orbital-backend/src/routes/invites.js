@@ -232,7 +232,7 @@ router.get('/status/:code', authenticate, asyncHandler(async (req, res) => {
 
 /**
  * GET /api/invites/group/:groupId
- * Get all active invite codes for a group
+ * Get invite history for a group (including used and expired)
  * Only group creator can view all codes
  *
  * Response:
@@ -241,14 +241,16 @@ router.get('/status/:code', authenticate, asyncHandler(async (req, res) => {
  *     code: string,
  *     createdAt: number,
  *     expiresAt: number,
- *     status: 'pending'
+ *     status: 'pending' | 'accepted' | 'expired',
+ *     targetEmail: string
  *   }
  */
 router.get('/group/:groupId', authenticate, asyncHandler(async (req, res) => {
   const { groupId } = req.params;
 
   try {
-    const codes = await groupService.getActiveInviteCodes(groupId, req.user.userId);
+    // Use getInviteHistory to get all invites with status
+    const codes = await groupService.getInviteHistory(groupId, req.user.userId);
 
     // Convert to expected format with Unix timestamps
     const inviteCodes = codes.map(code => ({
@@ -256,7 +258,7 @@ router.get('/group/:groupId', authenticate, asyncHandler(async (req, res) => {
       code: code.code,
       createdAt: new Date(code.created_at).getTime(),
       expiresAt: new Date(code.expires_at).getTime(),
-      status: 'pending', // All codes from getActiveInviteCodes are pending
+      status: code.status, // 'pending', 'accepted', or 'expired'
       targetEmail: code.target_email
     }));
 

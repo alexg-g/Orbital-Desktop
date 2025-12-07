@@ -74,31 +74,35 @@ app.use(helmet({
 // CORS configuration
 app.use(corsMiddleware);
 
-// Rate limiting (disabled in test environment)
+// Check if we should skip rate limiting (test or development environment)
+const skipRateLimiting = () =>
+  process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+
+// Rate limiting (disabled in test/development environment)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'test' ? 0 : 100, // Disable in test, 100 requests per windowMs in production
+  max: skipRateLimiting() ? 0 : 100, // Disable in test/dev, 100 requests per windowMs in production
   message: {
     error: 'TOO_MANY_REQUESTS',
     message: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test' // Skip rate limiting in test environment
+  skip: skipRateLimiting
 });
 
 // Apply rate limiting to API routes
 app.use('/api/', limiter);
 
-// Stricter rate limiting for auth endpoints (disabled in test environment)
+// Stricter rate limiting for auth endpoints (disabled in test/development environment)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 0 : 10,
+  max: skipRateLimiting() ? 0 : 10,
   message: {
     error: 'TOO_MANY_REQUESTS',
     message: 'Too many authentication attempts, please try again later.'
   },
-  skip: () => process.env.NODE_ENV === 'test' // Skip rate limiting in test environment
+  skip: skipRateLimiting
 });
 
 // Body parsing middleware
