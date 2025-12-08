@@ -33,19 +33,23 @@ ALTER TABLE users ADD CONSTRAINT username_length
 CREATE INDEX idx_users_username ON users(username);
 
 -- Groups Table
+-- group_type: 'orbit' = regular multi-member groups, 'dm' = 2-person direct messages
 CREATE TABLE groups (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     encrypted_name TEXT NOT NULL,
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    invite_code VARCHAR(8) UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    invite_code VARCHAR(8),  -- NULL for DM groups (no invite needed)
+    group_type VARCHAR(10) NOT NULL DEFAULT 'orbit',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT groups_type_check CHECK (group_type IN ('orbit', 'dm'))
 );
 
 ALTER TABLE groups ADD CONSTRAINT invite_code_format
-    CHECK (invite_code ~ '^[A-Za-z0-9]{8}$');
+    CHECK (invite_code IS NULL OR invite_code ~ '^[A-Za-z0-9]{8}$');
 
-CREATE INDEX idx_groups_invite_code ON groups(invite_code);
+CREATE UNIQUE INDEX idx_groups_invite_code ON groups(invite_code) WHERE invite_code IS NOT NULL;
 CREATE INDEX idx_groups_created_by ON groups(created_by);
+CREATE INDEX idx_groups_type ON groups(group_type);
 
 -- Members Table
 CREATE TABLE members (

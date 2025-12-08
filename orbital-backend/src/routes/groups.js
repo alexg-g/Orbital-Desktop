@@ -291,4 +291,84 @@ router.delete('/:groupId/members/:userId', authenticate, asyncHandler(async (req
   res.status(204).send();
 }));
 
+// =============================================================================
+// DM (Direct Message) Group Endpoints - Issue #75
+// DMs are implemented as 2-person groups with group_type = 'dm'
+// =============================================================================
+
+/**
+ * POST /api/groups/dm
+ * Create or get existing DM group with another user
+ *
+ * Request body:
+ * - recipient_id: string (UUID of user to DM)
+ * - encrypted_group_key: string (encryption key for the DM)
+ *
+ * Response:
+ * - group_id: string (UUID of DM group)
+ * - is_new: boolean (true if newly created, false if existing)
+ * - group_key: string (encryption key to use)
+ * - recipient: { id, username }
+ */
+router.post('/dm', authenticate, asyncHandler(async (req, res) => {
+  const { recipient_id, encrypted_group_key } = req.body;
+
+  if (!recipient_id) {
+    throw validationError('Missing required field: recipient_id');
+  }
+
+  if (!encrypted_group_key) {
+    throw validationError('Missing required field: encrypted_group_key');
+  }
+
+  // Don't allow DM to self
+  if (recipient_id === req.user.userId) {
+    throw validationError('Cannot create DM with yourself');
+  }
+
+  // Verify recipient exists
+  const recipientCheck = await db.query(
+    'SELECT id FROM users WHERE id = $1',
+    [recipient_id]
+  );
+
+  if (recipientCheck.rowCount === 0) {
+    throw notFoundError('Recipient user not found');
+  }
+
+  try {
+    const result = await groupService.createDMGroup(
+      req.user.userId,
+      recipient_id,
+      encrypted_group_key
+    );
+    res.status(result.is_new ? 201 : 200).json(result);
+  } catch (error) {
+    logger.error('Failed to create DM group', {
+      userId: req.user.userId,
+      recipientId: recipient_id,
+      error: error.message,
+    });
+    throw error;
+  }
+}));
+
+/**
+ * GET /api/groups/dms
+ * List user's DM conversations
+ *
+ * Response:
+ * - dms: Array of DM group objects
+ *   Each object contains:
+ *   - group_id: string (UUID)
+ *   - recipient: { id, username }
+ *   - encrypted_group_key: string
+ *   - last_message_at: string (ISO timestamp, may be null)
+ *   - created_at: string (ISO timestamp)
+ */
+router.get('/dms', authenticate, asyncHandler(async (req, res) => {
+  const dms = await groupService.getDMGroups(req.user.userId);
+  res.status(200).json({ dms });
+}));
+
 module.exports = router;

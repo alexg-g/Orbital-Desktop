@@ -18,6 +18,8 @@
     "postinstall": "pnpm run build:acknowledgments && pnpm run electron:install-app-deps",
     "postuninstall": "pnpm run build:acknowledgments",
     "start": "electron .",
+    "start:local": "run-s generate start",
+    "start:production": "run-s generate build:esbuild:prod start",
     "generate": "run-s generate:phase-0 generate:phase-1",
     "generate:phase-0": "run-p build:esbuild:scripts",
     "generate:phase-1": "run-p --aggregate-output --print-label generate:phase-1:bundle build:icu-types build:compact-locales build:styles get-expire-time copy-components",

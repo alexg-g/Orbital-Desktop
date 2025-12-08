@@ -15,6 +15,20 @@ const isProd = process.argv.some(argv => argv === '-prod' || argv === '--prod');
 const noBundle = process.argv.some(argv => argv === '--no-bundle');
 const noScripts = process.argv.some(argv => argv === '--no-scripts');
 
+// Orbital API Configuration
+// Production: https://api.orbitl.org (default for builds)
+// Development: http://localhost:3000 (for local testing)
+const ORBITAL_API_URL = isProd
+  ? 'https://api.orbitl.org'
+  : (process.env.ORBITAL_API_URL || 'http://localhost:3000');
+const ORBITAL_WS_URL = isProd
+  ? 'wss://api.orbitl.org/v1/websocket'
+  : (process.env.ORBITAL_WS_URL || 'ws://localhost:3000/v1/websocket');
+
+console.log(`[esbuild] Environment: ${isProd ? 'production' : 'development'}`);
+console.log(`[esbuild] ORBITAL_API_URL: ${ORBITAL_API_URL}`);
+console.log(`[esbuild] ORBITAL_WS_URL: ${ORBITAL_WS_URL}`);
+
 const nodeDefaults = {
   platform: 'node',
   target: 'es2023',
@@ -57,6 +71,8 @@ const bundleDefaults = {
   ...nodeDefaults,
   define: {
     'process.env.NODE_ENV': isProd ? '"production"' : '"development"',
+    'process.env.ORBITAL_API_URL': JSON.stringify(ORBITAL_API_URL),
+    'process.env.ORBITAL_WS_URL': JSON.stringify(ORBITAL_WS_URL),
   },
   bundle: true,
   minify: isProd,
@@ -103,6 +119,8 @@ const sandboxedPreloadDefaults = {
   ...nodeDefaults,
   define: {
     'process.env.NODE_ENV': isProd ? '"production"' : '"development"',
+    'process.env.ORBITAL_API_URL': JSON.stringify(ORBITAL_API_URL),
+    'process.env.ORBITAL_WS_URL': JSON.stringify(ORBITAL_WS_URL),
   },
   external: ['electron'],
   bundle: true,

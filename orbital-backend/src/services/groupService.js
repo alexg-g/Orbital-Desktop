@@ -601,6 +601,190 @@ async function cleanupExpiredCodes() {
   return count;
 }
 
+// =============================================================================
+// DM (Direct Message) Group Functions - Issue #75
+// DMs are implemented as 2-person groups with group_type = 'dm'
+// =============================================================================
+
+/**
+ * Find an existing DM group between two users
+ * @param {string} userAId - First user ID
+ * @param {string} userBId - Second user ID
+ * @returns {Promise<Object|null>} - DM group info or null if not found
+ */
+async function findExistingDMGroup(userAId, userBId) {
+  if (!userAId || !userBId) return null;
+
+  // Find a group of type 'dm' where BOTH users are members
+  const result = await db.query(
+    `SELECT g.id as group_id, g.created_at,
+            creator_member.encrypted_group_key
+     FROM groups g
+     INNER JOIN members m1 ON m1.group_id = g.id AND m1.user_id = $1
+     INNER JOIN members m2 ON m2.group_id = g.id AND m2.user_id = $2
+     LEFT JOIN members creator_member ON creator_member.group_id = g.id AND creator_member.user_id = g.created_by
+     WHERE g.group_type = 'dm'
+     LIMIT 1`,
+    [userAId, userBId]
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  return {
+    group_id: result.rows[0].group_id,
+    encrypted_group_key: result.rows[0].encrypted_group_key,
+    created_at: result.rows[0].created_at,
+  };
+}
+
+/**
+ * Create a DM group between two users, or return existing one
+ * @param {string} creatorId - User creating the DM (sends first message)
+ * @param {string} recipientId - User receiving the DM
+ * @param {string} encryptedGroupKey - Encrypted group key from creator
+ * @returns {Promise<Object>} - DM group info with is_new flag
+ */
+async function createDMGroup(creatorId, recipientId, encryptedGroupKey) {
+  if (!creatorId) throw new Error('creatorId is required');
+  if (!recipientId) throw new Error('recipientId is required');
+  if (!encryptedGroupKey) throw new Error('encryptedGroupKey is required');
+
+  // Check if DM already exists between these users
+  const existing = await findExistingDMGroup(creatorId, recipientId);
+  if (existing) {
+    // Get recipient info for response
+    const recipientResult = await db.query(
+      'SELECT id, username FROM users WHERE id = $1',
+      [recipientId]
+    );
+    const recipient = recipientResult.rows[0];
+
+    logger.info('Existing DM group found', {
+      groupId: existing.group_id,
+      creatorId,
+      recipientId,
+    });
+
+    return {
+      group_id: existing.group_id,
+      is_new: false,
+      group_key: existing.encrypted_group_key,
+      recipient: {
+        id: recipient.id,
+        username: recipient.username,
+      },
+    };
+  }
+
+  // Create new DM group
+  const client = await db.getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // Create the DM group (no invite code needed)
+    // Use a placeholder encrypted_name - DMs show recipient's name, not group name
+    const groupResult = await client.query(
+      `INSERT INTO groups (encrypted_name, created_by, invite_code, group_type)
+       VALUES ($1, $2, NULL, 'dm')
+       RETURNING id, created_at`,
+      ['DM', creatorId]
+    );
+
+    const group = groupResult.rows[0];
+
+    // Add creator as member
+    await client.query(
+      `INSERT INTO members (group_id, user_id, encrypted_group_key)
+       VALUES ($1, $2, $3)`,
+      [group.id, creatorId, encryptedGroupKey]
+    );
+
+    // Add recipient as member (with same key - they can decrypt with it)
+    await client.query(
+      `INSERT INTO members (group_id, user_id, encrypted_group_key)
+       VALUES ($1, $2, $3)`,
+      [group.id, recipientId, encryptedGroupKey]
+    );
+
+    await client.query('COMMIT');
+
+    // Get recipient info for response
+    const recipientResult = await db.query(
+      'SELECT id, username FROM users WHERE id = $1',
+      [recipientId]
+    );
+    const recipient = recipientResult.rows[0];
+
+    logger.info('DM group created', {
+      groupId: group.id,
+      creatorId,
+      recipientId,
+    });
+
+    return {
+      group_id: group.id,
+      is_new: true,
+      group_key: encryptedGroupKey,
+      recipient: {
+        id: recipient.id,
+        username: recipient.username,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Failed to create DM group', {
+      creatorId,
+      recipientId,
+      error: error.message,
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Get all DM groups for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} - List of DM groups with recipient info
+ */
+async function getDMGroups(userId) {
+  if (!userId) throw new Error('userId is required');
+
+  // Get all DM groups where user is a member, with the OTHER participant's info
+  const result = await db.query(
+    `SELECT
+       g.id as group_id,
+       g.created_at,
+       other_user.id as recipient_id,
+       other_user.username as recipient_username,
+       creator_member.encrypted_group_key,
+       (SELECT MAX(server_timestamp) FROM signal_messages WHERE conversation_id = g.id) as last_message_at
+     FROM groups g
+     INNER JOIN members my_membership ON my_membership.group_id = g.id AND my_membership.user_id = $1
+     INNER JOIN members other_membership ON other_membership.group_id = g.id AND other_membership.user_id != $1
+     INNER JOIN users other_user ON other_user.id = other_membership.user_id
+     LEFT JOIN members creator_member ON creator_member.group_id = g.id AND creator_member.user_id = g.created_by
+     WHERE g.group_type = 'dm'
+     ORDER BY last_message_at DESC NULLS LAST, g.created_at DESC`,
+    [userId]
+  );
+
+  return result.rows.map(row => ({
+    group_id: row.group_id,
+    recipient: {
+      id: row.recipient_id,
+      username: row.recipient_username,
+    },
+    encrypted_group_key: row.encrypted_group_key,
+    last_message_at: row.last_message_at,
+    created_at: row.created_at,
+  }));
+}
+
 module.exports = {
   createGroup,
   regenerateInviteCode,
@@ -612,6 +796,10 @@ module.exports = {
   getInviteHistory,
   cleanupExpiredCodes,
   generateInviteCode,
+  // DM functions (Issue #75)
+  findExistingDMGroup,
+  createDMGroup,
+  getDMGroups,
   MAX_MEMBERS,
   INVITE_CODE_EXPIRATION_DAYS
 };

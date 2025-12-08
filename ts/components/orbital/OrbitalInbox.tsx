@@ -34,11 +34,7 @@ import type {
   CreateThreadResult,
   CreateReplyResult,
 } from '../../services/orbitalThreads.preload.js';
-import {
-  storeLocalThread,
-  getLocalThreads,
-  type LocalThread,
-} from './localThreadStorage';
+// Legacy localThreadStorage removed - threads now come only from server API
 import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache } from './settingsStorage';
 
 // Browser-compatible type for authentication check
@@ -276,35 +272,7 @@ function applyCurrentUserProfileToMessages(
   return messages.map(m => applyCurrentUserProfile(m, currentUserId));
 }
 
-/**
- * Map LocalThread from local storage to OrbitalThread for UI
- * For current user's posts, always use their current profile (phpBB style)
- */
-function mapLocalThreadToOrbitalThread(
-  thread: LocalThread,
-  currentUserId: string | null
-): OrbitalThread {
-  // For current user's posts, use current profile (phpBB style - profile updates reflect everywhere)
-  const isCurrentUser = currentUserId !== null && thread.authorId === currentUserId;
-  const currentProfile = isCurrentUser ? getCurrentUserProfile() : null;
-
-  return {
-    id: thread.threadId,
-    orbitId: thread.groupId,
-    title: thread.title,
-    body: thread.body,
-    author: isCurrentUser ? currentProfile!.displayName : thread.authorUsername,
-    authorId: thread.authorId,
-    timestamp: new Date(thread.createdAt).getTime(),
-    replyCount: thread.replyCount,
-    hasMedia: thread.hasMedia,
-    hasVideo: thread.hasVideo,
-    hasImage: thread.hasImage,
-    isUnread: false,
-    avatarUrl: isCurrentUser ? (currentProfile!.avatarUrl || undefined) : thread.avatarUrl,
-    mediaIds: thread.mediaIds,
-  };
-}
+// Legacy mapLocalThreadToOrbitalThread removed - no longer using local thread storage
 
 // Default mock functions for Storybook/testing (used when no injection provided)
 const defaultGetQuotaInfo: GetQuotaInfoFunction = async (groupId) => ({
@@ -524,57 +492,92 @@ export function OrbitalInbox({
     loadGroupsAndCheckSelection();
   }, [isLoggedIn, getGroups, getSelectedGroupId]);
 
-  // Fetch chats when logged in (orbit-agnostic - chats are global)
-  // TODO: Integrate with real chat API when available
+  // Fetch DM chats when logged in
+  // Issue #75 fix: Load DM groups from backend instead of grouping messages by sender
+  // DMs are now 2-person groups with their own conversation_id
   useEffect(() => {
     if (!isLoggedIn) {
       return;
     }
 
-    // Load chats from Signal relay
-    async function loadChats() {
-      if (!selectedGroupId) return;
-
+    async function loadDMChats() {
       try {
-        console.log('[OrbitalInbox] Fetching chats for group:', selectedGroupId);
-        const result = await fetchChatMessages(selectedGroupId);
+        console.log('[OrbitalInbox] Loading DM groups from backend...');
 
-        // Group messages by sender to create chat list
-        const chatMap = new Map<string, OrbitalChat>();
+        // Import DM functions
+        const { listDMGroups } = await import('../../services/orbitalGroups.preload.js');
 
-        for (const msg of result.messages) {
-          const decoded = await decodeChatEnvelope(selectedGroupId, msg.encryptedEnvelope);
-          if (!decoded) continue;
+        // Load DM groups from backend (proper conversation architecture)
+        const dmGroups = await listDMGroups();
 
-          const senderId = decoded.sender;
-          if (!chatMap.has(senderId)) {
-            chatMap.set(senderId, {
-              id: `chat-${senderId}`,
-              recipientId: senderId,
-              name: senderId, // TODO: Look up username
-              lastMessage: decoded.body,
-              lastMessageTimestamp: decoded.timestamp,
-              unreadCount: 0,
-            });
-          } else {
-            const chat = chatMap.get(senderId)!;
-            if (decoded.timestamp > chat.lastMessageTimestamp) {
-              chat.lastMessage = decoded.body;
-              chat.lastMessageTimestamp = decoded.timestamp;
+        // Convert DM groups to OrbitalChat format
+        const dmChats: OrbitalChat[] = dmGroups.map(dm => ({
+          id: dm.groupId,  // Use actual group_id as chat ID (= conversation_id)
+          recipientId: dm.recipient.id,
+          name: dm.recipient.username,  // Proper username from backend
+          lastMessage: '',  // Will be populated when loading messages
+          lastMessageTimestamp: dm.lastMessageAt || 0,
+          unreadCount: 0,
+        }));
+
+        setChats(dmChats);
+        console.log('[OrbitalInbox] Loaded', dmChats.length, 'DM conversations');
+
+        // Load messages for each DM group into cache
+        const newCache: Record<string, OrbitalMessageType[]> = {};
+
+        for (const dm of dmGroups) {
+          try {
+            const result = await fetchChatMessages(dm.groupId);
+            const messages: OrbitalMessageType[] = [];
+
+            for (const msg of result.messages) {
+              const decoded = await decodeChatEnvelope(dm.groupId, msg.encryptedEnvelope);
+              if (!decoded) continue;
+
+              // Determine author name - if sender is current user, use "You", else use recipient name
+              const authorName = decoded.sender === currentUserId ? 'You' : dm.recipient.username;
+
+              messages.push({
+                id: msg.messageId,
+                author: authorName,
+                authorId: decoded.sender,
+                timestamp: decoded.timestamp,
+                body: decoded.body,
+                level: 0,
+                hasMedia: false,
+              });
             }
+
+            // Sort by timestamp ascending
+            messages.sort((a, b) => a.timestamp - b.timestamp);
+            newCache[dm.groupId] = messages;
+
+            // Update chat's lastMessage from actual messages
+            if (messages.length > 0) {
+              const lastMsg = messages[messages.length - 1];
+              setChats(prev => prev.map(chat =>
+                chat.id === dm.groupId
+                  ? { ...chat, lastMessage: lastMsg.body, lastMessageTimestamp: lastMsg.timestamp }
+                  : chat
+              ));
+            }
+          } catch (err) {
+            console.warn('[OrbitalInbox] Failed to load messages for DM:', dm.groupId, err);
           }
         }
 
-        setChats(Array.from(chatMap.values()));
-        console.log('[OrbitalInbox] Loaded', chatMap.size, 'chats');
+        setChatMessagesCache(prev => ({ ...prev, ...newCache }));
+        console.log('[OrbitalInbox] Loaded messages for', Object.keys(newCache).length, 'DM conversations');
+
       } catch (err) {
-        console.error('[OrbitalInbox] Failed to load chats:', err);
+        console.error('[OrbitalInbox] Failed to load DM chats:', err);
         setChats([]);
       }
     }
 
-    loadChats();
-  }, [isLoggedIn, selectedGroupId, fetchChatMessages, decodeChatEnvelope]);
+    loadDMChats();
+  }, [isLoggedIn, currentUserId, fetchChatMessages, decodeChatEnvelope]);
 
   // Load contacts when logged in AND orbit selected (for Create Chat picker)
   // Contacts are group members from the selected orbit
@@ -688,19 +691,20 @@ export function OrbitalInbox({
     });
 
     // Handle incoming chat messages from Signal relay
+    // Issue #75 fix: Use conversation_id (DM group_id) for proper chat lookup
     const unsubNewMessage = wsSubscribe('new_message', async (event) => {
       console.log('[OrbitalInbox] Received new_message event:', event);
       const data = event.data;
 
-      // Get the group ID for decryption
-      const groupId = data.conversation_id || selectedGroupId;
-      if (!groupId) {
-        console.warn('[OrbitalInbox] No group ID for decryption');
+      // Get the conversation_id (DM group_id) for decryption and chat lookup
+      const conversationId = data.conversation_id;
+      if (!conversationId) {
+        console.warn('[OrbitalInbox] No conversation_id in message');
         return;
       }
 
       // Decrypt the message envelope with group key
-      const decoded = await decodeChatEnvelope(groupId, data.encrypted_envelope);
+      const decoded = await decodeChatEnvelope(conversationId, data.encrypted_envelope);
       if (!decoded) {
         console.warn('[OrbitalInbox] Failed to decrypt message envelope');
         return;
@@ -712,10 +716,16 @@ export function OrbitalInbox({
         return;
       }
 
+      // Find the DM chat by conversation_id (which is now the DM group_id)
+      const existingChat = chats.find(c => c.id === conversationId);
+
+      // Get sender name from existing chat or fallback
+      const senderName = existingChat?.name || decoded.sender;
+
       // Create message object for UI
       const newChatMessage: OrbitalMessageType = {
         id: data.message_id,
-        author: decoded.sender, // TODO: Look up username
+        author: senderName,
         authorId: decoded.sender,
         timestamp: decoded.timestamp,
         body: decoded.body,
@@ -723,13 +733,12 @@ export function OrbitalInbox({
         hasMedia: false,
       };
 
-      // Update chat list - add or update sender's chat
+      // Update chat list using conversation_id
       setChats(prevChats => {
-        const senderId = decoded.sender;
-        const existingChatIndex = prevChats.findIndex(c => c.recipientId === senderId);
+        const existingChatIndex = prevChats.findIndex(c => c.id === conversationId);
 
         if (existingChatIndex >= 0) {
-          // Update existing chat
+          // Update existing chat's last message
           const updatedChats = [...prevChats];
           const chat = updatedChats[existingChatIndex];
           updatedChats[existingChatIndex] = {
@@ -740,11 +749,13 @@ export function OrbitalInbox({
           };
           return updatedChats;
         } else {
-          // Create new chat entry
+          // New DM from unknown conversation - reload DM list to get proper info
+          console.log('[OrbitalInbox] New message from unknown DM, will refresh on next load');
+          // For now, create a placeholder entry
           const newChat: OrbitalChat = {
-            id: `chat-${senderId}`,
-            recipientId: senderId,
-            name: senderId, // TODO: Look up username
+            id: conversationId,
+            recipientId: decoded.sender,
+            name: decoded.sender, // Will be refreshed on next DM list load
             lastMessage: decoded.body,
             lastMessageTimestamp: decoded.timestamp,
             unreadCount: 1,
@@ -753,9 +764,8 @@ export function OrbitalInbox({
         }
       });
 
-      // If viewing this sender's chat, add message to display
-      const senderChatId = `chat-${decoded.sender}`;
-      if (activeChatId === senderChatId || chats.some(c => c.id === activeChatId && c.recipientId === decoded.sender)) {
+      // If viewing this conversation, add message to display
+      if (activeChatId === conversationId) {
         setChatMessages(prevMessages => {
           // Check if message already exists
           if (prevMessages.some(m => m.id === data.message_id)) {
@@ -767,7 +777,13 @@ export function OrbitalInbox({
         // Update cache
         setChatMessagesCache(prev => ({
           ...prev,
-          [activeChatId!]: [...(prev[activeChatId!] || []), newChatMessage]
+          [conversationId]: [...(prev[conversationId] || []), newChatMessage]
+        }));
+      } else {
+        // Update cache even if not viewing (for when user switches to this chat)
+        setChatMessagesCache(prev => ({
+          ...prev,
+          [conversationId]: [...(prev[conversationId] || []), newChatMessage]
         }));
       }
     });
@@ -780,7 +796,7 @@ export function OrbitalInbox({
       unsubMediaUploaded();
       unsubNewMessage();
     };
-  }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope]);
+  }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, availableContacts, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope]);
 
   // Fetch threads when logged in AND orbit is selected (orbit-specific)
   useEffect(() => {
@@ -796,45 +812,20 @@ export function OrbitalInbox({
       console.log('[OrbitalInbox] Fetching threads for groupId:', groupId);
       try {
         if (listThreads) {
-          // LOCAL-FIRST: listThreads reads from SQLCipher and triggers background server sync
-          console.log('[OrbitalInbox] Using local-first thread storage...');
           const result = await listThreads(groupId, {
             limit: 50,
             sort: 'created_desc',
           });
-
-          console.log('[OrbitalInbox] Local SQLCipher returned', result.threads.length, 'threads');
+          console.log('[OrbitalInbox] Server returned', result.threads.length, 'threads');
           const threads = result.threads.map(t => mapThreadInfoToOrbitalThread(t, currentUserId));
           setThreads(threads);
         } else {
-          // Fallback: legacy local storage (deprecated)
-          console.log('[OrbitalInbox] No listThreads API - using legacy local storage');
-          const localThreads = await getLocalThreads(groupId);
-          if (localThreads.length > 0) {
-            console.log('[OrbitalInbox] Found', localThreads.length, 'threads in legacy storage');
-            const mappedThreads = localThreads.map(t => mapLocalThreadToOrbitalThread(t, currentUserId));
-            setThreads(mappedThreads);
-          } else {
-            console.log('[OrbitalInbox] No threads found');
-            setThreads([]);
-          }
+          console.log('[OrbitalInbox] No listThreads API available');
+          setThreads([]);
         }
       } catch (err) {
         console.error('[OrbitalInbox] Failed to fetch threads:', err);
-        // Fallback to legacy local storage on error
-        try {
-          const localThreads = await getLocalThreads(groupId);
-          if (localThreads.length > 0) {
-            console.log('[OrbitalInbox] Using legacy storage fallback:', localThreads.length, 'threads');
-            const mappedThreads = localThreads.map(t => mapLocalThreadToOrbitalThread(t, currentUserId));
-            setThreads(mappedThreads);
-          } else {
-            setThreads([]);
-          }
-        } catch (localErr) {
-          console.error('[OrbitalInbox] Legacy storage fallback failed:', localErr);
-          setThreads([]);
-        }
+        setThreads([]);
       } finally {
         setIsLoadingThreads(false);
       }
@@ -949,12 +940,12 @@ export function OrbitalInbox({
   }, []);
 
   // Handle contact selection from picker
-  // TODO: Integrate with real chat API when available
-  const handleSelectContacts = useCallback((contactIds: string[], groupName?: string) => {
+  // Issue #75 fix: Use createDMGroup() to create proper DM groups
+  const handleSelectContacts = useCallback(async (contactIds: string[], groupName?: string) => {
     setShowContactPicker(false);
 
     if (contactIds.length === 1) {
-      // 1:1 DM - check for existing chat in current state
+      // 1:1 DM - check for existing chat in current state first
       const recipientId = contactIds[0];
       const existingChat = chats.find(c => c.recipientId === recipientId);
 
@@ -970,48 +961,48 @@ export function OrbitalInbox({
           setChatMessagesCache(prev => ({ ...prev, [existingChat.id]: [] }));
         }
       } else {
-        // Create new chat - get contact info from availableContacts
-        const recipient = availableContacts.find(c => c.id === recipientId);
-        if (!recipient) {
-          console.warn('Contact not found:', recipientId);
-          return;
+        // Create new DM group via backend (Issue #75 fix)
+        try {
+          console.log('[OrbitalInbox] Creating DM group for recipient:', recipientId);
+          const { createDMGroup } = await import('../../services/orbitalGroups.preload.js');
+          const dmResult = await createDMGroup(recipientId);
+
+          console.log('[OrbitalInbox] DM group created/found:', dmResult.groupId, 'isNew:', dmResult.isNew);
+
+          // Create chat object with proper group_id
+          const newChat: OrbitalChat = {
+            id: dmResult.groupId,  // Use actual group_id as chat ID
+            recipientId: dmResult.recipient.id,
+            name: dmResult.recipient.username,
+            lastMessage: '',
+            lastMessageTimestamp: Date.now(),
+            unreadCount: 0,
+          };
+
+          // Add to chats if it's new, otherwise it might already be there
+          setChats(prev => {
+            const exists = prev.some(c => c.id === dmResult.groupId);
+            if (exists) return prev;
+            return [newChat, ...prev];
+          });
+
+          setActiveChatId(newChat.id);
+          setActiveThreadId(null);
+          setChatMessages([]);
+          setChatMessagesCache(prev => ({ ...prev, [newChat.id]: [] }));
+
+        } catch (err) {
+          console.error('[OrbitalInbox] Failed to create DM group:', err);
+          // Fallback: show error to user
+          alert('Failed to start conversation. Please try again.');
         }
-
-        const newChat: OrbitalChat = {
-          id: `chat-${Date.now()}`,
-          recipientId,
-          name: recipient.name,
-          avatarUrl: recipient.avatarUrl,
-          lastMessage: '',
-          lastMessageTimestamp: Date.now(),
-          unreadCount: 0,
-          isOnline: recipient.isOnline,
-        };
-
-        setChats(prev => [newChat, ...prev]);
-        setActiveChatId(newChat.id);
-        setActiveThreadId(null);
-        setChatMessages([]);
-        setChatMessagesCache(prev => ({ ...prev, [newChat.id]: [] }));
       }
     } else if (contactIds.length > 1) {
-      // Group chat - create new
-      const newGroupChat: OrbitalChat = {
-        id: `group-${Date.now()}`,
-        recipientId: contactIds.join(','),
-        name: groupName || 'New Group',
-        lastMessage: '',
-        lastMessageTimestamp: Date.now(),
-        unreadCount: 0,
-      };
-
-      setChats(prev => [newGroupChat, ...prev]);
-      setActiveChatId(newGroupChat.id);
-      setActiveThreadId(null);
-      setChatMessages([]);
-      setChatMessagesCache(prev => ({ ...prev, [newGroupChat.id]: [] }));
+      // Group chat - for now, log that this isn't supported yet
+      console.warn('[OrbitalInbox] Multi-person group chats not yet supported');
+      alert('Group chats are not yet supported. Please select one contact for a direct message.');
     }
-  }, [chats, chatMessagesCache, availableContacts]);
+  }, [chats, chatMessagesCache]);
 
   const handleSettingsClick = useCallback(() => {
     setShowSettings(true);
@@ -1061,25 +1052,6 @@ export function OrbitalInbox({
           avatarUrl: userProfile.avatarUrl || undefined,
           mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
         };
-
-        // Also store thread locally for persistence across app restarts
-        const localThread: LocalThread = {
-          threadId: result.threadId,
-          groupId: result.groupId,
-          authorId: currentUserId || 'unknown',
-          authorUsername: userProfile.displayName,
-          title,
-          body,
-          replyCount: 0,
-          createdAt: result.createdAt,
-          hasMedia: mediaIds.length > 0,
-          hasVideo: false,
-          hasImage: mediaIds.length > 0,
-          avatarUrl: userProfile.avatarUrl || undefined,
-          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
-        };
-        await storeLocalThread(localThread);
-        console.log('[OrbitalInbox] Thread stored locally:', result.threadId);
 
         // Add to threads list at the top
         setThreads(prev => [newThread, ...prev]);

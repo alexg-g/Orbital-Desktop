@@ -1381,3 +1381,168 @@ export async function clearSelectedGroupId(): Promise<void> {
   await itemStorage.remove('orbitalSelectedGroupId');
   log.info('clearSelectedGroupId: Cleared');
 }
+
+// =============================================================================
+// DM (DIRECT MESSAGE) FUNCTIONS - Issue #75
+// DMs are implemented as 2-person groups with group_type = 'dm'
+// =============================================================================
+
+/**
+ * DM group information returned from API
+ */
+export type DMGroupInfo = {
+  groupId: string;
+  isNew: boolean;
+  groupKey: string;
+  recipient: {
+    id: string;
+    username: string;
+  };
+};
+
+/**
+ * DM list item (for listing all DM conversations)
+ */
+export type DMListItem = {
+  groupId: string;
+  recipient: {
+    id: string;
+    username: string;
+  };
+  lastMessageAt: number | null;
+  createdAt: string;
+};
+
+/**
+ * Create a DM group with another user (or get existing one)
+ *
+ * This creates a 2-person group of type 'dm' for private messaging.
+ * If a DM already exists between the two users, returns the existing one.
+ *
+ * @param recipientId User ID to start DM with
+ * @returns DM group info including group key
+ */
+export async function createDMGroup(recipientId: string): Promise<DMGroupInfo> {
+  const logId = `createDMGroup(${recipientId})`;
+
+  try {
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    // Generate a group encryption key for this DM
+    const groupKey = getRandomBytes(32);
+    const groupKeyBase64 = Bytes.toBase64(groupKey);
+
+    log.info(`${logId}: Creating DM group with key prefix: ${groupKeyBase64.substring(0, 8)}...`);
+
+    const requestBody = JSON.stringify({
+      recipient_id: recipientId,
+      encrypted_group_key: groupKeyBase64,
+    });
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/groups/dm`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: Buffer.from(requestBody),
+    });
+
+    if (response.status !== 200 && response.status !== 201) {
+      const errorData = parseErrorResponse(response.data);
+      throw new Error(errorData.error || `Failed to create DM group: ${response.status}`);
+    }
+
+    const data = JSON.parse(response.data);
+
+    // Store the group key locally (use returned key, which may be existing key if DM existed)
+    const keyToStore = data.group_key || groupKeyBase64;
+    await storeGroupKey(data.group_id, keyToStore);
+
+    log.info(`${logId}: DM group ${data.is_new ? 'created' : 'found'}`, {
+      groupId: data.group_id,
+      isNew: data.is_new,
+      recipient: data.recipient?.username,
+    });
+
+    return {
+      groupId: data.group_id,
+      isNew: data.is_new,
+      groupKey: keyToStore,
+      recipient: {
+        id: data.recipient.id,
+        username: data.recipient.username,
+      },
+    };
+  } catch (error) {
+    log.error(`${logId}: Failed to create DM group`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
+
+/**
+ * List all DM conversations for the current user
+ *
+ * Returns DM groups sorted by last message timestamp (most recent first).
+ *
+ * @returns Array of DM list items with recipient info
+ */
+export async function listDMGroups(): Promise<DMListItem[]> {
+  const logId = 'listDMGroups';
+
+  try {
+    const { getJWT } = await import('./orbitalAuth.preload.js');
+    const jwtToken = await getJWT();
+
+    if (!jwtToken) {
+      throw new Error('Not authenticated. Please log in first.');
+    }
+
+    const response = await makeRequest({
+      url: `${ORBITAL_API_URL}/api/groups/dms`,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwtToken}`,
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`Failed to list DM groups: ${response.status} ${response.statusText}`);
+    }
+
+    const data = JSON.parse(response.data);
+    const dms: DMListItem[] = [];
+
+    for (const dm of data.dms || []) {
+      // Store the group key if present
+      if (dm.encrypted_group_key) {
+        await storeGroupKey(dm.group_id, dm.encrypted_group_key);
+      }
+
+      dms.push({
+        groupId: dm.group_id,
+        recipient: {
+          id: dm.recipient.id,
+          username: dm.recipient.username,
+        },
+        lastMessageAt: dm.last_message_at ? new Date(dm.last_message_at).getTime() : null,
+        createdAt: dm.created_at,
+      });
+    }
+
+    log.info(`${logId}: Retrieved ${dms.length} DM conversations`);
+
+    return dms;
+  } catch (error) {
+    log.error(`${logId}: Failed to list DM groups`, Errors.toLogFormat(error));
+    await handleOrbitalAPIError(error);
+    throw error;
+  }
+}
