@@ -1382,8 +1382,9 @@ export function OrbitalInbox({
       }));
 
       // Send to backend via Signal relay
-      console.log('[OrbitalInbox] Sending chat message via Signal relay...');
-      const result = await sendChatMessage(selectedGroupId, body);
+      // Use activeChatId (DM group ID) as conversation_id, not selectedGroupId (orbit)
+      console.log('[OrbitalInbox] Sending chat message via Signal relay to DM:', activeChatId);
+      const result = await sendChatMessage(activeChatId, body);
       console.log('[OrbitalInbox] Chat message sent:', result.messageId);
 
       // Update message with real ID from server
