@@ -153,6 +153,57 @@ psql -U orbital_user -d orbital -c "INSERT INTO users (username, password_hash, 
 | `.env.test` | Test config (port 5432, orbital_test database) |
 | `.env.local` | Local overrides (gitignored) |
 
+## Production Droplet
+
+The production backend runs on a DigitalOcean droplet. Connection details (IP address) are stored in `orbital-backend/.env.local` under the `LOGIN` variable.
+
+### Droplet Structure
+
+```
+/home/orbital/apps/orbital/orbital-backend   # Backend application
+```
+
+### User Accounts
+
+| User | Purpose |
+|------|---------|
+| `root` | SSH access, git operations |
+| `orbital` | PM2 process owner, application runtime |
+
+### Syncing Production
+
+```bash
+# SSH to droplet (get IP from orbital-backend/.env.local)
+ssh root@<IP>
+
+# Navigate to backend
+cd /home/orbital/apps/orbital/orbital-backend
+
+# Pull latest changes
+git pull origin main
+
+# Restart backend (MUST run as orbital user)
+su - orbital -c 'pm2 restart orbital-backend'
+
+# Check status
+su - orbital -c 'pm2 status'
+su - orbital -c 'pm2 logs orbital-backend --lines 50'
+```
+
+### Environment-Specific Builds
+
+The Electron app can target different backends:
+
+```bash
+# Local development (http://localhost:3000)
+pnpm start
+
+# Production (https://api.orbitl.org)
+pnpm run build:esbuild --prod
+```
+
+The esbuild script (`scripts/esbuild.js`) sets `ORBITAL_API_URL` and `ORBITAL_WS_URL` based on the `--prod` flag.
+
 This directory contains 8 specialized agent personas for the Orbital project. Each agent references the [Product Requirements Document (PRD)](/planning-docs/PRODUCT-REQUIREMENTS-DOCUMENT.md) as the single source of truth.
 
 ## Agent Overview
