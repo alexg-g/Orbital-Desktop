@@ -40,6 +40,50 @@ const log = createLogger('OrbitalGroups');
 const ORBITAL_API_URL = process.env.ORBITAL_API_URL || 'https://api.orbitl.org';
 
 /**
+ * Fetch an avatar image and convert to data URL
+ * This is needed because Electron's renderer can't load http:// images directly
+ */
+async function fetchAvatarAsDataUrl(avatarPath: string): Promise<string | undefined> {
+  const avatarUrl = `${ORBITAL_API_URL}${avatarPath}`;
+  const parsedUrl = new URL(avatarUrl);
+  const httpModule = parsedUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve) => {
+    const request = httpModule.get(avatarUrl, (response) => {
+      if (response.statusCode !== 200) {
+        log.warn(`Failed to fetch avatar: ${response.statusCode}`);
+        resolve(undefined);
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        const contentType = response.headers['content-type'] || 'image/png';
+        const base64 = buffer.toString('base64');
+        resolve(`data:${contentType};base64,${base64}`);
+      });
+      response.on('error', () => {
+        log.warn('Error reading avatar response');
+        resolve(undefined);
+      });
+    });
+
+    request.on('error', (error) => {
+      log.warn('Avatar fetch failed', Errors.toLogFormat(error));
+      resolve(undefined);
+    });
+
+    request.setTimeout(5000, () => {
+      request.destroy();
+      log.warn('Avatar fetch timed out');
+      resolve(undefined);
+    });
+  });
+}
+
+/**
  * Group limits
  */
 export const GROUP_LIMITS = {
@@ -68,6 +112,7 @@ export type GroupMember = {
   username: string;
   joinedAt: string;
   isOwner: boolean;
+  avatarUrl?: string;
 };
 
 /**
@@ -445,12 +490,23 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     }
 
     const data = JSON.parse(response.data);
-    const members: GroupMember[] = (data.members || []).map((m: any) => ({
-      memberId: m.user_id,
-      username: m.username,
-      joinedAt: m.joined_at,
-      isOwner: m.is_owner || false,
-    }));
+
+    // Fetch avatar data URLs in parallel for all members with avatars
+    const members: GroupMember[] = await Promise.all(
+      (data.members || []).map(async (m: any) => {
+        let avatarDataUrl: string | undefined;
+        if (m.avatar_url) {
+          avatarDataUrl = await fetchAvatarAsDataUrl(m.avatar_url);
+        }
+        return {
+          memberId: m.user_id,
+          username: m.username,
+          joinedAt: m.joined_at,
+          isOwner: m.is_owner || false,
+          avatarUrl: avatarDataUrl,
+        };
+      })
+    );
 
     log.info(`${logId}: Retrieved ${members.length} members`);
 

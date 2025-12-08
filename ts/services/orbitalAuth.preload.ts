@@ -489,3 +489,142 @@ async function makeAuthRequest(params: {
     request.end();
   });
 }
+
+/**
+ * Upload avatar image to backend
+ * @param fileBuffer - Image file buffer
+ * @param fileName - Original file name
+ * @param mimeType - MIME type of the image
+ * @returns The avatar URL from the server
+ */
+export async function uploadAvatar(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string
+): Promise<string> {
+  const token = await getJWT();
+  if (!token) {
+    throw new Error('Not authenticated. Please log in first.');
+  }
+
+  const boundary = `----OrbitalAvatarBoundary${crypto.randomBytes(16).toString('hex')}`;
+
+  // Build multipart form data
+  const parts: Buffer[] = [];
+
+  // Add file part
+  const fileHeader = Buffer.from(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="avatar"; filename="${fileName}"\r\n` +
+    `Content-Type: ${mimeType}\r\n\r\n`
+  );
+  parts.push(fileHeader);
+  parts.push(fileBuffer);
+  parts.push(Buffer.from('\r\n'));
+
+  // Add closing boundary
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+  const body = Buffer.concat(parts);
+
+  const apiUrl = `${ORBITAL_API_URL}/api/users/avatar`;
+  const parsedUrl = new URL(apiUrl);
+  const httpModule = parsedUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+
+    const requestOptions: https.RequestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+      path: parsedUrl.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length,
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    const request = httpModule.request(requestOptions, response => {
+      response.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      response.on('end', () => {
+        const data = Buffer.concat(chunks);
+
+        if (response.statusCode !== 200) {
+          log.error('Avatar upload failed', {
+            status: response.statusCode,
+            response: data.toString(),
+          });
+          reject(new Error(`Avatar upload failed: ${response.statusCode}`));
+          return;
+        }
+
+        try {
+          const result = JSON.parse(data.toString());
+          log.info('Avatar uploaded successfully', { avatarUrl: result.avatarUrl });
+          resolve(result.avatarUrl);
+        } catch (parseError) {
+          reject(new Error('Failed to parse avatar upload response'));
+        }
+      });
+    });
+
+    request.on('error', error => {
+      log.error('Avatar upload request failed', {
+        error: Errors.toLogFormat(error),
+      });
+      reject(error);
+    });
+
+    request.write(body);
+    request.end();
+  });
+}
+
+/**
+ * Remove avatar from backend
+ */
+export async function removeAvatar(): Promise<void> {
+  const token = await getJWT();
+  if (!token) {
+    throw new Error('Not authenticated. Please log in first.');
+  }
+
+  const apiUrl = `${ORBITAL_API_URL}/api/users/avatar`;
+  const parsedUrl = new URL(apiUrl);
+  const httpModule = parsedUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const requestOptions: https.RequestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+      path: parsedUrl.pathname,
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    const request = httpModule.request(requestOptions, response => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Avatar removal failed: ${response.statusCode}`));
+        return;
+      }
+      log.info('Avatar removed successfully');
+      resolve();
+    });
+
+    request.on('error', error => {
+      log.error('Avatar removal request failed', {
+        error: Errors.toLogFormat(error),
+      });
+      reject(error);
+    });
+
+    request.end();
+  });
+}

@@ -198,7 +198,8 @@ const defaultSetSelectedGroupId: SetSelectedGroupIdFunction = async () => {};
  */
 function mapThreadInfoToOrbitalThread(
   thread: ThreadInfo,
-  currentUserId: string | null
+  currentUserId: string | null,
+  memberAvatars: Map<string, string>
 ): OrbitalThread {
   // For current user's posts, use current profile (phpBB style - profile updates reflect everywhere)
   const isCurrentUser = currentUserId !== null && thread.authorId === currentUserId;
@@ -220,7 +221,9 @@ function mapThreadInfoToOrbitalThread(
     hasVideo: false, // TODO: Parse from media metadata
     hasImage: (thread.mediaCount || 0) > 0,
     isUnread: false, // TODO: Track read status
-    avatarUrl: isCurrentUser ? (currentProfile!.avatarUrl || undefined) : undefined,
+    avatarUrl: isCurrentUser
+      ? (currentProfile!.avatarUrl || undefined)
+      : memberAvatars.get(thread.authorId) || undefined,
     mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
   };
 }
@@ -229,7 +232,10 @@ function mapThreadInfoToOrbitalThread(
  * Map ReplyInfo from backend to OrbitalMessageType for UI
  * Note: Avatar URL will be populated by phpBB-style profile transformation for current user
  */
-function mapReplyInfoToOrbitalMessage(reply: ReplyInfo): OrbitalMessageType {
+function mapReplyInfoToOrbitalMessage(
+  reply: ReplyInfo,
+  memberAvatars: Map<string, string>
+): OrbitalMessageType {
   return {
     id: reply.replyId,
     author: reply.authorUsername,
@@ -239,7 +245,7 @@ function mapReplyInfoToOrbitalMessage(reply: ReplyInfo): OrbitalMessageType {
     level: 1, // Replies are always level 1 (flat structure for now)
     hasMedia: (reply.mediaCount || 0) > 0,
     mediaIds: reply.media?.map(m => m.mediaId),
-    avatarUrl: undefined, // Will be set by profile transformation for current user
+    avatarUrl: memberAvatars.get(reply.authorId) || undefined,
   };
 }
 
@@ -400,6 +406,9 @@ export function OrbitalInbox({
   // Contact picker modal state
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [availableContacts, setAvailableContacts] = useState<OrbitalUser[]>([]);
+
+  // Member avatar cache (maps userId -> avatarUrl)
+  const [memberAvatars, setMemberAvatars] = useState<Map<string, string>>(new Map());
 
   // Session caches for messages (persists user-posted messages during session)
   const [threadMessagesCache, setThreadMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
@@ -584,24 +593,46 @@ export function OrbitalInbox({
   useEffect(() => {
     if (!isLoggedIn || !selectedGroupId) {
       setAvailableContacts([]);
+      setMemberAvatars(new Map());
       return;
     }
 
     async function loadContacts() {
       try {
-        const contacts = await getContacts(selectedGroupId!);
-        // Filter out current user from contacts
-        const filteredContacts = contacts.filter(c => c.id !== currentUserId);
-        setAvailableContacts(filteredContacts);
-        console.log('[OrbitalInbox] Loaded contacts:', filteredContacts.length);
+        // Load members from API (includes avatar URLs)
+        const { getGroupMembers } = await import('../../services/orbitalGroups.preload.js');
+        const members = await getGroupMembers(selectedGroupId!);
+
+        // Build member avatar cache
+        const avatarMap = new Map<string, string>();
+        members.forEach(member => {
+          if (member.avatarUrl) {
+            avatarMap.set(member.memberId, member.avatarUrl);
+          }
+        });
+        setMemberAvatars(avatarMap);
+        console.log('[OrbitalInbox] Built avatar cache with', avatarMap.size, 'avatars');
+
+        // Convert members to contacts for picker
+        const contacts: OrbitalUser[] = members
+          .filter(m => m.memberId !== currentUserId) // Filter out current user
+          .map(m => ({
+            id: m.memberId,
+            name: m.username,
+            avatarUrl: m.avatarUrl,
+          }));
+
+        setAvailableContacts(contacts);
+        console.log('[OrbitalInbox] Loaded contacts:', contacts.length);
       } catch (err) {
         console.error('[OrbitalInbox] Failed to load contacts:', err);
         setAvailableContacts([]);
+        setMemberAvatars(new Map());
       }
     }
 
     loadContacts();
-  }, [isLoggedIn, selectedGroupId, getContacts, currentUserId]);
+  }, [isLoggedIn, selectedGroupId, currentUserId]);
 
   // WebSocket connection and real-time event handling
   useEffect(() => {
@@ -817,7 +848,7 @@ export function OrbitalInbox({
             sort: 'created_desc',
           });
           console.log('[OrbitalInbox] Server returned', result.threads.length, 'threads');
-          const threads = result.threads.map(t => mapThreadInfoToOrbitalThread(t, currentUserId));
+          const threads = result.threads.map(t => mapThreadInfoToOrbitalThread(t, currentUserId, memberAvatars));
           setThreads(threads);
         } else {
           console.log('[OrbitalInbox] No listThreads API available');
@@ -832,7 +863,7 @@ export function OrbitalInbox({
     }
 
     fetchThreads();
-  }, [isLoggedIn, selectedGroupId, listThreads, currentUserId]);
+  }, [isLoggedIn, selectedGroupId, listThreads, currentUserId, memberAvatars]);
 
   const handleThreadClick = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId);
@@ -856,7 +887,7 @@ export function OrbitalInbox({
       if (getReplies) {
         // Use real API
         const result = await getReplies(threadId, { limit: 100 });
-        const mappedReplies = result.replies.map(mapReplyInfoToOrbitalMessage);
+        const mappedReplies = result.replies.map(r => mapReplyInfoToOrbitalMessage(r, memberAvatars));
 
         // Create original post message from thread data
         const allMessages: OrbitalMessageType[] = [];
@@ -924,7 +955,7 @@ export function OrbitalInbox({
     } finally {
       setIsLoadingReplies(false);
     }
-  }, [threadMessagesCache, getReplies, threads]);
+  }, [threadMessagesCache, getReplies, threads, memberAvatars]);
 
   const handleCreateThread = useCallback(() => {
     setActiveThreadId(null); // Deselect any active thread

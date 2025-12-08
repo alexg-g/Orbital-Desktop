@@ -9,7 +9,7 @@ import {
   OrbitalSettingsButton,
 } from './OrbitalSettingsControl';
 import { getSetting, setSetting, validateDisplayName, sanitizeDisplayName } from './settingsStorage';
-import { logout, getUsername } from '../../services/orbitalAuth.preload.js';
+import { logout, getUsername, uploadAvatar, removeAvatar } from '../../services/orbitalAuth.preload.js';
 
 export type OrbitalSettingsGeneralProps = {
   onLogout?: () => void;
@@ -136,23 +136,38 @@ export function OrbitalSettingsGeneral({
         return;
       }
 
-      // Validate file size (max 1.5MB for base64 storage)
-      if (file.size > 1.5 * 1024 * 1024) {
-        alert('Image must be less than 1.5MB');
+      // Validate file size (max 5MB for backend storage)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image must be less than 5MB');
         return;
       }
 
-      // Convert file to base64 data URL for persistent storage
+      // Read file as both ArrayBuffer (for upload) and DataURL (for local display)
+      const arrayBuffer = await file.arrayBuffer();
+      const fileBuffer = Buffer.from(arrayBuffer);
+
+      // Convert to base64 for immediate local display
       const reader = new FileReader();
       reader.onload = async (e) => {
         const dataUrl = e.target?.result as string;
         if (dataUrl) {
+          // Set local display immediately
           setAvatarUrl(dataUrl);
+
           try {
+            // Upload to backend first
+            const serverAvatarUrl = await uploadAvatar(fileBuffer, file.name, file.type);
+            console.log('Avatar uploaded to server:', serverAvatarUrl);
+
+            // Save both local data URL (for immediate display) and server URL
             await setSetting('orbital.settings.general.avatarUrl', dataUrl);
-            console.log('Avatar saved as base64:', file.name);
+            await setSetting('orbital.settings.general.serverAvatarUrl', serverAvatarUrl);
+            console.log('Avatar saved locally:', file.name);
           } catch (error) {
             console.error('Failed to save avatar:', error);
+            // Revert local state on error
+            setAvatarUrl(null);
+            alert('Failed to upload avatar. Please try again.');
           }
         }
       };
@@ -168,12 +183,19 @@ export function OrbitalSettingsGeneral({
     setAvatarUrl(null);
 
     try {
+      // Remove from backend first
+      await removeAvatar();
+      console.log('Avatar removed from server');
+
+      // Then remove local settings
       await setSetting('orbital.settings.general.avatarUrl', null);
-      console.log('Avatar removed');
+      await setSetting('orbital.settings.general.serverAvatarUrl', null);
+      console.log('Avatar removed locally');
     } catch (error) {
-      console.error('Failed to remove avatar from storage:', error);
+      console.error('Failed to remove avatar:', error);
+      // Don't revert local state - user clearly wants avatar removed
     }
-  }, [avatarUrl]);
+  }, []);
 
   const handleNameChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value;

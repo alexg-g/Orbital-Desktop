@@ -134,7 +134,12 @@ app.get('/health', (req, res) => {
 // Static file serving for avatars (no authentication required for avatars within groups)
 // Avatars are served directly from the filesystem
 const avatarPath = process.env.AVATAR_STORAGE_PATH || './uploads/avatars';
-app.use('/avatars', express.static(avatarPath));
+// Override CORS headers for avatars to allow cross-origin access from Electron app
+app.use('/avatars', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(avatarPath));
 
 // API Routes
 app.use('/api', authLimiter, authRoutes);
