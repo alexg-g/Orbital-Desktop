@@ -1,0 +1,174 @@
+# Orbital Desktop - Windows Beta Build Workflow
+# Manual workflow for building and releasing Windows installers
+
+name: Build Windows Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_version:
+        description: 'Bump alpha version before build'
+        type: boolean
+        default: false
+      create_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: true
+      architecture:
+        description: 'Target architecture'
+        type: choice
+        options:
+          - x64
+          - arm64
+          - all
+        default: x64
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: System Info
+        run: systeminfo
+
+      - name: Configure git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: Cache electron-gyp
+        uses: actions/cache@v4
+        with:
+          path: ~/.electron-gyp
+          key: electron-gyp-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NPM_CONFIG_LOGLEVEL: verbose
+
+      - name: Bump version
+        if: ${{ github.event.inputs.bump_version == 'true' }}
+        shell: pwsh
+        run: |
+          $content = Get-Content "package.json" -Raw
+          if ($content -match '"version":\s*"(.+)-alpha\.(\d+)"') {
+            $base = $Matches[1]
+            $num = [int]$Matches[2] + 1
+            $newVersion = "$base-alpha.$num"
+            $content = $content -replace '"version":\s*"[^"]+"', "`"version`": `"$newVersion`""
+            Set-Content "package.json" $content -NoNewline
+            Write-Host "Bumped version to: $newVersion"
+            echo "VERSION=$newVersion" >> $env:GITHUB_ENV
+          } else {
+            $version = ($content | ConvertFrom-Json).version
+            Write-Host "Current version: $version (not an alpha, skipping bump)"
+            echo "VERSION=$version" >> $env:GITHUB_ENV
+          }
+
+      - name: Get version
+        if: ${{ github.event.inputs.bump_version != 'true' }}
+        shell: pwsh
+        run: |
+          $version = (Get-Content "package.json" | ConvertFrom-Json).version
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Generate assets
+        run: pnpm run generate
+
+      - name: Build production bundles
+        run: pnpm run build:esbuild:prod
+
+      - name: Build Windows installer (x64)
+        if: ${{ github.event.inputs.architecture == 'x64' || github.event.inputs.architecture == 'all' }}
+        run: |
+          pnpm exec electron-builder `
+            --win `
+            --x64 `
+            --config.directories.output=release `
+            --config.win.signtoolOptions.certificateSha1= `
+            --config.win.signtoolOptions.certificateSubjectName=
+        env:
+          SIGNAL_ENV: production
+          DISABLE_INSPECT_FUSE: on
+
+      - name: Build Windows installer (arm64)
+        if: ${{ github.event.inputs.architecture == 'arm64' || github.event.inputs.architecture == 'all' }}
+        run: |
+          pnpm exec electron-builder `
+            --win `
+            --arm64 `
+            --config.directories.output=release `
+            --config.win.signtoolOptions.certificateSha1= `
+            --config.win.signtoolOptions.certificateSubjectName=
+        env:
+          SIGNAL_ENV: production
+          DISABLE_INSPECT_FUSE: on
+
+      - name: List built artifacts
+        run: Get-ChildItem -Path release -Filter "*.exe" | ForEach-Object { Write-Host "$($_.Name) - $([math]::Round($_.Length / 1MB, 2)) MB" }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbital-windows-${{ env.VERSION }}-${{ github.event.inputs.architecture }}
+          path: release/*.exe
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ env.VERSION }}"
+
+          # Check if release exists
+          $releaseExists = gh release view $tag 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists. Uploading Windows assets..."
+            Get-ChildItem -Path release -Filter "*.exe" | ForEach-Object {
+              Write-Host "Uploading: $($_.Name)"
+              gh release upload $tag $_.FullName --clobber
+            }
+          } else {
+            # Create new release
+            $notes = @"
+          ## Orbital Desktop ${{ env.VERSION }} Beta (Windows)
+
+          ### Installation
+
+          1. Download the ``.exe`` installer
+          2. Run the installer - Windows SmartScreen may show a warning
+          3. Click "More info" then "Run anyway" to proceed
+          4. Follow the installation wizard
+
+          ### Known Issues
+
+          - Unsigned app triggers SmartScreen warning on first install
+
+          ---
+          Built automatically via GitHub Actions
+          "@
+
+            $installers = Get-ChildItem -Path release -Filter "*.exe" | Select-Object -ExpandProperty FullName
+
+            gh release create $tag `
+              --title "${{ env.VERSION }} Beta Release" `
+              --notes $notes `
+              --prerelease `
+              $installers
+          }

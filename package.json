@@ -92,6 +92,8 @@
     "build-linux": "run-s generate build:esbuild:prod && pnpm run build:release --publish=never",
     "build:beta": "bash scripts/build-beta-unsigned.sh",
     "build:beta:dmg": "bash scripts/build-beta-unsigned.sh --dmg",
+    "build:beta:win": "bash scripts/build-beta-windows.sh",
+    "build:beta:win:all": "bash scripts/build-beta-windows.sh --all",
     "build:acknowledgments": "node scripts/generate-acknowledgments.js",
     "build:dns-fallback": "node ts/scripts/generate-dns-fallback.node.js",
     "build:icu-types": "node ts/scripts/generate-icu-types.node.js",
@@ -492,9 +494,8 @@
     },
     "win": {
       "signtoolOptions": {
-        "certificateSubjectName": "Signal Messenger, LLC",
-        "certificateSha1": "8D5E3CD800736C5E1FE459A1F5AA48287D4F6EC6",
-        "publisherName": "Signal Messenger, LLC",
+        "certificateSubjectName": "Orbital",
+        "publisherName": "Orbital",
         "sign": "./ts/scripts/sign-windows.node.js",
         "signingHashAlgorithms": [
           "sha256"
@@ -502,12 +503,7 @@
       },
       "artifactName": "${name}-win-${arch}-${version}.${ext}",
       "icon": "build/icons/win/icon.ico",
-      "publish": [
-        {
-          "provider": "generic",
-          "url": "https://updates.signal.org/desktop"
-        }
-      ],
+      "publish": [],
       "releaseInfo": {
         "vendor": {
           "minOSVersion": "10.0.10240"
@@ -526,17 +522,13 @@
     },
     "nsis": {
       "deleteAppDataOnUninstall": true,
-      "differentialPackage": true,
-      "customNsisBinary": {
-        "url": "https://updates.signal.org/desktop/nsis/nsis-3.0.4.1.7z",
-        "version": "3.0.4.1-signal",
-        "checksum": "D6XH03F8A4Vzfjpq6zS9eZYXGXktdoaeQh5QgxAZ01pdts3KaDfMilem0x+HUzn9FpzfpgZrD8MVTcFlcPfcWg=="
-      },
-      "customNsisResources": {
-        "url": "https://updates.signal.org/desktop/nsis/nsis-resources-3.4.1.7z",
-        "version": "3.4.1-signal",
-        "checksum": "KmySC53iz92XNYVgEy5gc0/cpXiyWsxxOX5UETBAt889TIvsNlUx7uKBxkQVf3D2Ycex0D2IPGjRdGYr1bftrw=="
-      }
+      "differentialPackage": false,
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/installerIcon.ico",
+      "uninstallerIcon": "build/installerIcon.ico",
+      "installerHeaderIcon": "build/installerHeaderIcon.ico"
     },
     "linux": {
       "executableName": "orbital-desktop",
