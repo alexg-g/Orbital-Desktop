@@ -11,7 +11,6 @@
 import React, { useState, useCallback } from 'react';
 import type { LocalizerType } from '../../types/Util.std.js';
 import { Button, ButtonVariant } from '../Button.dom.js';
-import { Input } from '../Input.dom.js';
 import { Spinner } from '../Spinner.dom.js';
 import { login, signup } from '../../services/orbitalAuth.preload.js';
 
@@ -31,8 +30,28 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+type PasswordRequirement = {
+  label: string;
+  met: boolean;
+};
+
+function checkPasswordRequirements(password: string): PasswordRequirement[] {
+  return [
+    { label: 'At least 12 characters', met: password.length >= 12 },
+    { label: 'One uppercase letter', met: /[A-Z]/.test(password) },
+    { label: 'One lowercase letter', met: /[a-z]/.test(password) },
+    { label: 'One number', met: /[0-9]/.test(password) },
+  ];
+}
+
+function getPasswordStrength(requirements: PasswordRequirement[]): 'weak' | 'medium' | 'strong' {
+  const metCount = requirements.filter(r => r.met).length;
+  if (metCount <= 1) return 'weak';
+  if (metCount <= 3) return 'medium';
+  return 'strong';
+}
+
 export function OrbitalLogin({
-  i18n,
   onClose,
   onLoginSuccess,
 }: PropsType): JSX.Element {
@@ -76,8 +95,10 @@ export function OrbitalLogin({
     if (!password) {
       return 'Password is required';
     }
-    if (password.length < 12) {
-      return 'Password must be at least 12 characters';
+    const requirements = checkPasswordRequirements(password);
+    const allMet = requirements.every(r => r.met);
+    if (!allMet) {
+      return 'Password must be at least 12 characters with uppercase, lowercase, and number';
     }
     return null;
   }, [email, inviteCode, username, password]);
@@ -186,76 +207,74 @@ export function OrbitalLogin({
           {mode === 'signup' && (
             <>
               <div className="OrbitalLogin__field">
-                <label htmlFor="orbital-email" className="OrbitalLogin__label">
-                  Email Address
-                </label>
-                <div className="OrbitalLogin__input-wrapper">
-                  <input
-                    type="email"
-                    id="orbital-email"
-                    className="Input__input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="The email your invite was sent to"
-                    disabled={loading}
-                    autoComplete="email"
-                    autoFocus
-                  />
-                </div>
+                <input
+                  type="email"
+                  id="orbital-email"
+                  className="OrbitalLogin__input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  disabled={loading}
+                  autoComplete="email"
+                  autoFocus
+                />
               </div>
 
               <div className="OrbitalLogin__field">
-                <label htmlFor="orbital-invite-code" className="OrbitalLogin__label">
-                  Invite Code
-                </label>
-                <div className="OrbitalLogin__input-wrapper">
-                  <input
-                    type="text"
-                    id="orbital-invite-code"
-                    className="Input__input OrbitalLogin__invite-code-input"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase().slice(0, 8))}
-                    placeholder="8-character code (e.g., ABC12345)"
-                    disabled={loading}
-                    autoComplete="off"
-                    maxLength={8}
-                  />
-                </div>
+                <input
+                  type="text"
+                  id="orbital-invite-code"
+                  className="OrbitalLogin__input OrbitalLogin__invite-code-input"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase().slice(0, 8))}
+                  placeholder="Invite code"
+                  disabled={loading}
+                  autoComplete="off"
+                  maxLength={8}
+                />
               </div>
             </>
           )}
 
           <div className="OrbitalLogin__field">
-            <label htmlFor="orbital-username" className="OrbitalLogin__label">
-              Username
-            </label>
-            <Input
-              i18n={i18n}
+            <input
+              type="text"
               id="orbital-username"
+              className="OrbitalLogin__input"
               value={username}
-              onChange={setUsername}
-              placeholder={mode === 'signup' ? 'Choose a username' : 'Enter your username'}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
               disabled={loading}
               autoFocus={mode === 'login'}
+              autoComplete="username"
             />
           </div>
 
           <div className="OrbitalLogin__field">
-            <label htmlFor="orbital-password" className="OrbitalLogin__label">
-              Password
-            </label>
-            <div className="OrbitalLogin__password-wrapper">
-              <input
-                type="password"
-                id="orbital-password"
-                className="Input__input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? 'Create a password (min. 12 chars)' : 'Enter your password'}
-                disabled={loading}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              />
-            </div>
+            <input
+              type="password"
+              id="orbital-password"
+              className="OrbitalLogin__input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              disabled={loading}
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            />
+              {mode === 'signup' && password && (
+                <div className="OrbitalLogin__password-strength">
+                  <div className="OrbitalLogin__strength-bar-container">
+                    <div className={`OrbitalLogin__strength-bar OrbitalLogin__strength-bar--${getPasswordStrength(checkPasswordRequirements(password))}`} />
+                  </div>
+                  <ul className="OrbitalLogin__requirements">
+                    {checkPasswordRequirements(password).map((req, i) => (
+                      <li key={i} className={req.met ? 'OrbitalLogin__requirement--met' : 'OrbitalLogin__requirement--unmet'}>
+                        {req.met ? '✓' : '○'} {req.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
           </div>
 
           {error && (

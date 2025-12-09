@@ -90,23 +90,47 @@
   &__field {
     display: flex;
     flex-direction: column;
-    gap: 8px;
   }
 
-  &__label {
-    font-size: 14px;
-    font-weight: 500;
+  &__input {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 15px;
+    line-height: 20px;
     color: $orbital-text-primary;
+    background-color: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &::placeholder {
+      color: $orbital-text-tertiary;
+    }
+
+    &:focus {
+      border-color: $orbital-blue;
+      box-shadow: 0 0 0 2px rgba($orbital-blue, 0.15);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
 
     @include mixins.dark-theme {
       color: $orbital-dark-text-primary;
-    }
-  }
+      background-color: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
 
-  &__password-wrapper,
-  &__input-wrapper {
-    .Input__input {
-      width: 100%;
+      &::placeholder {
+        color: $orbital-dark-text-tertiary;
+      }
+
+      &:focus {
+        border-color: $orbital-dark-blue;
+        box-shadow: 0 0 0 2px rgba($orbital-dark-blue, 0.2);
+      }
     }
   }
 
@@ -188,6 +212,69 @@
     @include mixins.dark-theme {
       border-top-color: $orbital-dark-border-subtle;
       color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__password-strength {
+    margin-top: 8px;
+  }
+
+  &__strength-bar-container {
+    height: 6px;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+
+    @include mixins.dark-theme {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+  }
+
+  &__strength-bar {
+    display: block;
+    height: 6px;
+    border-radius: 3px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+    // Default state (no requirements met)
+    width: 0%;
+    background-color: transparent;
+
+    &--weak {
+      width: 33%;
+      background-color: #e32c2c;
+    }
+
+    &--medium {
+      width: 66%;
+      background-color: #f5a623;
+    }
+
+    &--strong {
+      width: 100%;
+      background-color: #4caf50;
+    }
+  }
+
+  &__requirements {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  &__requirement--met {
+    color: #4caf50;
+    padding: 2px 0;
+  }
+
+  &__requirement--unmet {
+    color: $orbital-text-secondary;
+    padding: 2px 0;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
     }
   }
 }

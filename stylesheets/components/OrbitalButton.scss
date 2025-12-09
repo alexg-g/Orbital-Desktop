@@ -1,0 +1,389 @@
+// Copyright 2025 Orbital
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// =============================================================================
+// ORBITAL BUTTON OVERRIDES
+// Ensures Signal's Button component uses Orbital branding when used in Orbital
+// =============================================================================
+
+@use 'sass:color';
+@use '../mixins';
+@use '../orbital-variables' as *;
+
+// =============================================================================
+// OVERRIDE SIGNAL BUTTON STYLES IN ORBITAL CONTEXTS
+// =============================================================================
+
+// When Signal's Button component is used within Orbital components,
+// override its colors to use Orbital branding
+
+.OrbitalLogin,
+.CreateGroupModal,
+.JoinGroupModal,
+.GroupSelector,
+.OrbitSelectorModal,
+.ContactPickerModal,
+.OrbitalSettings,
+.OrbitalInbox {
+  // Primary Button - Orbital Blue
+  .module-Button--primary {
+    $color: white;
+    $background-color: $orbital-blue;
+
+    color: $color;
+    background: $background-color;
+
+    &:hover {
+      @include mixins.not-disabled {
+        background: $orbital-blue-hover;
+      }
+    }
+
+    &:active {
+      @include mixins.not-disabled {
+        background: $orbital-blue-dark;
+      }
+    }
+
+    @include mixins.disabled {
+      color: color.adjust($color, $alpha: -0.4);
+      background: $orbital-text-tertiary;
+      border-color: $orbital-border-subtle;
+    }
+
+    @include mixins.dark-theme {
+      $dark-background-color: $orbital-dark-blue;
+      background: $dark-background-color;
+
+      &:hover {
+        @include mixins.not-disabled {
+          background: color.adjust($dark-background-color, $lightness: 8%);
+        }
+      }
+
+      &:active {
+        @include mixins.not-disabled {
+          background: color.adjust($dark-background-color, $lightness: -8%);
+        }
+      }
+    }
+  }
+
+  // Secondary Button - Orbital Light Gray with Blue hover
+  .module-Button--secondary {
+    $background-color: $orbital-surface-elevated;
+    $color: $orbital-text-primary;
+
+    color: $color;
+    background: $background-color;
+    border: 1px solid $orbital-border-strong;
+
+    &:hover {
+      @include mixins.not-disabled {
+        background: $orbital-blue-tint-light;
+        border-color: $orbital-blue;
+        color: $orbital-blue;
+      }
+    }
+
+    &:active {
+      @include mixins.not-disabled {
+        background: $orbital-blue-tint;
+        border-color: $orbital-blue-dark;
+      }
+    }
+
+    @include mixins.disabled {
+      color: $orbital-text-tertiary;
+      background: $orbital-surface;
+      border-color: $orbital-border-subtle;
+    }
+
+    @include mixins.dark-theme {
+      $dark-background-color: $orbital-dark-surface-elevated;
+      $dark-color: $orbital-dark-text-primary;
+
+      background: $dark-background-color;
+      color: $dark-color;
+      border-color: $orbital-dark-border-strong;
+
+      &:hover {
+        @include mixins.not-disabled {
+          background: rgba($orbital-dark-blue, 0.15);
+          border-color: $orbital-dark-blue;
+          color: $orbital-dark-blue;
+        }
+      }
+
+      &:active {
+        @include mixins.not-disabled {
+          background: rgba($orbital-dark-blue, 0.25);
+        }
+      }
+
+      @include mixins.disabled {
+        color: $orbital-dark-text-tertiary;
+        background: $orbital-dark-surface;
+        border-color: $orbital-dark-border-subtle;
+      }
+    }
+  }
+
+  // Secondary Affirmative - Orbital Purple (for special actions like "Copy Code")
+  .module-Button--secondary.module-Button--secondary--affirmative {
+    background: $orbital-purple;
+    border-color: $orbital-purple-dark;
+    color: white;
+
+    &:hover {
+      @include mixins.not-disabled {
+        background: $orbital-purple-hover;
+      }
+    }
+
+    &:active {
+      @include mixins.not-disabled {
+        background: $orbital-purple-dark;
+      }
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-purple;
+      border-color: $orbital-dark-purple;
+
+      &:hover {
+        @include mixins.not-disabled {
+          background: color.adjust($orbital-dark-purple, $lightness: 8%);
+        }
+      }
+    }
+  }
+
+  // Destructive Button - Orbital Error Red
+  .module-Button--destructive {
+    $background-color: $orbital-error;
+    $color: white;
+
+    background: $background-color;
+    color: $color;
+    border-color: color.adjust($orbital-error, $lightness: -10%);
+
+    &:hover {
+      @include mixins.not-disabled {
+        background: color.adjust($background-color, $lightness: -8%);
+      }
+    }
+
+    &:active {
+      @include mixins.not-disabled {
+        background: color.adjust($background-color, $lightness: -15%);
+      }
+    }
+
+    @include mixins.disabled {
+      color: color.adjust($color, $alpha: -0.4);
+      background: $orbital-text-tertiary;
+    }
+  }
+
+  // Focus states - use Orbital blue
+  .module-Button {
+    @include mixins.keyboard-mode {
+      &:focus {
+        box-shadow:
+          0 0 0 1px white,
+          0 0 0 4px $orbital-blue;
+      }
+    }
+
+    @include mixins.dark-keyboard-mode {
+      &:focus {
+        box-shadow:
+          0 0 0 1px $orbital-dark-bg,
+          0 0 0 4px $orbital-dark-blue;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// UTILITY CLASSES FOR ORBITAL BUTTONS
+// =============================================================================
+
+// Use these classes directly when you need consistent button styling
+// without using the Signal Button component
+
+.orbital-button {
+  padding: $orbital-btn-padding-y $orbital-btn-padding-x;
+  border-radius: $orbital-btn-border-radius;
+  font-family: $orbital-font-body;
+  font-size: $orbital-btn-font-size;
+  font-weight: $orbital-btn-font-weight;
+  cursor: pointer;
+  transition: $orbital-btn-transition;
+  text-align: center;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  border: $orbital-btn-border-width solid transparent;
+
+  @include mixins.button-reset;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  // Primary - Blue
+  &--primary {
+    background: $orbital-blue;
+    border-color: $orbital-blue-dark;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: $orbital-blue-hover;
+    }
+
+    &:active:not(:disabled) {
+      background: $orbital-blue-dark;
+    }
+
+    &:disabled {
+      background: $orbital-text-tertiary;
+      border-color: $orbital-border-subtle;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-blue;
+      border-color: $orbital-dark-blue;
+
+      &:hover:not(:disabled) {
+        background: color.adjust($orbital-dark-blue, $lightness: 8%);
+      }
+    }
+  }
+
+  // Secondary - Light gray with blue hover
+  &--secondary {
+    background: $orbital-surface-elevated;
+    border-color: $orbital-border-strong;
+    color: $orbital-text-primary;
+
+    &:hover:not(:disabled) {
+      background: $orbital-blue-tint-light;
+      border-color: $orbital-blue;
+      color: $orbital-blue;
+    }
+
+    &:active:not(:disabled) {
+      background: $orbital-blue-tint;
+    }
+
+    &:disabled {
+      background: $orbital-surface;
+      color: $orbital-text-tertiary;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+      color: $orbital-dark-text-primary;
+
+      &:hover:not(:disabled) {
+        background: rgba($orbital-dark-blue, 0.15);
+        border-color: $orbital-dark-blue;
+        color: $orbital-dark-blue;
+      }
+    }
+  }
+
+  // Purple - For special actions
+  &--purple {
+    background: $orbital-purple;
+    border-color: $orbital-purple-dark;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: $orbital-purple-hover;
+    }
+
+    &:active:not(:disabled) {
+      background: $orbital-purple-dark;
+    }
+
+    &:disabled {
+      background: $orbital-text-tertiary;
+      border-color: $orbital-border-subtle;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-purple;
+      border-color: $orbital-dark-purple;
+
+      &:hover:not(:disabled) {
+        background: color.adjust($orbital-dark-purple, $lightness: 8%);
+      }
+    }
+  }
+
+  // Destructive - Red
+  &--destructive {
+    background: $orbital-error;
+    border-color: color.adjust($orbital-error, $lightness: -10%);
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: color.adjust($orbital-error, $lightness: -8%);
+    }
+
+    &:active:not(:disabled) {
+      background: color.adjust($orbital-error, $lightness: -15%);
+    }
+
+    &:disabled {
+      background: $orbital-text-tertiary;
+      border-color: $orbital-border-subtle;
+    }
+  }
+
+  // Small size
+  &--small {
+    padding: 6px 12px;
+    font-size: $orbital-font-size-sm;
+  }
+
+  // Large size
+  &--large {
+    padding: 10px 20px;
+    font-size: $orbital-font-size-md;
+  }
+}
+
+// =============================================================================
+// BUTTON GROUPS (for toggle buttons, segmented controls, etc.)
+// =============================================================================
+
+.orbital-button-group {
+  display: flex;
+  gap: 0;
+
+  .orbital-button {
+    border-radius: 0;
+
+    &:first-child {
+      border-top-left-radius: $orbital-btn-border-radius;
+      border-bottom-left-radius: $orbital-btn-border-radius;
+      border-right-width: 1px;
+    }
+
+    &:last-child {
+      border-top-right-radius: $orbital-btn-border-radius;
+      border-bottom-right-radius: $orbital-btn-border-radius;
+      border-left-width: 1px;
+    }
+
+    &:not(:first-child):not(:last-child) {
+      border-left-width: 1px;
+      border-right-width: 1px;
+    }
+  }
+}
