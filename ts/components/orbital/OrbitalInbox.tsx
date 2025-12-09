@@ -34,6 +34,7 @@ import type {
   CreateThreadResult,
   CreateReplyResult,
 } from '../../services/orbitalThreads.preload.js';
+import { incrementThreadReplyCount } from '../../services/orbitalThreads.preload.js';
 // Legacy localThreadStorage removed - threads now come only from server API
 import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache } from './settingsStorage';
 
@@ -684,10 +685,10 @@ export function OrbitalInbox({
       }
     });
 
-    const unsubNewReply = wsSubscribe('new_reply', (event) => {
+    const unsubNewReply = wsSubscribe('new_reply', async (event) => {
       console.log('[OrbitalInbox] Received new_reply event:', event);
       const data = event.data;
-      // Update reply count for the thread
+      // Update reply count for the thread (UI state)
       setThreads(prevThreads =>
         prevThreads.map(t =>
           t.id === data.thread_id
@@ -695,6 +696,14 @@ export function OrbitalInbox({
             : t
         )
       );
+
+      // Persist reply count to SQLCipher so it survives orbit switches/refreshes
+      try {
+        await incrementThreadReplyCount(data.thread_id, new Date(data.created_at).getTime());
+      } catch (error) {
+        console.error('[OrbitalInbox] Failed to persist reply count to SQLCipher:', error);
+      }
+
       // If viewing this thread, add the reply to messages
       if (activeThreadId === data.thread_id) {
         setMessages(prevMessages => {

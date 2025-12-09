@@ -879,6 +879,14 @@ export async function createReply(
 
     log.info(`${logId}: Reply created successfully`, { replyId: result.replyId });
 
+    // Update local SQLCipher reply count so sidebar stays in sync
+    const updatedThread = await DataReader.getOrbitalThread(threadId);
+    if (updatedThread) {
+      const newReplyCount = (updatedThread.replyCount || 0) + 1;
+      DataWriter.updateOrbitalThreadReplyCount(threadId, newReplyCount, Date.now());
+      log.info(`${logId}: Updated SQLCipher reply count to ${newReplyCount}`);
+    }
+
     return result;
   } catch (error) {
     log.error(`${logId}: Failed to create reply`, Errors.toLogFormat(error));
@@ -1130,8 +1138,9 @@ async function syncThreadsFromServer(groupId: string): Promise<void> {
     log.info(`${logId}: Received ${serverThreads.length} threads from server`);
     console.log('[DEBUG] syncThreadsFromServer: Server response:', JSON.stringify(data, null, 2));
 
-    // Merge: add threads we don't have locally
+    // Merge: add threads we don't have locally, update reply counts for existing threads
     let addedCount = 0;
+    let updatedCount = 0;
     for (const serverThread of serverThreads) {
       const existingThread = await DataReader.getOrbitalThread(serverThread.thread_id);
 
@@ -1156,12 +1165,31 @@ async function syncThreadsFromServer(groupId: string): Promise<void> {
         await DataWriter.saveOrbitalThread(thread);
         addedCount++;
         log.info(`${logId}: Added thread ${thread.id} from server`);
+      } else {
+        // Existing thread - update reply count if server has newer data
+        const serverReplyCount = serverThread.reply_count || 0;
+        const localReplyCount = existingThread.replyCount || 0;
+        if (serverReplyCount !== localReplyCount) {
+          const lastReplyAt = serverThread.last_reply_at
+            ? new Date(serverThread.last_reply_at).getTime()
+            : undefined;
+          DataWriter.updateOrbitalThreadReplyCount(
+            serverThread.thread_id,
+            serverReplyCount,
+            lastReplyAt
+          );
+          updatedCount++;
+          log.info(`${logId}: Updated reply count for thread ${serverThread.thread_id}: ${localReplyCount} -> ${serverReplyCount}`);
+        }
       }
     }
 
     if (addedCount > 0) {
       log.info(`${logId}: Added ${addedCount} new threads from server`);
       // TODO: Emit event to trigger UI refresh
+    }
+    if (updatedCount > 0) {
+      log.info(`${logId}: Updated reply counts for ${updatedCount} existing threads`);
     }
   } catch (error) {
     log.error(`${logId}: Failed to sync threads from server`, Errors.toLogFormat(error));
@@ -1400,6 +1428,26 @@ export async function updateLocalThreadReplyCount(groupId: string, threadId: str
     };
     await itemStorage.put('orbitalLocalThreads', updatedThreads);
     log.info(`updateLocalThreadReplyCount: Updated thread ${threadId} reply count to ${replyCount}`);
+  }
+}
+
+/**
+ * Increment reply count for a thread in SQLCipher
+ * Called when receiving WebSocket new_reply events from other users
+ */
+export async function incrementThreadReplyCount(
+  threadId: string,
+  lastReplyAt?: number
+): Promise<void> {
+  const logId = `incrementThreadReplyCount(${threadId})`;
+
+  const thread = await DataReader.getOrbitalThread(threadId);
+  if (thread) {
+    const newReplyCount = (thread.replyCount || 0) + 1;
+    DataWriter.updateOrbitalThreadReplyCount(threadId, newReplyCount, lastReplyAt);
+    log.info(`${logId}: Incremented SQLCipher reply count to ${newReplyCount}`);
+  } else {
+    log.warn(`${logId}: Thread not found in SQLCipher, skipping reply count update`);
   }
 }
 
