@@ -139,6 +139,8 @@ get_version() {
 }
 
 # Bump alpha version (e.g., 7.80.0-alpha.1 -> 7.80.0-alpha.2)
+# Returns ONLY the version string to stdout (for capture)
+# Informational messages go to stderr (for display)
 bump_alpha_version() {
     local current_version=$(get_version)
 
@@ -148,14 +150,17 @@ bump_alpha_version() {
         local new_alpha_num=$((alpha_num + 1))
         local new_version="${base}-alpha.${new_alpha_num}"
 
-        echo -e "${BLUE}Bumping version: ${current_version} -> ${new_version}${NC}"
+        # Send informational message to stderr so it displays but doesn't get captured
+        echo -e "${BLUE}Bumping version: ${current_version} -> ${new_version}${NC}" >&2
 
         # Update package.json
         sed -i '' "s/\"version\": \"${current_version}\"/\"version\": \"${new_version}\"/" package.json
 
+        # Return only the clean version string to stdout
         echo "$new_version"
     else
-        echo -e "${YELLOW}Warning: Version '${current_version}' is not an alpha version. Skipping bump.${NC}"
+        # Send warning to stderr
+        echo -e "${YELLOW}Warning: Version '${current_version}' is not an alpha version. Skipping bump.${NC}" >&2
         echo "$current_version"
     fi
 }
