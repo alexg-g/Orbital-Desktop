@@ -80,6 +80,14 @@ brew services start postgresql@16
 
 # Verify it's running
 pg_isready
+
+# IMPORTANT: psql may not be in PATH by default. Find it with:
+find /opt/homebrew -name "psql" 2>/dev/null | head -1
+# Current path: /opt/homebrew/Cellar/postgresql@15/15.14_1/bin/psql
+
+# Add to PATH (temporary) or create alias:
+export PATH="/opt/homebrew/Cellar/postgresql@15/15.14_1/bin:$PATH"
+# Or use full path in commands below
 ```
 
 ### Database Setup

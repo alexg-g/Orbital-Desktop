@@ -149,6 +149,102 @@ Signal-Desktop uses file suffixes to enforce process boundaries. Understanding t
 | Storybook stories | `/ts/components/orbital/*.stories.tsx` | Component demos |
 | Mock data | `/ts/components/orbital/mockThreadData.ts` | Test fixtures |
 | DB migrations | `/ts/sql/migrations/*.std.ts` | Schema changes |
+| **Backend routes** | `/orbital-backend/src/routes/*.js` | **API contracts (source of truth)** |
+| **Backend migrations** | `/orbital-backend/migrations/*.js` | **DB schema expectations** |
+
+## Orbital Encryption Architecture (CRITICAL)
+
+Orbital uses Signal's attachment encryption for all media uploads. Understanding this flow is **essential** before implementing any media-related features.
+
+### Encryption Flow Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        CLIENT-SIDE ENCRYPTION                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1. Generate attachment keys (64 bytes)                                 │
+│     └─ generateAttachmentKeys() → Uint8Array                           │
+│                                                                         │
+│  2. Encrypt file to temp disk                                          │
+│     └─ encryptAttachmentV2ToDisk() returns:                            │
+│        • path: string (temp encrypted file)                            │
+│        • iv: Uint8Array (16 bytes) ← REQUIRED BY BACKEND               │
+│        • digest: Uint8Array (32 bytes)                                 │
+│        • plaintextHash: string                                         │
+│        • incrementalMac: Uint8Array (optional)                         │
+│        • chunkSize: number                                             │
+│        • ciphertextSize: number                                        │
+│                                                                         │
+│  3. Upload encrypted chunks to server                                  │
+│     └─ Server receives ONLY encrypted blob + metadata                  │
+│     └─ Server NEVER receives decryption keys                           │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Media Upload API Contract
+
+**ALWAYS check the backend route before implementing upload logic:**
+- Source of truth: `/orbital-backend/src/routes/media.js`
+- DB schema: `/orbital-backend/migrations/1730000000007_chunked-uploads.js`
+
+**First chunk MUST include these fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `media_id` | UUID string | Client-generated unique ID |
+| `group_id` | UUID string | Group this media belongs to |
+| `chunk_index` | number | Always 0 for first chunk |
+| `total_chunks` | number | Total chunks expected |
+| `chunk` | Binary | The encrypted chunk data |
+| `encrypted_metadata` | JSON string | Metadata (digest, size, contentType, etc.) |
+| `encryption_iv` | Base64 string | **IV from encryption result** |
+
+**Common mistake:** Forgetting `encryption_iv`. The IV comes from `encryptResult.iv` and must be base64-encoded.
+
+### Key Files for Media Upload
+
+| Purpose | File | Key Functions/Types |
+|---------|------|---------------------|
+| Encryption | `/ts/AttachmentCrypto.node.ts` | `encryptAttachmentV2ToDisk`, `generateAttachmentKeys` |
+| Upload service | `/ts/services/orbitalMediaUpload.preload.ts` | `uploadMediaToOrbital` |
+| Types | `/ts/types/OrbitalMedia.std.ts` | `OrbitalMediaAttachment` |
+| Backend validation | `/orbital-backend/src/routes/media.js` | Chunk upload endpoint |
+
+### Pre-Implementation Checklist for Media Features
+
+Before implementing any media upload/download feature:
+
+```
+1. [ ] Read the backend route to understand expected request format
+       └─ /orbital-backend/src/routes/media.js
+
+2. [ ] Read the DB migration to understand stored fields
+       └─ /orbital-backend/migrations/1730000000007_chunked-uploads.js
+
+3. [ ] Check the encryption function return type
+       └─ /ts/AttachmentCrypto.node.ts → EncryptedAttachmentV2 type
+
+4. [ ] Verify ALL required fields are being sent
+       └─ Backend validation throws descriptive errors - read them!
+
+5. [ ] Test with real upload before considering done
+       └─ Don't assume - verify in running app
+```
+
+### Encryption Field Reference
+
+These fields come from Signal's attachment encryption and have specific purposes:
+
+| Field | Source | Purpose |
+|-------|--------|---------|
+| `attachmentKeys` | `generateAttachmentKeys()` | 64-byte key (AES key + MAC key) - NEVER sent to server |
+| `iv` | `encryptResult.iv` | Initialization vector for AES-CBC encryption |
+| `digest` | `encryptResult.digest` | SHA-256 hash of encrypted blob |
+| `plaintextHash` | `encryptResult.plaintextHash` | Hash of original file (integrity check) |
+| `incrementalMac` | `encryptResult.incrementalMac` | For streaming decryption |
+| `chunkSize` | `encryptResult.chunkSize` | Incremental MAC chunk size |
+
+**Security note:** `attachmentKeys` are stored ONLY in local SQLCipher and shared with group members via Signal Protocol encrypted messages. The server never has decryption capability.
 
 ## Before Creating New Code (Advisory)
 

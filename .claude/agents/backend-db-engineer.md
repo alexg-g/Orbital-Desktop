@@ -121,6 +121,37 @@ Frontend consumes backend APIs via preload services:
 - When designing APIs, ensure response shapes are easy to mock for Storybook testing
 - Coordinate with Frontend Engineer via GitHub Issue comments on API contracts
 
+## Local Database Access
+
+**IMPORTANT:** `psql` may not be in PATH by default on macOS with Homebrew.
+
+```bash
+# Find psql location:
+find /opt/homebrew -name "psql" 2>/dev/null | head -1
+# Current path: /opt/homebrew/Cellar/postgresql@15/15.14_1/bin/psql
+
+# Add to PATH (temporary):
+export PATH="/opt/homebrew/Cellar/postgresql@15/15.14_1/bin:$PATH"
+
+# Or use full path directly:
+/opt/homebrew/Cellar/postgresql@15/15.14_1/bin/psql -U orbital_user -d orbital -c "SELECT * FROM users;"
+```
+
+**Common database commands:**
+```bash
+# Connect to dev database
+psql -U orbital_user -d orbital
+
+# Check table structure
+psql -U orbital_user -d orbital -c "\d users"
+
+# Query users
+psql -U orbital_user -d orbital -c "SELECT id, username, avatar_url FROM users;"
+
+# Apply schema changes
+psql -U orbital_user -d orbital -f schema.sql
+```
+
 ## Coordination
 - Work closely with **Signal Protocol Specialist** on relay endpoint design
 - Work closely with **Frontend Engineer** on API contracts
