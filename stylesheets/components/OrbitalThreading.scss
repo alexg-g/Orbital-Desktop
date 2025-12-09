@@ -1304,14 +1304,94 @@
 // =============================================================================
 
 .OrbitalComposer {
+  position: relative;
   padding: $orbital-space-lg;
   padding-top: 6px; // Reduced top padding to save space
   padding-bottom: 10px;
   background: $orbital-surface;
   font-family: $orbital-font-body;
+  transition: background $orbital-duration-fast, border $orbital-duration-fast;
 
   @include mixins.dark-theme {
     background: $orbital-dark-surface;
+  }
+
+  // Dragging state - visual feedback when dragging files
+  &--dragging {
+    background: rgba($orbital-blue, 0.05);
+    border: 2px dashed $orbital-blue;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-blue, 0.1);
+      border-color: $orbital-dark-blue;
+    }
+  }
+
+  // Drop overlay - shown when dragging files over composer
+  &__drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba($orbital-blue, 0.15);
+    border: 3px dashed $orbital-blue;
+    border-radius: $orbital-radius-base;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    color: $orbital-blue;
+    pointer-events: none;
+    z-index: 10;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-dark-blue, 0.2);
+      border-color: $orbital-dark-blue;
+      color: $orbital-dark-blue;
+    }
+  }
+
+  // Inline quota warning (when nearing limit)
+  &__quota-warning {
+    padding: $orbital-space-sm $orbital-space-md;
+    background: rgba($orbital-yellow, 0.15);
+    border: 2px solid $orbital-yellow;
+    border-radius: $orbital-radius-base;
+    color: $orbital-text-primary;
+    font-size: $orbital-font-size-sm;
+    font-weight: 600;
+    margin-bottom: $orbital-space-md;
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      background: rgba($orbital-yellow, 0.1);
+      border-color: $orbital-yellow-dark;
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  // Inline quota error (when quota exceeded)
+  &__quota-error {
+    padding: $orbital-space-sm $orbital-space-md;
+    background: rgba(227, 44, 44, 0.1);
+    border: 2px solid #e32c2c;
+    border-radius: $orbital-radius-base;
+    color: #e32c2c;
+    font-size: $orbital-font-size-sm;
+    font-weight: 600;
+    margin-bottom: $orbital-space-md;
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      background: rgba(227, 44, 44, 0.15);
+    }
   }
 
   // Field wrapper (input/textarea + character counter)
@@ -1662,34 +1742,92 @@
     }
   }
 
-  // Attachments preview (GIFs, stickers)
+  // Attachments preview - Grid layout like Signal (120x120 thumbnails)
   &__attachments {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 120px);
     gap: $orbital-space-sm;
     margin-bottom: $orbital-space-md;
   }
 
   &__attachment {
     position: relative;
-    display: inline-block;
-    max-width: 400px; // Cap container at 400px
+    width: 120px;
+    height: 120px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: $orbital-surface-elevated;
+    border: 2px solid $orbital-border-strong;
 
-    // Video and image sizing
-    video,
-    img {
-      max-width: 100%; // Fill container width (capped by parent)
-      max-height: 200px; // Cap height at 200px
-      width: auto;
-      height: auto;
-      object-fit: contain; // Show entire video/image without cropping
-      border-radius: 4px;
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-strong;
+    }
+
+    // Preview image/video
+    &-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
       display: block;
     }
 
+    // Icon for non-image files
+    &-icon {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+
+    // Info overlay (name + size)
+    &-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: $orbital-font-size-xs;
+      line-height: 1.2;
+      overflow: hidden;
+    }
+
+    &-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 600;
+    }
+
+    &-size {
+      font-family: $orbital-font-mono;
+      font-size: 10px;
+      opacity: 0.8;
+    }
+
+    // Error message
+    &-error {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 4px;
+      background: rgba(227, 44, 44, 0.9);
+      color: white;
+      font-size: 10px;
+      line-height: 1.2;
+      text-align: center;
+    }
+
+    // Remove button - top right corner
     &-remove {
       position: absolute;
-      top: -8px;
-      right: -8px;
+      top: 4px;
+      right: 4px;
       width: 24px;
       height: 24px;
       padding: 0;
@@ -1706,6 +1844,7 @@
       justify-content: center;
       transition: background $orbital-duration-fast;
       z-index: 1; // Ensure button stays on top
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 
       &:hover {
         background: $orbital-purple-hover;
@@ -1714,6 +1853,18 @@
       &:active {
         background: $orbital-purple-dark;
       }
+    }
+
+    // Video and image sizing (for legacy attachments like GIFs/stickers)
+    video,
+    img {
+      max-width: 100%; // Fill container width (capped by parent)
+      max-height: 200px; // Cap height at 200px
+      width: auto;
+      height: auto;
+      object-fit: contain; // Show entire video/image without cropping
+      border-radius: 4px;
+      display: block;
     }
   }
 }

@@ -254,6 +254,7 @@ export type ListRepliesResult = {
   replies: ReplyInfo[];
   totalCount: number;
   hasMore: boolean;
+  media?: MediaInfo[]; // Thread-level media (not per-reply)
 };
 
 /**
@@ -710,13 +711,23 @@ export async function getReplies(
       })
     );
 
+    // Parse thread-level media from backend response
+    const threadMedia: MediaInfo[] = (data.media || []).map((m: any) => ({
+      mediaId: m.media_id,
+      encryptedMetadata: m.encrypted_metadata,
+      sizeBytes: m.size_bytes,
+      uploadedAt: m.uploaded_at,
+      expiresAt: m.expires_at,
+    }));
+
     const result: ListRepliesResult = {
       replies,
       totalCount: data.total_count || replies.length,
       hasMore: data.has_more || false,
+      media: threadMedia.length > 0 ? threadMedia : undefined,
     };
 
-    log.info(`${logId}: Retrieved ${replies.length} replies`);
+    log.info(`${logId}: Retrieved ${replies.length} replies, ${threadMedia.length} media items`);
 
     return result;
   } catch (error) {
@@ -889,6 +900,96 @@ type SyncResult = {
 };
 
 /**
+ * Send OrbitalMediaSyncMessage to group members
+ *
+ * This shares media encryption keys with other orbit members so they can
+ * download and decrypt the media. Keys are sent via Signal Protocol encrypted
+ * group messages (server cannot read them).
+ *
+ * @param groupId Group/orbit ID
+ * @param threadId Thread ID the media belongs to
+ * @param mediaIds Array of media IDs to sync
+ */
+async function sendMediaSyncMessages(
+  groupId: string,
+  threadId: string,
+  mediaIds: string[]
+): Promise<void> {
+  const logId = `sendMediaSyncMessages(${groupId}, ${threadId})`;
+
+  try {
+    // Get user info for uploadedBy field
+    const { getUserId } = await import('./orbitalAuth.preload.js');
+    const uploadedBy = await getUserId() || 'unknown';
+
+    // Get the conversation for this group
+    const conversation = window.ConversationController?.get(groupId);
+    if (!conversation) {
+      log.error(`${logId}: Group conversation not found: ${groupId}`);
+      return;
+    }
+
+    for (const mediaId of mediaIds) {
+      try {
+        // Fetch the media record from local SQLCipher
+        const media = await DataReader.getOrbitalMediaById(mediaId);
+        if (!media) {
+          log.warn(`${logId}: Media ${mediaId} not found in local storage, skipping sync message`);
+          continue;
+        }
+
+        // Construct the OrbitalMediaSyncMessage
+        const syncMessage: import('../types/OrbitalMedia.std.js').OrbitalMediaSyncMessage = {
+          type: 'orbital-media-sync',
+          id: media.id,
+          mediaId: media.mediaId,
+          threadId,
+          attachmentKeys: media.attachmentKeys, // Base64 string
+          plaintextHash: media.plaintextHash,
+          digest: media.digest,
+          incrementalMac: media.incrementalMac,
+          chunkSize: media.chunkSize,
+          size: media.size,
+          contentType: media.contentType,
+          fileName: media.fileName,
+          blurHash: media.blurHash,
+          width: media.width,
+          height: media.height,
+          duration: media.duration,
+          caption: media.caption,
+          expiresAt: media.expiresAt,
+          uploadedBy,
+          createdAt: media.createdAt,
+        };
+
+        // Serialize the sync message to JSON
+        const messageBody = JSON.stringify(syncMessage);
+
+        // Send via Signal Protocol using ConversationController
+        // This ensures proper E2E encryption through Signal's infrastructure
+        await conversation.queueJob('sendMediaSyncMessage', async () => {
+          await conversation.sendMessage({
+            body: messageBody,
+            // No attachments - metadata is in the body
+            // Signal Protocol handles encryption
+          });
+        });
+
+        log.info(`${logId}: Sent media sync message for ${mediaId}`);
+      } catch (mediaError) {
+        log.error(`${logId}: Failed to send media sync message for ${mediaId}:`, Errors.toLogFormat(mediaError));
+        // Continue with other media - don't fail the entire operation
+      }
+    }
+
+    log.info(`${logId}: Completed sending ${mediaIds.length} media sync messages`);
+  } catch (error) {
+    log.error(`${logId}: Failed to send media sync messages:`, Errors.toLogFormat(error));
+    // Don't throw - media sync is a best-effort operation
+  }
+}
+
+/**
  * Sync a thread to the server
  *
  * Called after storing locally. Updates pendingSync status on success.
@@ -952,6 +1053,24 @@ async function syncThreadToServer(
       // Success - update local sync status
       await DataWriter.updateOrbitalThreadSyncStatus(threadId, false);
       log.info(`${logId}: Thread synced to server successfully`);
+
+      // Update local orbital_media records with the correct threadId
+      if (mediaIds && mediaIds.length > 0) {
+        log.info(`${logId}: Updating threadId for ${mediaIds.length} media attachments`);
+        for (const mediaId of mediaIds) {
+          try {
+            await DataWriter.updateOrbitalMediaThreadId(mediaId, threadId);
+            log.info(`${logId}: Updated media ${mediaId} with threadId ${threadId}`);
+          } catch (mediaError) {
+            log.error(`${logId}: Failed to update media ${mediaId}:`, Errors.toLogFormat(mediaError));
+          }
+        }
+
+        // Send OrbitalMediaSyncMessage to group members for each media attachment
+        // This shares encryption keys so other users can decrypt the media
+        await sendMediaSyncMessages(groupId, threadId, mediaIds);
+      }
+
       return { success: true };
     } else {
       // Parse error response for better error message

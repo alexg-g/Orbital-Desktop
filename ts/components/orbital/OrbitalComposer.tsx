@@ -12,11 +12,24 @@ import type { FunGifSelection } from '../fun/panels/FunPanelGifs.dom.js';
 import type { FunStickerSelection } from '../fun/panels/FunPanelStickers.dom.js';
 import { getEmojiVariantByKey, type EmojiVariantKey } from '../fun/data/emojis.std.js';
 import { OrbitalQuillEditor } from './OrbitalQuillEditor.js';
-import { OrbitalMediaPicker } from './OrbitalMediaPicker.js';
-import type { SelectedFile, UploadCheckResult } from './OrbitalMediaPicker.js';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload.js';
 import { useDraft } from './useDraft.js';
 import type { DraftOperations } from './useDraft.js';
+
+// Browser-compatible types for media selection
+export type SelectedFile = {
+  file: File;
+  preview?: string; // Data URL for preview
+  size: number;
+  name: string;
+  type: string;
+};
+
+export type UploadCheckResult = {
+  allowed: boolean;
+  reason?: string;
+  quotaInfo: QuotaInfo;
+};
 
 export type OrbitalComposerMode = 'thread' | 'reply';
 
@@ -105,7 +118,7 @@ export function OrbitalComposer({
   i18n: _i18n,
   getQuotaInfo,
   checkUploadAllowed,
-  formatBytes,
+  formatBytes: formatBytesFromProps,
   uploadMedia,
   getAbsoluteAttachmentPath,
   draftOperations,
@@ -124,13 +137,17 @@ export function OrbitalComposer({
   const lastLoadedContextRef = useRef<string | null>(null);
 
   // Media attachment state
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [uploadedMediaIds, setUploadedMediaIds] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // File input ref for direct file picking
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editorApiRef = useRef<{
     insertText: (text: string) => void;
@@ -355,33 +372,119 @@ export function OrbitalComposer({
     setSelectedSticker(null);
   }, []);
 
-  // Handle opening media picker
+  // Handle opening file picker directly
   const handleOpenMediaPicker = useCallback(() => {
-    setShowMediaPicker(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Reset to allow re-selection
+      fileInputRef.current.click();
+    }
   }, []);
 
-  // Handle media files selected from picker
-  const handleFilesSelected = useCallback(
-    async (files: SelectedFile[]) => {
-      setSelectedFiles(files);
-      setShowMediaPicker(false);
+  // Create file preview for images
+  const createFilePreview = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }, []);
 
-      // Automatically start upload
-      try {
-        setUploadingMedia(true);
-        const mediaIds = await uploadAllMedia(files);
-        setUploadedMediaIds(mediaIds);
+  // Process selected files (shared logic for file input and drag-and-drop)
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      setQuotaError(null);
+      const newFiles: SelectedFile[] = [];
 
-        // Refresh quota after upload
-        const info = await getQuotaInfo(groupId);
-        setQuotaInfo(info);
-      } catch (error) {
-        console.error('Failed to upload media:', error);
-      } finally {
-        setUploadingMedia(false);
+      for (const file of files) {
+        try {
+          // Check if upload is allowed for this file
+          const checkResult = await checkUploadAllowed(groupId, file.size);
+
+          if (!checkResult.allowed) {
+            setQuotaError(checkResult.reason || 'Upload not allowed');
+            break; // Stop processing more files
+          }
+
+          // Generate preview for images
+          let preview: string | undefined;
+          if (file.type.startsWith('image/')) {
+            preview = await createFilePreview(file);
+          }
+
+          newFiles.push({
+            file,
+            preview,
+            size: file.size,
+            name: file.name,
+            type: file.type,
+          });
+        } catch (error) {
+          console.error('Failed to process file:', error);
+          setQuotaError('Failed to check storage quota');
+          break;
+        }
+      }
+
+      if (newFiles.length > 0) {
+        setSelectedFiles(prev => [...prev, ...newFiles]);
+
+        // Refresh quota info
+        try {
+          const info = await getQuotaInfo(groupId);
+          setQuotaInfo(info);
+        } catch (error) {
+          console.error('Failed to refresh quota:', error);
+        }
       }
     },
-    [groupId]
+    [groupId, checkUploadAllowed, getQuotaInfo, createFilePreview]
+  );
+
+  // Handle file input change
+  const handleFileInputChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        await processFiles(Array.from(files));
+      }
+    },
+    [processFiles]
+  );
+
+  // Drag-and-drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only leave if we're leaving the container, not a child
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        await processFiles(Array.from(files));
+      }
+    },
+    [processFiles]
   );
 
   // Upload all selected media files
@@ -469,7 +572,13 @@ export function OrbitalComposer({
   );
 
   return (
-    <div className="OrbitalComposer">
+    <div
+      className={`OrbitalComposer ${isDragging ? 'OrbitalComposer--dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Reply Context (when replying to a message) */}
       {mode === 'reply' && replyContext && (
         <div className="OrbitalComposer__reply-context">
@@ -528,6 +637,38 @@ export function OrbitalComposer({
         />
       </div>
 
+      {/* Hidden file input for direct file picking */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        onChange={handleFileInputChange}
+        style={{ display: 'none' }}
+      />
+
+      {/* Drag-and-drop overlay */}
+      {isDragging && (
+        <div className="OrbitalComposer__drop-overlay">
+          Drop files here to attach
+        </div>
+      )}
+
+      {/* Inline Quota Warning */}
+      {quotaInfo?.isNearLimit && (
+        <div className="OrbitalComposer__quota-warning">
+          ⚠️ Storage is near limit ({(quotaInfo.storagePercentUsed ?? 0).toFixed(1)}% used).
+          Consider deleting old media.
+        </div>
+      )}
+
+      {/* Inline Quota Error */}
+      {quotaError && (
+        <div className="OrbitalComposer__quota-error">
+          ⚠️ {quotaError}
+        </div>
+      )}
+
       {/* Upload Progress Indicator */}
       {Object.keys(uploadProgress).length > 0 && (
         <div className="OrbitalComposer__upload-progress-container">
@@ -579,7 +720,7 @@ export function OrbitalComposer({
                   {file.name}
                 </div>
                 <div className="OrbitalComposer__attachment-size">
-                  {formatFileSize(file.size)}
+                  {formatBytesFromProps(file.size)}
                 </div>
               </div>
               <button
@@ -638,22 +779,6 @@ export function OrbitalComposer({
               </button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* OrbitalMediaPicker Modal */}
-      {showMediaPicker && (
-        <div className="OrbitalComposer__modal-overlay">
-          <div className="OrbitalComposer__modal">
-            <OrbitalMediaPicker
-              groupId={groupId}
-              onFilesSelected={handleFilesSelected}
-              onCancel={() => setShowMediaPicker(false)}
-              getQuotaInfo={getQuotaInfo}
-              checkUploadAllowed={checkUploadAllowed}
-              formatBytes={formatBytes}
-            />
-          </div>
         </div>
       )}
 
@@ -721,19 +846,4 @@ function truncateText(text: string, maxLength: number): string {
     return text;
   }
   return `${text.slice(0, maxLength)}...`;
-}
-
-/**
- * Format file size in human-readable format
- */
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) {
-    return '0 Bytes';
-  }
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
 }

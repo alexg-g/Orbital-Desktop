@@ -52,6 +52,23 @@ export async function ipcInvoke<T>(
         throw result.error;
       }
       return result.value;
+    } catch (error) {
+      // Log IPC clone errors with method name and arg types for debugging
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('could not be cloned')) {
+        log.error(`IPC clone error in ${fnName}: ${errorMessage}`);
+        args.forEach((arg, i) => {
+          const argType = arg === null ? 'null' :
+            arg === undefined ? 'undefined' :
+            Array.isArray(arg) ? 'Array' :
+            arg instanceof Uint8Array ? 'Uint8Array' :
+            arg instanceof ArrayBuffer ? 'ArrayBuffer' :
+            typeof arg === 'object' ? arg.constructor?.name || 'Object' :
+            typeof arg;
+          log.error(`  arg[${i}] type: ${argType}`);
+        });
+      }
+      throw error;
     } finally {
       activeJobCount -= 1;
       if (activeJobCount === 0) {

@@ -348,10 +348,12 @@ router.post('/upload/complete', authenticate, asyncHandler(async (req, res) => {
     const finalSize = stats.size;
 
     // Verify size matches expected
-    if (finalSize !== tempUpload.total_size_bytes) {
+    // Note: PostgreSQL returns bigint as string, so we need to parse it
+    const expectedSize = parseInt(tempUpload.total_size_bytes, 10);
+    if (finalSize !== expectedSize) {
       await fs.unlink(finalPath).catch(() => {});
       throw new Error(
-        `Size mismatch: expected ${tempUpload.total_size_bytes} bytes, got ${finalSize} bytes`
+        `Size mismatch: expected ${expectedSize} bytes, got ${finalSize} bytes`
       );
     }
 
@@ -717,6 +719,82 @@ router.get('/threads/:threadId/media', authenticate, asyncHandler(async (req, re
   }));
 
   res.status(200).json({ media: mediaList });
+}));
+
+/**
+ * GET /api/media/sync/:groupId
+ * Sync media metadata for a group
+ * Returns all media metadata (without attachment keys) for the group
+ * Used for syncing media info across clients when they come online
+ */
+router.get('/sync/:groupId', authenticate, asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
+
+  // Verify user is member of group
+  const memberCheck = await db.query(
+    'SELECT 1 FROM members WHERE group_id = $1 AND user_id = $2',
+    [groupId, req.user.userId]
+  );
+
+  if (memberCheck.rowCount === 0) {
+    throw forbiddenError('Not a member of this group');
+  }
+
+  // Fetch all media for this group that hasn't expired
+  // Note: We return ALL media, not just unsynced, because client tracks sync state locally
+  const result = await db.query(
+    `SELECT
+      m.id as media_id,
+      m.thread_id,
+      m.encrypted_metadata,
+      m.size_bytes,
+      m.uploaded_at,
+      m.expires_at,
+      m.author_id as uploaded_by
+     FROM media m
+     WHERE m.group_id = $1 AND m.expires_at > NOW()
+     ORDER BY m.uploaded_at DESC`,
+    [groupId]
+  );
+
+  // Parse encrypted_metadata to extract display fields
+  const mediaList = result.rows.map(row => {
+    let metadata = {};
+    try {
+      // encrypted_metadata is a JSON string containing contentType, fileName, blurHash, etc.
+      metadata = JSON.parse(row.encrypted_metadata);
+    } catch (error) {
+      logger.warn('Failed to parse encrypted_metadata', {
+        mediaId: row.media_id,
+        error: error.message
+      });
+    }
+
+    return {
+      media_id: row.media_id,
+      thread_id: row.thread_id,
+      content_type: metadata.contentType,
+      size: parseInt(row.size_bytes, 10),
+      file_name: metadata.fileName,
+      blur_hash: metadata.blurHash,
+      width: metadata.width,
+      height: metadata.height,
+      duration: metadata.duration,
+      expires_at: row.expires_at,
+      uploaded_by: row.uploaded_by,
+      created_at: row.uploaded_at
+    };
+  });
+
+  logger.info('Media sync requested', {
+    groupId,
+    userId: req.user.userId,
+    mediaCount: mediaList.length
+  });
+
+  res.status(200).json({
+    media: mediaList
+  });
 }));
 
 /**

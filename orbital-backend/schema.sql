@@ -98,7 +98,8 @@ CREATE INDEX idx_replies_author ON replies(author_id);
 -- Media Table
 CREATE TABLE media (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    thread_id UUID NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    thread_id UUID REFERENCES threads(id) ON DELETE CASCADE,
     author_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     encrypted_metadata TEXT NOT NULL,
     storage_url TEXT NOT NULL,
@@ -108,6 +109,7 @@ CREATE TABLE media (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE INDEX idx_media_group ON media(group_id);
 CREATE INDEX idx_media_thread ON media(thread_id);
 CREATE INDEX idx_media_author ON media(author_id);
 CREATE INDEX idx_media_expires ON media(expires_at);

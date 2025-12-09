@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { SelectedFile } from './OrbitalMediaPicker';
+import type { SelectedFile } from './OrbitalComposer';
 import type { AttachmentWithHydratedData } from '../../types/Attachment.std';
 import type { MIMEType } from '../../types/MIME.std';
 

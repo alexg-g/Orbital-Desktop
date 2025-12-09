@@ -248,7 +248,7 @@ export function OrbitalMediaViewer({
                 }}
               >
                 <img
-                  src={`file://${getAbsoluteAttachmentPath(localPath)}`}
+                  src={`file://${localPath.startsWith('/') ? localPath : getAbsoluteAttachmentPath(localPath)}`}
                   alt={fileName || 'Image attachment'}
                   className="OrbitalMediaViewer__image"
                   style={{
@@ -265,7 +265,7 @@ export function OrbitalMediaViewer({
             {isVideo && (
               <div className="OrbitalMediaViewer__video-container">
                 <video
-                  src={`file://${getAbsoluteAttachmentPath(localPath)}`}
+                  src={`file://${localPath.startsWith('/') ? localPath : getAbsoluteAttachmentPath(localPath)}`}
                   controls
                   className="OrbitalMediaViewer__video"
                   style={{

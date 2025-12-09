@@ -516,6 +516,45 @@ export async function handleDataMessage(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataMessage = await upgradeMessageSchema(withQuoteReference as any);
 
+    // ORBITAL: Check for media sync messages
+    // These are sent when a user uploads media to a thread
+    // Contains encryption keys and metadata for distributed backup
+    if (dataMessage.body) {
+      try {
+        const parsedBody = JSON.parse(dataMessage.body);
+        if (parsedBody && parsedBody.type === 'orbital-media-sync') {
+          const { handleMediaSyncMessage, isValidMediaSyncMessage } = await import(
+            '../services/orbitalMediaSync.preload.js'
+          );
+
+          if (isValidMediaSyncMessage(parsedBody)) {
+            log.info(
+              `${idLog}: Processing Orbital media sync message`,
+              { mediaId: parsedBody.mediaId, threadId: parsedBody.threadId }
+            );
+
+            // Get absolute attachment path function
+            const { getAbsoluteAttachmentPath } = await import(
+              '../util/attachments.preload.js'
+            );
+
+            // Process the media sync message (creates local record + triggers download)
+            await handleMediaSyncMessage(parsedBody, getAbsoluteAttachmentPath);
+
+            // Confirm receipt and return early - don't save as a regular message
+            log.info(`${idLog}: Orbital media sync message processed successfully`);
+            confirm();
+            return;
+          } else {
+            log.warn(`${idLog}: Invalid Orbital media sync message format`, { parsedBody });
+          }
+        }
+      } catch (parseError) {
+        // Not JSON or not an Orbital message - continue normal processing
+        // This is expected for regular text messages
+      }
+    }
+
     const isGroupStoryReply =
       isGroup(conversation.attributes) && dataMessage.storyId;
 

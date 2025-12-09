@@ -16,6 +16,39 @@ const router = express.Router();
  */
 
 /**
+ * Helper: Parse media metadata for WebSocket broadcast
+ * Extracts display fields from encrypted_metadata JSON
+ */
+function formatMediaForBroadcast(mediaRows) {
+  return mediaRows.map(row => {
+    let metadata = {};
+    try {
+      metadata = JSON.parse(row.encrypted_metadata);
+    } catch (error) {
+      logger.warn('Failed to parse encrypted_metadata', {
+        mediaId: row.id,
+        error: error.message
+      });
+    }
+
+    return {
+      media_id: row.id,
+      encrypted_metadata: row.encrypted_metadata,
+      size_bytes: parseInt(row.size_bytes, 10),
+      uploaded_at: row.uploaded_at,
+      expires_at: row.expires_at,
+      // Display fields from metadata
+      content_type: metadata.contentType,
+      file_name: metadata.fileName,
+      blur_hash: metadata.blurHash,
+      width: metadata.width,
+      height: metadata.height,
+      duration: metadata.duration
+    };
+  });
+}
+
+/**
  * POST /api/threads
  * Create new discussion thread
  */
@@ -115,7 +148,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
         [thread.id, validatedMediaIds]
       );
 
-      // Fetch media metadata to return in response
+      // Fetch media metadata to return in response (with full metadata for WebSocket)
       const mediaResult = await client.query(
         `SELECT id, encrypted_metadata, size_bytes, uploaded_at, expires_at
          FROM media
@@ -124,13 +157,8 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
         [validatedMediaIds]
       );
 
-      associatedMedia = mediaResult.rows.map(row => ({
-        media_id: row.id,
-        encrypted_metadata: row.encrypted_metadata,
-        size_bytes: parseInt(row.size_bytes, 10),
-        uploaded_at: row.uploaded_at,
-        expires_at: row.expires_at
-      }));
+      // Format media with extracted display fields for WebSocket broadcast
+      associatedMedia = formatMediaForBroadcast(mediaResult.rows);
     }
 
     // Get author username for WebSocket broadcast
@@ -216,16 +244,18 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
   // Determine sort order
   const sortOrder = sort === 'created_asc' ? 'ASC' : 'DESC';
 
-  // Fetch threads with reply counts
+  // Fetch threads with reply counts and media counts
   const result = await db.query(
     `SELECT
        t.id, t.group_id, t.author_id, t.encrypted_title, t.encrypted_body,
        t.title_iv, t.body_iv, t.created_at,
        u.username as author_username,
-       COUNT(r.id) as reply_count
+       COUNT(DISTINCT r.id) as reply_count,
+       COUNT(DISTINCT m.id) as media_count
      FROM threads t
      LEFT JOIN users u ON u.id = t.author_id
      LEFT JOIN replies r ON r.thread_id = t.id
+     LEFT JOIN media m ON m.thread_id = t.id AND m.expires_at > NOW()
      WHERE t.group_id = $1
      GROUP BY t.id, u.username
      ORDER BY t.created_at ${sortOrder}
@@ -249,6 +279,7 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
     title_iv: row.title_iv,
     body_iv: row.body_iv,
     reply_count: parseInt(row.reply_count, 10),
+    media_count: parseInt(row.media_count, 10),
     created_at: row.created_at
   }));
 
@@ -301,6 +332,17 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
     [threadId]
   );
 
+  // Get media for this thread
+  const mediaResult = await db.query(
+    `SELECT id, encrypted_metadata, size_bytes, uploaded_at, expires_at
+     FROM media
+     WHERE thread_id = $1 AND expires_at > NOW()
+     ORDER BY uploaded_at ASC`,
+    [threadId]
+  );
+
+  const media = formatMediaForBroadcast(mediaResult.rows);
+
   res.status(200).json({
     thread_id: thread.id,
     group_id: thread.group_id,
@@ -311,7 +353,8 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
     title_iv: thread.title_iv,
     body_iv: thread.body_iv,
     reply_count: parseInt(countResult.rows[0].count, 10),
-    created_at: thread.created_at
+    created_at: thread.created_at,
+    media: media
   });
 }));
 
@@ -367,6 +410,31 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
     [threadId]
   );
 
+  // Fetch media associated with this thread (including reply_id for per-reply association)
+  const mediaResult = await db.query(
+    `SELECT id, reply_id, encrypted_metadata, size_bytes, uploaded_at, expires_at
+     FROM media
+     WHERE thread_id = $1
+     ORDER BY uploaded_at ASC`,
+    [threadId]
+  );
+
+  // Group media by reply_id (null = original post, UUID = specific reply)
+  const mediaByReplyId = new Map();
+  const threadLevelMedia = []; // Media with reply_id = NULL (original post)
+
+  for (const row of mediaResult.rows) {
+    const formattedMedia = formatMediaForBroadcast([row])[0];
+    if (row.reply_id) {
+      if (!mediaByReplyId.has(row.reply_id)) {
+        mediaByReplyId.set(row.reply_id, []);
+      }
+      mediaByReplyId.get(row.reply_id).push(formattedMedia);
+    } else {
+      threadLevelMedia.push(formattedMedia);
+    }
+  }
+
   const replies = result.rows.map(row => ({
     reply_id: row.id,
     thread_id: row.thread_id,
@@ -374,7 +442,8 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
     author_username: row.author_username,
     encrypted_body: row.encrypted_body,
     body_iv: row.body_iv,
-    created_at: row.created_at
+    created_at: row.created_at,
+    media: mediaByReplyId.get(row.id) || [] // Attach media to each reply
   }));
 
   const totalCount = parseInt(countResult.rows[0].total, 10);
@@ -382,6 +451,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
 
   res.status(200).json({
     replies,
+    media: threadLevelMedia, // Thread-level media (original post)
     total_count: totalCount,
     has_more: hasMore
   });
@@ -475,17 +545,17 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
 
     const reply = result.rows[0];
 
-    // Associate media with the parent thread (replies don't have their own media, they attach to thread)
+    // Associate media with both the parent thread AND this specific reply
     let associatedMedia = [];
     if (validatedMediaIds.length > 0) {
       await client.query(
         `UPDATE media
-         SET thread_id = $1
-         WHERE id = ANY($2::uuid[])`,
-        [threadId, validatedMediaIds]
+         SET thread_id = $1, reply_id = $2
+         WHERE id = ANY($3::uuid[])`,
+        [threadId, reply.id, validatedMediaIds]
       );
 
-      // Fetch media metadata to return in response
+      // Fetch media metadata to return in response (with full metadata for WebSocket)
       const mediaResult = await client.query(
         `SELECT id, encrypted_metadata, size_bytes, uploaded_at, expires_at
          FROM media
@@ -494,13 +564,8 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
         [validatedMediaIds]
       );
 
-      associatedMedia = mediaResult.rows.map(row => ({
-        media_id: row.id,
-        encrypted_metadata: row.encrypted_metadata,
-        size_bytes: parseInt(row.size_bytes, 10),
-        uploaded_at: row.uploaded_at,
-        expires_at: row.expires_at
-      }));
+      // Format media with extracted display fields for WebSocket broadcast
+      associatedMedia = formatMediaForBroadcast(mediaResult.rows);
     }
 
     // Get author username for WebSocket broadcast

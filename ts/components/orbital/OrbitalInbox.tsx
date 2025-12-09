@@ -15,7 +15,7 @@ import { DisplayMode, OrbitalSettingsPage } from '../../types/Nav.std';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import { OrbitalSettings } from './OrbitalSettings';
 import { OrbitalSettingsNav } from './OrbitalSettingsNav';
-import type { UploadCheckResult } from './OrbitalMediaPicker';
+import type { UploadCheckResult } from './OrbitalComposer';
 import { createMockDraftOperations, type DraftOperations } from './useDraft';
 import { FunProvider } from '../fun/FunProvider.dom';
 import { packs, recentStickers } from '../stickers/mocks.std';
@@ -236,6 +236,7 @@ function mapReplyInfoToOrbitalMessage(
   reply: ReplyInfo,
   memberAvatars: Map<string, string>
 ): OrbitalMessageType {
+  const mediaIds = reply.media?.map(m => m.mediaId);
   return {
     id: reply.replyId,
     author: reply.authorUsername,
@@ -243,8 +244,8 @@ function mapReplyInfoToOrbitalMessage(
     timestamp: new Date(reply.createdAt).getTime(),
     body: reply.encryptedBody, // Already decrypted by service
     level: 1, // Replies are always level 1 (flat structure for now)
-    hasMedia: (reply.mediaCount || 0) > 0,
-    mediaIds: reply.media?.map(m => m.mediaId),
+    hasMedia: (mediaIds && mediaIds.length > 0) || (reply.mediaCount || 0) > 0,
+    mediaIds,
     avatarUrl: memberAvatars.get(reply.authorId) || undefined,
   };
 }
@@ -889,6 +890,9 @@ export function OrbitalInbox({
         const result = await getReplies(threadId, { limit: 100 });
         const mappedReplies = result.replies.map(r => mapReplyInfoToOrbitalMessage(r, memberAvatars));
 
+        // Extract thread-level mediaIds from the API response (for persistence after logout/login)
+        const threadMediaIds = result.media?.map(m => m.mediaId);
+
         // Create original post message from thread data
         const allMessages: OrbitalMessageType[] = [];
         if (thread && thread.body) {
@@ -899,8 +903,9 @@ export function OrbitalInbox({
             timestamp: thread.timestamp,
             body: thread.body,
             level: 0, // Original post is level 0
-            hasMedia: thread.hasMedia,
-            mediaIds: thread.mediaIds,
+            hasMedia: thread.hasMedia || (threadMediaIds && threadMediaIds.length > 0),
+            // Use mediaIds from API response (persists after logout/login) or fallback to thread cache
+            mediaIds: threadMediaIds && threadMediaIds.length > 0 ? threadMediaIds : thread.mediaIds,
             avatarUrl: thread.avatarUrl,
           };
           allMessages.push(originalPost);

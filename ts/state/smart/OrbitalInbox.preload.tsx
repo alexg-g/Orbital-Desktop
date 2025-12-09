@@ -62,9 +62,16 @@ async function getGroups() {
 }
 
 // Wrapper for downloadMedia to match expected signature
-async function downloadMedia(mediaId: string): Promise<string> {
+// Accepts options object with mediaId, onProgress, and signal
+async function downloadMedia(params: {
+  mediaId: string;
+  onProgress?: (progress: number) => void;
+  signal?: AbortSignal;
+}): Promise<string> {
   return downloadMediaFromOrbital({
-    mediaId,
+    mediaId: params.mediaId,
+    onProgress: params.onProgress,
+    signal: params.signal,
     getAbsoluteAttachmentPath,
   });
 }

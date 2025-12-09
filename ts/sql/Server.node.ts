@@ -34,6 +34,7 @@ import { isServiceIdString } from '../types/ServiceId.std.js';
 import { STORAGE_UI_KEYS } from '../types/StorageUIKeys.std.js';
 import type { StoryDistributionIdString } from '../types/StoryDistributionId.std.js';
 import * as Errors from '../types/errors.std.js';
+import * as Bytes from '../Bytes.std.js';
 import { assertDev, strictAssert } from '../util/assert.std.js';
 import { missingCaseError } from '../util/missingCaseError.std.js';
 import { combineNames } from '../util/combineNames.std.js';
@@ -241,6 +242,7 @@ import type { GifType } from '../components/fun/panels/FunPanelGifs.dom.js';
 import type { NotificationProfileType } from '../types/NotificationProfile.std.js';
 import * as durations from '../util/durations/index.std.js';
 import type { AttachmentType } from '../types/Attachment.std.js';
+import type { OrbitalMediaAttachmentForIpc } from '../types/OrbitalMedia.std.js';
 import { isFile, isVisualMedia } from '../util/Attachment.std.js';
 import { generateMessageId } from '../util/generateMessageId.node.js';
 import type {
@@ -505,6 +507,8 @@ export const DataReader: ServerReadableInterface = {
 
   // Orbital Media
   getOrbitalMedia,
+  getOrbitalMediaById,
+  getOrbitalMediaForDisplay,
   getThreadMedia,
   getStorageStats,
   getPendingDownloads,
@@ -740,6 +744,7 @@ export const DataWriter: ServerWritableInterface = {
   // Orbital Media
   saveOrbitalMedia,
   updateMediaDownloadStatus,
+  updateOrbitalMediaThreadId,
   deleteOrbitalMedia,
 
   // Orbital Threads
@@ -8789,7 +8794,47 @@ function orbitalMediaRowToAttachment(
     id: row.id,
     mediaId: row.media_id,
     threadId: row.thread_id,
-    attachmentKeys: row.attachment_keys,
+    // Convert BLOB to base64 string for IPC serialization
+    // SQLite BLOBs returned as Buffer cannot cross Electron IPC (structured clone fails)
+    // Following Signal's pattern: binary data crossing IPC must be base64 strings
+    attachmentKeys: (() => {
+      const keys = row.attachment_keys;
+
+      // Already a string (e.g., already converted or stored as text)
+      if (typeof keys === 'string') {
+        return keys;
+      }
+
+      // Node.js Buffer (most common from better-sqlite3)
+      if (Buffer.isBuffer(keys)) {
+        return keys.toString('base64');
+      }
+
+      // Uint8Array or typed array
+      if (keys instanceof Uint8Array || ArrayBuffer.isView(keys)) {
+        return Buffer.from(keys as Uint8Array).toString('base64');
+      }
+
+      // ArrayBuffer
+      if (keys instanceof ArrayBuffer) {
+        return Buffer.from(keys).toString('base64');
+      }
+
+      // Handle {type: 'Buffer', data: [...]} format (JSON serialized Buffer)
+      if (typeof keys === 'object' && keys !== null) {
+        if ('data' in keys && Array.isArray((keys as any).data)) {
+          return Buffer.from((keys as any).data).toString('base64');
+        }
+        // Array-like object with numeric keys
+        if (Object.keys(keys).every(k => !isNaN(Number(k)))) {
+          const arr = Object.values(keys) as number[];
+          return Buffer.from(arr).toString('base64');
+        }
+      }
+
+      // Unexpected type - return empty string (should not happen)
+      return '';
+    })(),
     plaintextHash: row.plaintext_hash,
     digest: row.digest,
     incrementalMac: row.incremental_mac ?? undefined,
@@ -8849,7 +8894,150 @@ function getOrbitalMedia(
     return null;
   }
 
-  return orbitalMediaRowToAttachment(row as OrbitalMediaRow);
+  // Convert to plain object with explicit field extraction
+  // This ensures IPC serialization works (no prototype pollution from better-sqlite3)
+  const typedRow = row as OrbitalMediaRow;
+
+  // Convert Buffer to base64 string for IPC safety
+  let attachmentKeysBase64: string;
+  const keys = typedRow.attachment_keys;
+  if (typeof keys === 'string') {
+    attachmentKeysBase64 = keys;
+  } else if (Buffer.isBuffer(keys)) {
+    attachmentKeysBase64 = keys.toString('base64');
+  } else if (keys instanceof Uint8Array || ArrayBuffer.isView(keys)) {
+    attachmentKeysBase64 = Buffer.from(keys as Uint8Array).toString('base64');
+  } else {
+    attachmentKeysBase64 = '';
+  }
+
+  // Return a plain object literal (guaranteed IPC-safe)
+  return {
+    id: String(typedRow.id),
+    mediaId: String(typedRow.media_id),
+    threadId: String(typedRow.thread_id),
+    attachmentKeys: attachmentKeysBase64,
+    plaintextHash: String(typedRow.plaintext_hash),
+    digest: String(typedRow.digest),
+    incrementalMac: typedRow.incremental_mac ?? undefined,
+    chunkSize: typedRow.chunk_size ?? undefined,
+    size: Number(typedRow.size),
+    contentType: String(typedRow.content_type) as any,
+    fileName: typedRow.file_name ?? undefined,
+    blurHash: typedRow.blur_hash ?? undefined,
+    width: typedRow.width ?? undefined,
+    height: typedRow.height ?? undefined,
+    duration: typedRow.duration ?? undefined,
+    expiresAt: Number(typedRow.expires_at),
+    localPath: typedRow.local_path,
+    downloaded: typedRow.downloaded as 0 | 1,
+    createdAt: Number(typedRow.created_at),
+    caption: typedRow.caption ?? undefined,
+    uploadedBy: typedRow.uploaded_by ?? undefined,
+  };
+}
+
+/**
+ * Lightweight display row - only fields needed for UI rendering.
+ * NO binary data (attachment_keys, digest, etc.) to avoid IPC serialization errors.
+ */
+type OrbitalMediaDisplayRow = {
+  id: string;
+  media_id: string;
+  thread_id: string;
+  local_path: string | null;
+  content_type: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  blur_hash: string | null;
+  file_name: string | null;
+  downloaded: 0 | 1;
+  caption: string | null;
+  expires_at: number;
+  uploaded_by: string | null;
+};
+
+/**
+ * Get media display info for UI rendering (lightweight, IPC-safe)
+ *
+ * Following Signal's pattern: only fetch display-relevant fields.
+ * NO binary data (attachmentKeys, digest, etc.) - prevents IPC serialization errors.
+ *
+ * Use this for:
+ * - Rendering media thumbnails in OrbitalThreadDetail
+ * - Displaying media previews in OrbitalMessage
+ *
+ * Use getOrbitalMedia for:
+ * - Download/decryption operations (needs attachmentKeys)
+ */
+function getOrbitalMediaForDisplay(
+  db: ReadableDB,
+  mediaId: string
+): {
+  id: string;
+  mediaId: string;
+  threadId: string;
+  localPath: string | null;
+  contentType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  blurHash?: string;
+  fileName?: string;
+  downloaded: 0 | 1;
+  caption?: string;
+  expiresAt: number;
+  uploadedBy?: string;
+} | null {
+  const row = db
+    .prepare<{ mediaId: string }>(
+      `
+      SELECT
+        id,
+        media_id,
+        thread_id,
+        local_path,
+        content_type,
+        size,
+        width,
+        height,
+        duration,
+        blur_hash,
+        file_name,
+        downloaded,
+        caption,
+        expires_at,
+        uploaded_by
+      FROM orbital_media
+      WHERE media_id = $mediaId
+    `
+    )
+    .get({ mediaId }) as OrbitalMediaDisplayRow | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    mediaId: row.media_id,
+    threadId: row.thread_id,
+    localPath: row.local_path,
+    contentType: row.content_type,
+    size: row.size,
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    duration: row.duration ?? undefined,
+    blurHash: row.blur_hash ?? undefined,
+    fileName: row.file_name ?? undefined,
+    downloaded: row.downloaded,
+    caption: row.caption ?? undefined,
+    expiresAt: row.expires_at,
+    uploadedBy: row.uploaded_by ?? undefined,
+  };
 }
 
 function getThreadMedia(
@@ -8888,7 +9076,47 @@ function getThreadMedia(
     )
     .all({ threadId });
 
-  return rows.map(row => orbitalMediaRowToAttachment(row as OrbitalMediaRow));
+  // Convert each row to plain object with explicit field extraction (IPC-safe)
+  return rows.map(row => {
+    const typedRow = row as OrbitalMediaRow;
+
+    // Convert Buffer to base64 string
+    let attachmentKeysBase64: string;
+    const keys = typedRow.attachment_keys;
+    if (typeof keys === 'string') {
+      attachmentKeysBase64 = keys;
+    } else if (Buffer.isBuffer(keys)) {
+      attachmentKeysBase64 = keys.toString('base64');
+    } else if (keys instanceof Uint8Array || ArrayBuffer.isView(keys)) {
+      attachmentKeysBase64 = Buffer.from(keys as Uint8Array).toString('base64');
+    } else {
+      attachmentKeysBase64 = '';
+    }
+
+    return {
+      id: String(typedRow.id),
+      mediaId: String(typedRow.media_id),
+      threadId: String(typedRow.thread_id),
+      attachmentKeys: attachmentKeysBase64,
+      plaintextHash: String(typedRow.plaintext_hash),
+      digest: String(typedRow.digest),
+      incrementalMac: typedRow.incremental_mac ?? undefined,
+      chunkSize: typedRow.chunk_size ?? undefined,
+      size: Number(typedRow.size),
+      contentType: String(typedRow.content_type) as any,
+      fileName: typedRow.file_name ?? undefined,
+      blurHash: typedRow.blur_hash ?? undefined,
+      width: typedRow.width ?? undefined,
+      height: typedRow.height ?? undefined,
+      duration: typedRow.duration ?? undefined,
+      expiresAt: Number(typedRow.expires_at),
+      localPath: typedRow.local_path,
+      downloaded: typedRow.downloaded as 0 | 1,
+      createdAt: Number(typedRow.created_at),
+      caption: typedRow.caption ?? undefined,
+      uploadedBy: typedRow.uploaded_by ?? undefined,
+    };
+  });
 }
 
 function getStorageStats(
@@ -8960,8 +9188,11 @@ function getStorageStats(
 
 function saveOrbitalMedia(
   db: WritableDB,
-  media: OrbitalMediaAttachment
+  media: OrbitalMediaAttachmentForIpc
 ): void {
+  // Convert base64-encoded attachmentKeys back to Buffer for SQLite storage
+  const attachmentKeysBuffer = Buffer.from(media.attachmentKeys, 'base64');
+
   db.prepare(
     `
     INSERT OR REPLACE INTO orbital_media (
@@ -9014,7 +9245,7 @@ function saveOrbitalMedia(
     id: media.id,
     mediaId: media.mediaId,
     threadId: media.threadId,
-    attachmentKeys: media.attachmentKeys,
+    attachmentKeys: attachmentKeysBuffer,
     plaintextHash: media.plaintextHash,
     digest: media.digest,
     incrementalMac: media.incrementalMac ?? null,
@@ -9054,6 +9285,65 @@ function updateMediaDownloadStatus(
   });
 }
 
+function updateOrbitalMediaThreadId(
+  db: WritableDB,
+  mediaId: string,
+  threadId: string
+): void {
+  db.prepare(
+    `
+    UPDATE orbital_media
+    SET thread_id = $threadId
+    WHERE id = $mediaId
+  `
+  ).run({
+    mediaId,
+    threadId,
+  });
+}
+
+function getOrbitalMediaById(
+  db: ReadableDB,
+  id: string
+): OrbitalMediaAttachment | null {
+  const row = db
+    .prepare<{ id: string }>(
+      `
+      SELECT
+        id,
+        media_id,
+        thread_id,
+        attachment_keys,
+        plaintext_hash,
+        digest,
+        incremental_mac,
+        chunk_size,
+        size,
+        content_type,
+        file_name,
+        blur_hash,
+        width,
+        height,
+        duration,
+        expires_at,
+        local_path,
+        downloaded,
+        created_at,
+        caption,
+        uploaded_by
+      FROM orbital_media
+      WHERE id = $id
+    `
+    )
+    .get({ id });
+
+  if (!row) {
+    return null;
+  }
+
+  return orbitalMediaRowToAttachment(row as OrbitalMediaRow);
+}
+
 function getPendingDownloads(
   db: ReadableDB
 ): Array<OrbitalMediaAttachment> {
@@ -9090,7 +9380,36 @@ function getPendingDownloads(
     )
     .all({ now });
 
-  return rows.map(row => orbitalMediaRowToAttachment(row as OrbitalMediaRow));
+  // Map each row to a truly plain object literal for IPC safety
+  // The spread operator creates a new object without prototype pollution
+  // that JSON.parse(JSON.stringify()) fails to fully remove
+  return rows.map(row => {
+    const attachment = orbitalMediaRowToAttachment(row as OrbitalMediaRow);
+    // Create a guaranteed plain object literal
+    return {
+      id: attachment.id,
+      mediaId: attachment.mediaId,
+      threadId: attachment.threadId,
+      attachmentKeys: attachment.attachmentKeys,
+      plaintextHash: attachment.plaintextHash,
+      digest: attachment.digest,
+      incrementalMac: attachment.incrementalMac,
+      chunkSize: attachment.chunkSize,
+      size: attachment.size,
+      contentType: attachment.contentType,
+      fileName: attachment.fileName,
+      blurHash: attachment.blurHash,
+      width: attachment.width,
+      height: attachment.height,
+      duration: attachment.duration,
+      expiresAt: attachment.expiresAt,
+      localPath: attachment.localPath,
+      downloaded: attachment.downloaded,
+      createdAt: attachment.createdAt,
+      caption: attachment.caption,
+      uploadedBy: attachment.uploadedBy,
+    } as OrbitalMediaAttachment;
+  });
 }
 
 function deleteOrbitalMedia(

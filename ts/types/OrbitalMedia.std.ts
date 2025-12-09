@@ -45,14 +45,18 @@ export type OrbitalMediaAttachment = {
   threadId: string;
 
   /**
-   * Signal Protocol attachment keys (64 bytes)
+   * Signal Protocol attachment keys (64 bytes) as base64 string
    * Split into: 32 bytes AES-256 + 32 bytes HMAC-SHA256
    *
-   * SECURITY: Stored as BLOB, encrypted at rest by SQLCipher
+   * SECURITY: Stored as BLOB in SQLCipher, encrypted at rest
    * NEVER transmitted to server
    * Shared with orbit members via Signal Protocol encrypted group messages
+   *
+   * NOTE: Stored as base64 string (not Uint8Array) following Signal's pattern
+   * for IPC serialization safety. Use Bytes.fromBase64() to convert back
+   * to binary when needed for encryption/decryption operations.
    */
-  attachmentKeys: Uint8Array;
+  attachmentKeys: string;
 
   /**
    * SHA-256 hash of PLAINTEXT (before encryption)
@@ -325,11 +329,15 @@ export type OrbitalMediaSyncMessage = {
   threadId: string;
 
   /**
-   * Attachment keys (64 bytes: 32 AES + 32 MAC)
+   * Attachment keys (64 bytes: 32 AES + 32 MAC) as base64 string
    * SECURITY: Only transmitted via Signal Protocol encryption
    * Server NEVER sees these keys
+   *
+   * NOTE: Stored as base64 string (not Uint8Array) following Signal's pattern
+   * for IPC serialization safety. Use Bytes.fromBase64() to convert back
+   * to binary when needed for encryption/decryption operations.
    */
-  attachmentKeys: Uint8Array;
+  attachmentKeys: string;
 
   /**
    * Plaintext hash (for integrity verification)
@@ -471,4 +479,74 @@ export type OrbitalMediaStorageStats = {
     count: number;
     storageUsed: number;
   }[];
+};
+
+/**
+ * Orbital Media Display Info (lightweight, IPC-safe)
+ *
+ * Following Signal's pattern: separate storage type from display type.
+ * This type contains ONLY the fields needed for UI rendering.
+ * NO binary data (attachmentKeys, digest, etc.) - prevents IPC serialization errors.
+ *
+ * Used by: OrbitalThreadDetail, OrbitalMessage for rendering media previews.
+ */
+export type OrbitalMediaDisplayInfo = {
+  /** Client-side UUID */
+  id: string;
+
+  /** Server-assigned media ID */
+  mediaId: string;
+
+  /** Thread this media belongs to */
+  threadId: string;
+
+  /** Local storage path (relative to attachments directory) */
+  localPath: string | null;
+
+  /** MIME type */
+  contentType: MIMEType;
+
+  /** File size in bytes */
+  size: number;
+
+  /** Media dimensions */
+  width?: number;
+  height?: number;
+
+  /** Duration for video/audio (milliseconds) */
+  duration?: number;
+
+  /** Blurhash for placeholder */
+  blurHash?: string;
+
+  /** Original filename */
+  fileName?: string;
+
+  /** Download status (0 = not downloaded, 1 = downloaded) */
+  downloaded: 0 | 1;
+
+  /** Caption text */
+  caption?: string;
+
+  /** Server expiration timestamp (Unix milliseconds) */
+  expiresAt: number;
+
+  /** Uploader's member ID */
+  uploadedBy?: string;
+};
+
+/**
+ * Orbital Media Attachment for IPC (serializable)
+ *
+ * Same as OrbitalMediaAttachment but with attachmentKeys as base64 string
+ * for safe serialization through Electron IPC (Uint8Array can cause issues).
+ *
+ * Used by: saveOrbitalMedia IPC call from preload to main process
+ */
+export type OrbitalMediaAttachmentForIpc = Omit<OrbitalMediaAttachment, 'attachmentKeys'> & {
+  /**
+   * Attachment keys as base64-encoded string (for IPC serialization)
+   * Convert to Buffer in main process before storing in SQLite
+   */
+  attachmentKeys: string;
 };

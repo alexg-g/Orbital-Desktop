@@ -5,10 +5,10 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import type { LocalizerType } from '../../types/Util.std';
 import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews.std';
-import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
+import type { OrbitalMediaDisplayInfo } from '../../types/OrbitalMedia.std';
 import { OrbitalMessage } from './OrbitalMessage';
 import { OrbitalComposer } from './OrbitalComposer';
-import type { UploadCheckResult } from './OrbitalMediaPicker';
+import type { UploadCheckResult } from './OrbitalComposer';
 import type { QuotaInfo } from '../../services/orbitalQuota.preload';
 import type { DraftOperations } from './useDraft';
 
@@ -86,11 +86,12 @@ export function OrbitalThreadDetail({
   draftOperations,
 }: OrbitalThreadDetailProps): JSX.Element {
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
-  const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaAttachment>>(
+  const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaDisplayInfo>>(
     new Map()
   );
 
-  // Fetch media metadata for messages that have mediaIds
+  // Fetch media display info for messages that have mediaIds
+  // Uses lightweight getOrbitalMediaForDisplay (no binary data) to avoid IPC serialization issues
   useEffect(() => {
     async function fetchMediaByIds() {
       try {
@@ -110,19 +111,21 @@ export function OrbitalThreadDetail({
         }
 
         // Access DataReader from window.Signal
+        // Note: DataReader methods are async (wrapped by IPC proxy)
+        // Use getOrbitalMediaForDisplay - lightweight version without binary data
         const dataReader = window.Signal?.DataReader as {
-          getOrbitalMedia?: (mediaId: string) => OrbitalMediaAttachment | null;
+          getOrbitalMediaForDisplay?: (mediaId: string) => Promise<OrbitalMediaDisplayInfo | null>;
         } | undefined;
 
-        if (!dataReader?.getOrbitalMedia) {
-          console.warn('DataReader.getOrbitalMedia not available');
+        if (!dataReader?.getOrbitalMediaForDisplay) {
+          console.warn('DataReader.getOrbitalMediaForDisplay not available');
           return;
         }
 
-        // Fetch each media item by its ID
-        const map = new Map<string, OrbitalMediaAttachment>();
+        // Fetch each media item by its ID (must await async IPC calls)
+        const map = new Map<string, OrbitalMediaDisplayInfo>();
         for (const mediaId of allMediaIds) {
-          const media = dataReader.getOrbitalMedia(mediaId);
+          const media = await dataReader.getOrbitalMediaForDisplay(mediaId);
           if (media) {
             map.set(mediaId, media);
           }

@@ -164,13 +164,17 @@ export async function downloadMediaFromOrbital(
     // Step 4: Decrypt blob
     onProgress?.(50); // 50% - starting decryption
 
+    // Convert attachment keys from base64 string to Uint8Array for decryption
+    // Signal pattern: binary data crosses IPC as base64, convert back when needed
+    const attachmentKeysBytes = fromBase64(media.attachmentKeys);
+
     const decryptResult = await decryptAttachmentV2({
       idForLogging: mediaId,
       ciphertextStream: Readable.from([Buffer.from(encryptedBlob)]),
       size: media.size,
       type: 'standard',
-      aesKey: media.attachmentKeys.subarray(0, 32),
-      macKey: media.attachmentKeys.subarray(32, 64),
+      aesKey: attachmentKeysBytes.subarray(0, 32),
+      macKey: attachmentKeysBytes.subarray(32, 64),
       theirIncrementalMac: media.incrementalMac
         ? fromBase64(media.incrementalMac)
         : undefined,
@@ -287,10 +291,10 @@ async function downloadEncryptedBlob(params: {
   onProgress?: DownloadProgressCallback;
   signal?: AbortSignal;
 }): Promise<Uint8Array> {
-  const { mediaId, threadId, expectedSize, onProgress, signal } = params;
+  const { mediaId, expectedSize, onProgress, signal } = params;
+  // Note: threadId is not sent - backend verifies group membership via media's group_id
 
   // Make request using Node.js https/http module
-  const requestBody = JSON.stringify({ threadId });
   const url = `${ORBITAL_API_URL}/api/media/${mediaId}/download`;
 
   // Get JWT token for authentication (before Promise)
@@ -316,10 +320,8 @@ async function downloadEncryptedBlob(params: {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port,
       path: parsedUrl.pathname + parsedUrl.search,
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(requestBody),
         'Authorization': `Bearer ${jwtToken}`,
       },
     };
@@ -381,7 +383,7 @@ async function downloadEncryptedBlob(params: {
       reject(error);
     });
 
-    request.write(requestBody);
+    // GET request - no body to write
     request.end();
   });
 

@@ -35,7 +35,7 @@ import * as http from 'node:http';
 import { URL } from 'node:url';
 
 import type { AttachmentWithHydratedData } from '../types/Attachment.std.js';
-import type { OrbitalMediaAttachment } from '../types/OrbitalMedia.std.js';
+import type { OrbitalMediaAttachmentForIpc } from '../types/OrbitalMedia.std.js';
 import {
   generateAttachmentKeys,
   encryptAttachmentV2ToDisk,
@@ -126,9 +126,9 @@ type UploadChunkResponse = {
 };
 
 type FinalizeUploadResponse = {
-  mediaId: string;
-  expiresAt: number;
-  uploadedAt: number;
+  media_id: string;
+  expires_at: string; // ISO date string from backend
+  uploaded_at: string; // ISO date string from backend
 };
 
 /**
@@ -148,7 +148,7 @@ type FinalizeUploadResponse = {
  */
 export async function uploadMediaToOrbital(
   options: UploadMediaOptions
-): Promise<OrbitalMediaAttachment> {
+): Promise<OrbitalMediaAttachmentForIpc> {
   const {
     attachment,
     groupId,
@@ -250,6 +250,7 @@ export async function uploadMediaToOrbital(
                 caption,
               }
             : undefined,
+        encryptionIv: chunkIndex === 0 ? toBase64(encryptResult.iv) : undefined,
         signal,
       });
 
@@ -271,16 +272,23 @@ export async function uploadMediaToOrbital(
       signal,
     });
 
-    log.info(`${logId}: Finalized upload: ${finalizeResponse.mediaId}`);
+    // Backend returns snake_case with ISO date strings, convert to camelCase with Unix timestamps
+    const mediaId = finalizeResponse.media_id;
+    // SQLCipher expects INTEGER timestamps (milliseconds), backend returns ISO strings
+    const uploadedAt = new Date(finalizeResponse.uploaded_at).getTime();
+    const expiresAt = new Date(finalizeResponse.expires_at).getTime();
+
+    log.info(`${logId}: Finalized upload: ${mediaId}`);
 
     // Step 5: Save to SQLCipher
-    // Note: OrbitalMediaAttachment type may still use threadId internally
-    // but we store groupId since media is shared across the entire group
-    const media: OrbitalMediaAttachment = {
+    // Store with empty threadId since media is not yet associated with a thread
+    // After thread/reply creation, the threadId will be updated
+    // We create the IPC-safe format directly since that's what we return
+    const mediaForIpc: OrbitalMediaAttachmentForIpc = {
       id,
-      mediaId: finalizeResponse.mediaId,
-      threadId: groupId, // Using groupId here (schema may need update later)
-      attachmentKeys,
+      mediaId,
+      threadId: '', // Empty - will be updated after thread/reply creation
+      attachmentKeys: toBase64(attachmentKeys), // Base64 for IPC safety
       plaintextHash: encryptResult.plaintextHash,
       digest: toBase64(encryptResult.digest),
       incrementalMac: encryptResult.incrementalMac
@@ -294,18 +302,25 @@ export async function uploadMediaToOrbital(
       width: attachment.width,
       height: attachment.height,
       duration: attachment.duration,
-      expiresAt: finalizeResponse.expiresAt,
+      expiresAt,
       localPath: null, // Not downloaded yet (we just uploaded)
       downloaded: 0,
-      createdAt: finalizeResponse.uploadedAt,
+      createdAt: uploadedAt,
       caption,
       uploadedBy,
     };
 
-    await DataWriter.saveOrbitalMedia(media);
+    await DataWriter.saveOrbitalMedia(mediaForIpc);
     log.info(`${logId}: Saved to SQLCipher`);
 
-    return media;
+    // NOTE: Media sync messages are sent AFTER thread/reply creation
+    // when the media is associated with a threadId. See syncThreadToServer()
+    // in orbitalThreads.preload.ts for the actual sync message sending.
+    // At this point, threadId is empty and will be updated later.
+
+    // Return IPC-safe format to prevent "object could not be cloned" errors
+    // All callers only need mediaId, but this ensures the full object is serializable
+    return mediaForIpc;
   } catch (error) {
     log.error(`${logId}: Upload failed`, Errors.toLogFormat(error));
 
@@ -378,6 +393,7 @@ async function uploadChunkWithRetry(params: {
     chunkSize?: number;
     caption?: string;
   };
+  encryptionIv?: string;
   signal?: AbortSignal;
 }): Promise<void> {
   const { id, chunkIndex, signal } = params;
@@ -559,6 +575,7 @@ async function uploadChunk(params: {
     chunkSize?: number;
     caption?: string;
   };
+  encryptionIv?: string;
   signal?: AbortSignal;
 }): Promise<UploadChunkResponse> {
   const {
@@ -569,6 +586,7 @@ async function uploadChunk(params: {
     chunkData,
     isFirstChunk,
     encryptedMetadata,
+    encryptionIv,
     signal,
   } = params;
 
@@ -584,6 +602,11 @@ async function uploadChunk(params: {
   // Add metadata on first chunk
   if (isFirstChunk && encryptedMetadata) {
     fields.encrypted_metadata = JSON.stringify(encryptedMetadata);
+  }
+
+  // Add encryption IV on first chunk (required by backend)
+  if (isFirstChunk && encryptionIv) {
+    fields.encryption_iv = encryptionIv;
   }
 
   const { body, boundary } = buildMultipartFormData(fields);
@@ -652,11 +675,96 @@ async function finalizeUpload(params: {
     signal,
   });
 
-  if (response.status !== 200) {
+  // Accept both 200 and 201 (Created) as success
+  if (response.status !== 200 && response.status !== 201) {
     throw new Error(
       `Finalize upload failed: ${response.status} ${response.statusText}: ${response.data}`
     );
   }
 
   return JSON.parse(response.data);
+}
+
+/**
+ * Send media sync message to group
+ *
+ * Broadcasts media metadata and encryption keys to all orbit members
+ * via Signal Protocol encrypted group message.
+ *
+ * The server cannot read this message - encryption keys are end-to-end encrypted.
+ *
+ * @param params Group ID and media metadata
+ */
+async function sendMediaSyncMessage(params: {
+  groupId: string;
+  media: OrbitalMediaAttachmentForIpc;
+}): Promise<void> {
+  const { groupId, media } = params;
+  const logId = `sendMediaSyncMessage(${media.mediaId})`;
+
+  try {
+    // Import OrbitalMediaSyncMessage type
+    const { OrbitalMediaSyncMessage } = await import('../types/OrbitalMedia.std.js');
+
+    // Build the sync message payload
+    const syncMessage: import('../types/OrbitalMedia.std.js').OrbitalMediaSyncMessage = {
+      type: 'orbital-media-sync',
+      id: media.id,
+      mediaId: media.mediaId,
+      threadId: media.threadId,
+      attachmentKeys: media.attachmentKeys, // Already base64 string
+      plaintextHash: media.plaintextHash,
+      digest: media.digest,
+      incrementalMac: media.incrementalMac,
+      chunkSize: media.chunkSize,
+      size: media.size,
+      contentType: media.contentType,
+      fileName: media.fileName,
+      blurHash: media.blurHash,
+      width: media.width,
+      height: media.height,
+      duration: media.duration,
+      caption: media.caption,
+      expiresAt: media.expiresAt,
+      uploadedBy: media.uploadedBy || '',
+      createdAt: media.createdAt,
+    };
+
+    // Serialize to JSON for transmission
+    const messageBody = JSON.stringify(syncMessage);
+
+    // Get the conversation for this group
+    const conversation = window.ConversationController.get(groupId);
+    if (!conversation) {
+      throw new Error(`Group conversation not found: ${groupId}`);
+    }
+
+    // Send as a Signal Protocol encrypted message
+    // The message body contains the JSON payload
+    // Signal Protocol ensures end-to-end encryption
+    await conversation.queueJob('sendMediaSyncMessage', async () => {
+      const message = await conversation.sendMessage({
+        body: messageBody,
+        // No attachments - this is just metadata
+        attachments: [],
+        // No mentions
+        mentions: [],
+        // No preview
+        preview: [],
+        // No quote
+        quote: undefined,
+        // No sticker
+        sticker: undefined,
+      });
+
+      log.info(`${logId}: Media sync message sent`, {
+        messageId: message?.id,
+        groupId,
+        mediaId: media.mediaId,
+      });
+    });
+  } catch (error) {
+    log.error(`${logId}: Failed to send media sync message`, Errors.toLogFormat(error));
+    throw error;
+  }
 }

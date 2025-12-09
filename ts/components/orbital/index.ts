@@ -21,7 +21,12 @@ export { OrbitalMessage, getReplyDepthColor, getReplyIndentation } from './Orbit
 export type { OrbitalMessageProps } from './OrbitalMessage';
 
 export { OrbitalComposer } from './OrbitalComposer';
-export type { OrbitalComposerMode, OrbitalComposerProps } from './OrbitalComposer';
+export type {
+  OrbitalComposerMode,
+  OrbitalComposerProps,
+  SelectedFile,
+  UploadCheckResult,
+} from './OrbitalComposer';
 
 export {
   OrbitalDaySeparator,
@@ -35,9 +40,6 @@ export { OrbitalThreadingDemo } from './OrbitalThreadingDemo';
 
 export { OrbitalMediaViewer } from './OrbitalMediaViewer';
 export type { OrbitalMediaViewerProps } from './OrbitalMediaViewer';
-
-export { OrbitalMediaPicker } from './OrbitalMediaPicker';
-export type { OrbitalMediaPickerProps, SelectedFile } from './OrbitalMediaPicker';
 
 export { OrbitalUploadProgress } from './OrbitalUploadProgress';
 export type { OrbitalUploadProgressProps, UploadFile } from './OrbitalUploadProgress';

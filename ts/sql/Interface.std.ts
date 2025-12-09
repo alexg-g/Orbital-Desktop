@@ -50,6 +50,8 @@ import type { AttachmentBackupJobType } from '../types/AttachmentBackup.std.js';
 import type { AttachmentType } from '../types/Attachment.std.js';
 import type {
   OrbitalMediaAttachment,
+  OrbitalMediaAttachmentForIpc,
+  OrbitalMediaDisplayInfo,
   OrbitalMediaStorageStats} from '../types/OrbitalMedia.std.js';
 import type { OrbitalThreadType } from '../types/OrbitalThread.std.js';
 import type { DraftType } from '../types/Draft.std.js';
@@ -963,6 +965,8 @@ type ReadableInterface = {
 
   // Orbital Media
   getOrbitalMedia: (mediaId: string) => OrbitalMediaAttachment | null;
+  getOrbitalMediaById: (id: string) => OrbitalMediaAttachment | null;
+  getOrbitalMediaForDisplay: (mediaId: string) => OrbitalMediaDisplayInfo | null;
   getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
   getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
   getPendingDownloads: () => Array<OrbitalMediaAttachment>;
@@ -1324,8 +1328,9 @@ type WritableInterface = {
   _testOnlyRemoveMessageAttachments(timestamp: number): void;
 
   // Orbital Media
-  saveOrbitalMedia: (media: OrbitalMediaAttachment) => void;
+  saveOrbitalMedia: (media: OrbitalMediaAttachmentForIpc) => void;
   updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
+  updateOrbitalMediaThreadId: (mediaId: string, threadId: string) => void;
 
   // Orbital Threads
   saveOrbitalThread: (thread: OrbitalThreadType) => void;

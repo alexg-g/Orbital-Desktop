@@ -6,7 +6,7 @@ import React, { useCallback, useState } from 'react';
 import classNames from 'classnames';
 import type { LocalizerType } from '../../types/Util.std';
 import type { OrbitalMessageType } from './OrbitalThreadDetail';
-import type { OrbitalMediaAttachment } from '../../types/OrbitalMedia.std';
+import type { OrbitalMediaDisplayInfo } from '../../types/OrbitalMedia.std';
 import { StagedLinkPreview } from '../conversation/StagedLinkPreview.dom';
 import { OrbitalPhotoGallery } from './OrbitalPhotoGallery';
 import { OrbitalMediaViewer } from './OrbitalMediaViewer';
@@ -20,7 +20,7 @@ export type OrbitalMessageProps = {
   onQuote?: (messageId: string) => void;
   i18n: LocalizerType;
   threadId: string;
-  mediaMap: Map<string, OrbitalMediaAttachment>;
+  mediaMap: Map<string, OrbitalMediaDisplayInfo>;
   currentUserId?: string;
   onDeleteMedia?: (mediaId: string) => void;
   // Dependency injection for OrbitalMediaViewer (allows Storybook mocking)
@@ -98,13 +98,13 @@ export function OrbitalMessage({
   // Determine CSS class based on reply depth
   const levelClass = getLevelClass(message.level);
 
-  // Get media items from mediaMap
+  // Get media items from mediaMap (filter out items with missing contentType)
   const mediaItems = (message.mediaIds || [])
     .map(id => mediaMap.get(id))
-    .filter((m): m is OrbitalMediaAttachment => m !== undefined);
+    .filter((m): m is OrbitalMediaDisplayInfo => m !== undefined && m.contentType != null);
 
   // Filter for images only (for lightbox)
-  const imageMedia = mediaItems.filter(m => m.contentType.startsWith('image/'));
+  const imageMedia = mediaItems.filter(m => m.contentType?.startsWith('image/'));
   const imageUrls = imageMedia
     .filter(m => m.localPath)
     .map(m => `file://${getAbsoluteAttachmentPath(m.localPath as string)}`);
@@ -250,7 +250,7 @@ export function OrbitalMessage({
                       currentUserId={currentUserId}
                       onDelete={onDeleteMedia}
                       onOpenFullscreen={
-                        media.contentType.startsWith('image/')
+                        media.contentType?.startsWith('image/')
                           ? () => openLightbox(imageMedia.indexOf(media))
                           : undefined
                       }
@@ -282,7 +282,7 @@ export function OrbitalMessage({
                       currentUserId={currentUserId}
                       onDelete={onDeleteMedia}
                       onOpenFullscreen={
-                        mediaItems[0].contentType.startsWith('image/')
+                        mediaItems[0].contentType?.startsWith('image/')
                           ? () => openLightbox(0)
                           : undefined
                       }
@@ -344,7 +344,7 @@ export function OrbitalMessage({
                       currentUserId={currentUserId}
                       onDelete={onDeleteMedia}
                       onOpenFullscreen={
-                        media.contentType.startsWith('image/')
+                        media.contentType?.startsWith('image/')
                           ? () => openLightbox(imageMedia.indexOf(media))
                           : undefined
                       }
