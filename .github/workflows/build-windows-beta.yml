@@ -99,6 +99,7 @@ jobs:
           pnpm exec electron-builder `
             --win `
             --x64 `
+            --publish=never `
             --config.directories.output=release `
             --config.win.signtoolOptions.certificateSha1= `
             --config.win.signtoolOptions.certificateSubjectName=
@@ -112,6 +113,7 @@ jobs:
           pnpm exec electron-builder `
             --win `
             --arm64 `
+            --publish=never `
             --config.directories.output=release `
             --config.win.signtoolOptions.certificateSha1= `
             --config.win.signtoolOptions.certificateSubjectName=
