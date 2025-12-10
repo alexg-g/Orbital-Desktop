@@ -460,8 +460,9 @@
       "icon": "build/icons/mac/icon.icns",
       "publish": [
         {
-          "provider": "generic",
-          "url": "https://updates.signal.org/desktop"
+          "provider": "github",
+          "owner": "alexg-g",
+          "repo": "Orbital-Desktop"
         }
       ],
       "mergeASARs": true,
@@ -503,7 +504,13 @@
       },
       "artifactName": "${name}-win-${arch}-${version}.${ext}",
       "icon": "build/icons/win/icon.ico",
-      "publish": [],
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "alexg-g",
+          "repo": "Orbital-Desktop"
+        }
+      ],
       "releaseInfo": {
         "vendor": {
           "minOSVersion": "10.0.10240"
