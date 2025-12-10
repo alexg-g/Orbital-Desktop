@@ -9,6 +9,21 @@ import {
 } from './OrbitalSettingsControl';
 import { getSetting, setSetting } from './settingsStorage';
 
+// Lazy import of notification service to avoid breaking Storybook
+// The service uses Node.js modules that aren't available in browser
+let orbitalNotifications: {
+  updateSettings: (settings: { enabled?: boolean; soundEnabled?: boolean; showPreviews?: 'full' | 'name' | 'none' }) => void;
+} | null = null;
+
+// Only import in Electron environment
+if (typeof window !== 'undefined' && window.IPC) {
+  import('../../services/orbitalNotifications.preload.js').then(module => {
+    orbitalNotifications = module.orbitalNotifications;
+  }).catch(() => {
+    // Silently fail in Storybook
+  });
+}
+
 export function OrbitalSettingsNotifications(): JSX.Element {
   // Local state for settings
   const [desktopNotifications, setDesktopNotifications] = useState(true);
@@ -33,6 +48,8 @@ export function OrbitalSettingsNotifications(): JSX.Element {
     setDesktopNotifications(value);
     try {
       await setSetting('orbital.settings.notifications.enabled', value);
+      // Update the notification service in real-time
+      orbitalNotifications.updateSettings({ enabled: value });
       console.log('Desktop notifications setting saved:', value);
     } catch (error) {
       console.error('Failed to save notifications.enabled setting:', error);
@@ -43,6 +60,8 @@ export function OrbitalSettingsNotifications(): JSX.Element {
     setNotificationSound(value);
     try {
       await setSetting('orbital.settings.notifications.soundEnabled', value);
+      // Update the notification service in real-time
+      orbitalNotifications.updateSettings({ soundEnabled: value });
       console.log('Notification sound setting saved:', value);
     } catch (error) {
       console.error('Failed to save notifications.soundEnabled setting:', error);
@@ -53,6 +72,8 @@ export function OrbitalSettingsNotifications(): JSX.Element {
     setNotificationContent(value);
     try {
       await setSetting('orbital.settings.notifications.showPreviews', value);
+      // Update the notification service in real-time
+      orbitalNotifications.updateSettings({ showPreviews: value as 'full' | 'name' | 'none' });
       console.log('Notification content setting saved:', value);
     } catch (error) {
       console.error('Failed to save notifications.showPreviews setting:', error);

@@ -2,8 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { StorybookConfig } from '@storybook/react-webpack5';
-import { ProvidePlugin } from 'webpack';
+import { ProvidePlugin, NormalModuleReplacementPlugin } from 'webpack';
 import { builtinModules } from 'node:module';
+import path from 'node:path';
+
+// Mock mappings for preload services that contain Node.js-only code
+const PRELOAD_MOCKS: Record<string, string> = {
+  'orbitalAuth.preload': path.resolve(__dirname, './__mocks__/orbitalAuth.preload.ts'),
+  'orbitalGroups.preload': path.resolve(__dirname, './__mocks__/orbitalGroups.preload.ts'),
+  'orbitalNotifications.preload': path.resolve(__dirname, './__mocks__/orbitalNotifications.preload.ts'),
+  'orbitalThreads.preload': path.resolve(__dirname, './__mocks__/orbitalThreads.preload.ts'),
+  'orbitalQuota.preload': path.resolve(__dirname, './__mocks__/orbitalQuota.preload.ts'),
+};
 
 const EXTERNALS = new Set(builtinModules);
 
@@ -62,6 +72,7 @@ const config: StorybookConfig = {
       '.js': ['.tsx', '.ts', '.js'],
     };
 
+
     config.module!.rules!.unshift({
       test: /\.scss$/,
       use: [
@@ -112,6 +123,24 @@ const config: StorybookConfig = {
       new ProvidePlugin({
         Buffer: ['buffer', 'Buffer'],
       })
+    );
+
+    // Use NormalModuleReplacementPlugin to mock preload services
+    // These files contain Node.js-only code that doesn't work in the browser
+    config.plugins!.push(
+      new NormalModuleReplacementPlugin(
+        /\/services\/orbital[A-Za-z]+\.preload\.(ts|js)$/,
+        (resource) => {
+          // Extract the service name from the request
+          const match = resource.request.match(/orbital([A-Za-z]+)\.preload/);
+          if (match) {
+            const serviceName = `orbital${match[1]}.preload`;
+            if (PRELOAD_MOCKS[serviceName]) {
+              resource.request = PRELOAD_MOCKS[serviceName];
+            }
+          }
+        }
+      )
     );
 
     return config;

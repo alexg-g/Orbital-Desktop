@@ -36,7 +36,11 @@ import type {
 } from '../../services/orbitalThreads.preload.js';
 import { incrementThreadReplyCount } from '../../services/orbitalThreads.preload.js';
 // Legacy localThreadStorage removed - threads now come only from server API
-import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache } from './settingsStorage';
+import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache, getSetting } from './settingsStorage';
+import {
+  orbitalNotifications,
+  type OrbitalNotificationSettings,
+} from '../../services/orbitalNotifications.preload.js';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -682,20 +686,39 @@ export function OrbitalInbox({
           };
           return [newThread, ...prevThreads];
         });
+
+        // Show desktop notification for new thread (if not from current user)
+        if (data.author_id !== currentUserId) {
+          const currentGroup = groups.find(g => g.groupId === data.group_id);
+          orbitalNotifications.notifyNewThread({
+            threadId: data.thread_id,
+            orbitId: data.group_id,
+            title: data.encrypted_title || 'New Thread',
+            authorName: data.author_name || 'Someone',
+            orbitName: currentGroup?.name,
+          });
+        }
       }
     });
 
     const unsubNewReply = wsSubscribe('new_reply', async (event) => {
       console.log('[OrbitalInbox] Received new_reply event:', event);
       const data = event.data;
-      // Update reply count for the thread (UI state)
-      setThreads(prevThreads =>
-        prevThreads.map(t =>
+
+      // Get the thread title for notification (capture before state update)
+      let threadTitle = 'Thread';
+      setThreads(prevThreads => {
+        const thread = prevThreads.find(t => t.id === data.thread_id);
+        if (thread) {
+          threadTitle = thread.title;
+        }
+        // Update reply count for the thread (UI state)
+        return prevThreads.map(t =>
           t.id === data.thread_id
             ? { ...t, replyCount: (t.replyCount || 0) + 1 }
             : t
-        )
-      );
+        );
+      });
 
       // Persist reply count to SQLCipher so it survives orbit switches/refreshes
       try {
@@ -721,6 +744,17 @@ export function OrbitalInbox({
             hasMedia: false,
           };
           return [...prevMessages, newReply];
+        });
+      }
+
+      // Show desktop notification for new reply (if not from current user)
+      if (data.author_id !== currentUserId) {
+        orbitalNotifications.notifyNewReply({
+          threadId: data.thread_id,
+          orbitId: data.group_id || selectedGroupId || '',
+          threadTitle,
+          authorName: data.author_name || 'Someone',
+          replyPreview: data.encrypted_body?.substring(0, 50),
         });
       }
     });
@@ -826,6 +860,13 @@ export function OrbitalInbox({
           ...prev,
           [conversationId]: [...(prev[conversationId] || []), newChatMessage]
         }));
+
+        // Show desktop notification for new DM (only if not viewing the chat)
+        orbitalNotifications.notifyNewMessage({
+          conversationId,
+          authorName: senderName,
+          messagePreview: decoded.body?.substring(0, 50),
+        });
       }
     });
 
@@ -837,7 +878,7 @@ export function OrbitalInbox({
       unsubMediaUploaded();
       unsubNewMessage();
     };
-  }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, availableContacts, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope]);
+  }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, availableContacts, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope, groups]);
 
   // Fetch threads when logged in AND orbit is selected (orbit-specific)
   useEffect(() => {
@@ -1263,6 +1304,14 @@ export function OrbitalInbox({
 
   const handleLoginSuccess = useCallback(() => {
     setIsLoggedIn(true);
+
+    // Initialize notification service with user settings
+    const notificationSettings: Partial<OrbitalNotificationSettings> = {
+      enabled: getSetting('orbital.settings.notifications.enabled', true) ?? true,
+      soundEnabled: getSetting('orbital.settings.notifications.soundEnabled', true) ?? true,
+      showPreviews: (getSetting('orbital.settings.notifications.showPreviews', 'full') ?? 'full') as 'full' | 'name' | 'none',
+    };
+    orbitalNotifications.initialize(notificationSettings);
   }, []);
 
   // Handle logout - resets all state and shows login screen
