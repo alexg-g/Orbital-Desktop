@@ -1,0 +1,269 @@
+# Orbital Desktop - macOS Beta Build Workflow
+# Manual workflow for building and releasing macOS installers
+
+name: Build macOS Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_version:
+        description: 'Bump alpha version before build'
+        type: boolean
+        default: false
+      create_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: true
+      architecture:
+        description: 'Target architecture'
+        type: choice
+        options:
+          - arm64
+          - x64
+          - universal
+        default: arm64
+
+jobs:
+  build-macos:
+    runs-on: macos-14  # M1 runner for Apple Silicon builds
+    timeout-minutes: 60
+
+    steps:
+      - name: System Info
+        run: |
+          echo "macOS Version:"
+          sw_vers
+          echo ""
+          echo "Architecture:"
+          uname -m
+          echo ""
+          echo "Xcode Version:"
+          xcodebuild -version
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: Cache electron-gyp
+        uses: actions/cache@v4
+        with:
+          path: ~/.electron-gyp
+          key: electron-gyp-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NPM_CONFIG_LOGLEVEL: verbose
+
+      - name: Bump version
+        if: ${{ github.event.inputs.bump_version == 'true' }}
+        run: |
+          current_version=$(grep '"version"' package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+          if [[ $current_version =~ ^(.+)-alpha\.([0-9]+)$ ]]; then
+            base="${BASH_REMATCH[1]}"
+            alpha_num="${BASH_REMATCH[2]}"
+            new_alpha_num=$((alpha_num + 1))
+            new_version="${base}-alpha.${new_alpha_num}"
+            sed -i '' "s/\"version\": \"${current_version}\"/\"version\": \"${new_version}\"/" package.json
+            echo "Bumped version: ${current_version} -> ${new_version}"
+            echo "VERSION=${new_version}" >> $GITHUB_ENV
+          else
+            echo "Version '${current_version}' is not an alpha version. Skipping bump."
+            echo "VERSION=${current_version}" >> $GITHUB_ENV
+          fi
+
+      - name: Get version
+        if: ${{ github.event.inputs.bump_version != 'true' }}
+        run: |
+          version=$(grep '"version"' package.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
+          echo "VERSION=${version}" >> $GITHUB_ENV
+
+      - name: Generate assets
+        run: pnpm run generate
+
+      - name: Build production bundles
+        run: pnpm run build:esbuild:prod
+
+      - name: Build macOS app (arm64)
+        if: ${{ github.event.inputs.architecture == 'arm64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          SIGNAL_ENV=production pnpm exec electron-builder \
+            --mac \
+            --arm64 \
+            --dir \
+            --publish=never \
+            --config.directories.output=release \
+            --config.mac.identity=null \
+            --config.mac.sign=null
+
+      - name: Build macOS app (x64)
+        if: ${{ github.event.inputs.architecture == 'x64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          SIGNAL_ENV=production pnpm exec electron-builder \
+            --mac \
+            --x64 \
+            --dir \
+            --publish=never \
+            --config.directories.output=release \
+            --config.mac.identity=null \
+            --config.mac.sign=null
+
+      - name: Ad-hoc sign app (arm64)
+        if: ${{ github.event.inputs.architecture == 'arm64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          APP_PATH="release/mac-arm64/Orbital.app"
+          if [ -d "$APP_PATH" ]; then
+            echo "Signing app at: $APP_PATH"
+
+            # Sign all .dylib files first
+            echo "Signing dynamic libraries..."
+            find "$APP_PATH" -name "*.dylib" -exec codesign --force --sign - {} \; 2>/dev/null || true
+
+            # Sign all .node files (native modules)
+            echo "Signing native modules..."
+            find "$APP_PATH" -name "*.node" -exec codesign --force --sign - {} \; 2>/dev/null || true
+
+            # Sign helper apps inside the framework
+            echo "Signing helper apps..."
+            find "$APP_PATH/Contents/Frameworks" -name "*Helper*" -type d 2>/dev/null | while read helper; do
+              codesign --force --sign - "$helper" 2>/dev/null || true
+            done
+
+            # Sign frameworks (deepest first)
+            echo "Signing frameworks..."
+            find "$APP_PATH/Contents/Frameworks" -name "*.framework" -type d -depth 2>/dev/null | while read framework; do
+              codesign --force --sign - "$framework" 2>/dev/null || true
+            done
+
+            # Sign the main app bundle with --deep as final step
+            echo "Signing main app bundle..."
+            codesign --force --deep --sign - "$APP_PATH"
+
+            echo "Ad-hoc signing complete for arm64"
+          else
+            echo "Error: App not found at $APP_PATH"
+            exit 1
+          fi
+
+      - name: Ad-hoc sign app (x64)
+        if: ${{ github.event.inputs.architecture == 'x64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          APP_PATH="release/mac-x64/Orbital.app"
+          if [ -d "$APP_PATH" ]; then
+            echo "Signing app at: $APP_PATH"
+
+            # Sign all .dylib files first
+            echo "Signing dynamic libraries..."
+            find "$APP_PATH" -name "*.dylib" -exec codesign --force --sign - {} \; 2>/dev/null || true
+
+            # Sign all .node files (native modules)
+            echo "Signing native modules..."
+            find "$APP_PATH" -name "*.node" -exec codesign --force --sign - {} \; 2>/dev/null || true
+
+            # Sign helper apps inside the framework
+            echo "Signing helper apps..."
+            find "$APP_PATH/Contents/Frameworks" -name "*Helper*" -type d 2>/dev/null | while read helper; do
+              codesign --force --sign - "$helper" 2>/dev/null || true
+            done
+
+            # Sign frameworks (deepest first)
+            echo "Signing frameworks..."
+            find "$APP_PATH/Contents/Frameworks" -name "*.framework" -type d -depth 2>/dev/null | while read framework; do
+              codesign --force --sign - "$framework" 2>/dev/null || true
+            done
+
+            # Sign the main app bundle with --deep as final step
+            echo "Signing main app bundle..."
+            codesign --force --deep --sign - "$APP_PATH"
+
+            echo "Ad-hoc signing complete for x64"
+          else
+            echo "Error: App not found at $APP_PATH"
+            exit 1
+          fi
+
+      - name: Create zip (arm64)
+        if: ${{ github.event.inputs.architecture == 'arm64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          cd release/mac-arm64
+          zip -r -y "../Orbital-${{ env.VERSION }}-mac-arm64.zip" "Orbital.app"
+          cd ../..
+          ls -lh release/*.zip
+
+      - name: Create zip (x64)
+        if: ${{ github.event.inputs.architecture == 'x64' || github.event.inputs.architecture == 'universal' }}
+        run: |
+          cd release/mac-x64
+          zip -r -y "../Orbital-${{ env.VERSION }}-mac-x64.zip" "Orbital.app"
+          cd ../..
+          ls -lh release/*.zip
+
+      - name: Upload artifacts (arm64)
+        if: ${{ github.event.inputs.architecture == 'arm64' || github.event.inputs.architecture == 'universal' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbital-macos-${{ env.VERSION }}-arm64
+          path: release/Orbital-${{ env.VERSION }}-mac-arm64.zip
+          retention-days: 30
+
+      - name: Upload artifacts (x64)
+        if: ${{ github.event.inputs.architecture == 'x64' || github.event.inputs.architecture == 'universal' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbital-macos-${{ env.VERSION }}-x64
+          path: release/Orbital-${{ env.VERSION }}-mac-x64.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ env.VERSION }}"
+
+          # Check if release exists
+          if gh release view "$TAG" 2>/dev/null; then
+            echo "Release $TAG exists. Uploading macOS assets..."
+            for zip in release/*.zip; do
+              echo "Uploading: $zip"
+              gh release upload "$TAG" "$zip" --clobber
+            done
+          else
+            # Create new release
+            NOTES=$(cat <<'EOF'
+          ## Orbital Desktop ${{ env.VERSION }} Beta (macOS)
+
+          ### Installation
+
+          1. Download the `.zip` file for your Mac:
+             - **Apple Silicon (M1/M2/M3)**: `Orbital-${{ env.VERSION }}-mac-arm64.zip`
+             - **Intel**: `Orbital-${{ env.VERSION }}-mac-x64.zip`
+          2. Unzip and move `Orbital.app` to Applications
+          3. Right-click the app and select "Open" (first time only, to bypass Gatekeeper)
+          4. Click "Open" in the security dialog
+
+          ### Known Issues
+
+          - Unsigned app requires right-click -> Open on first launch
+          - macOS Gatekeeper will show a security warning
+
+          ---
+          Built automatically via GitHub Actions
+          EOF
+          )
+
+            gh release create "$TAG" \
+              --title "${{ env.VERSION }} Beta Release" \
+              --notes "$NOTES" \
+              --prerelease \
+              release/*.zip
+          fi
