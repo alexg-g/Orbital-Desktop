@@ -1294,6 +1294,13 @@ export function OrbitalInbox({
 
   // Orbit selection handlers
   const handleSelectOrbit = useCallback(async (groupId: string) => {
+    // No-op if selecting the already-selected orbit (fixes issue #77)
+    if (groupId === selectedGroupId) {
+      setShowOrbitSelector(false);
+      setShowSettings(false);
+      return;
+    }
+
     try {
       await setSelectedGroupId(groupId);
       setSelectedGroupIdState(groupId);
@@ -1311,7 +1318,7 @@ export function OrbitalInbox({
       console.error('Failed to select orbit:', err);
       setGroupsError('Failed to switch orbit. Please try again.');
     }
-  }, [setSelectedGroupId]);
+  }, [setSelectedGroupId, selectedGroupId]);
 
   const handleCreateOrbit = useCallback(() => {
     setShowOrbitSelector(false);
