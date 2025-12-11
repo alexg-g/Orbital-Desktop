@@ -1,0 +1,853 @@
+// Copyright 2025 Orbital
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Issue #79: Styles for Historic Media Sync components
+// - OrbitalMediaRecovery: Request historic media recovery
+// - OrbitalPendingUploads: Notification banner for sync requests
+
+@use 'sass:color';
+@use '../mixins';
+@use '../orbital-variables' as *;
+
+// =============================================================================
+// MEDIA RECOVERY (Request Form + Active Requests)
+// =============================================================================
+
+.OrbitalMediaRecovery {
+  padding: $orbital-space-base;
+
+  &__header {
+    margin-bottom: $orbital-space-lg;
+  }
+
+  &__title {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-xl;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    margin: 0 0 $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__description {
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-secondary;
+    line-height: $orbital-line-height-relaxed;
+    margin: 0;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  // Orbit Selector
+  &__orbit-selector {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-xs;
+    margin-bottom: $orbital-space-lg;
+    padding: $orbital-space-md;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__orbit-label {
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__orbit-select {
+    padding: $orbital-space-sm $orbital-space-md;
+    font-size: $orbital-font-size-base;
+    font-family: $orbital-font-body;
+    color: $orbital-text-primary;
+    background: $orbital-surface-elevated;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    cursor: pointer;
+    transition: border-color $orbital-duration-fast $orbital-ease-default;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-subtle;
+    }
+
+    &:hover:not(:disabled) {
+      border-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-blue;
+      }
+    }
+
+    &:focus {
+      outline: none;
+      border-color: $orbital-blue;
+      box-shadow: 0 0 0 2px color.adjust($orbital-blue, $alpha: -0.7);
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-blue;
+        box-shadow: 0 0 0 2px color.adjust($orbital-dark-blue, $alpha: -0.7);
+      }
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__orbit-hint {
+    font-size: $orbital-font-size-xs;
+    color: $orbital-text-tertiary;
+    font-style: italic;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__no-orbit {
+    padding: $orbital-space-xl;
+    text-align: center;
+    color: $orbital-text-secondary;
+    font-style: italic;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__section-title {
+    font-family: $orbital-font-header;
+    font-size: $orbital-font-size-lg;
+    font-weight: bold;
+    color: $orbital-text-primary;
+    margin: 0 0 $orbital-space-md;
+    padding-bottom: $orbital-space-xs;
+    border-bottom: 2px solid $orbital-blue;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+      border-bottom-color: $orbital-dark-blue;
+    }
+  }
+
+  // Active Requests Section
+  &__active-requests {
+    margin-bottom: $orbital-space-xl;
+  }
+
+  &__request {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $orbital-space-md;
+    margin-bottom: $orbital-space-sm;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    border-left: 4px solid $orbital-blue;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+      border-left-color: $orbital-dark-blue;
+    }
+
+    &--pending {
+      border-left-color: $orbital-warning;
+    }
+
+    &--in_progress {
+      border-left-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        border-left-color: $orbital-dark-blue;
+      }
+    }
+
+    &--completed {
+      border-left-color: $orbital-success;
+    }
+
+    &--expired,
+    &--cancelled {
+      border-left-color: $orbital-text-tertiary;
+      opacity: 0.7;
+    }
+  }
+
+  &__request-info {
+    flex: 1;
+  }
+
+  &__request-status {
+    font-weight: bold;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    margin-bottom: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__request-details {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__request-progress {
+    height: 8px;
+    margin-top: $orbital-space-sm;
+    background: $orbital-border-subtle;
+    border-radius: 4px;
+    overflow: hidden;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__request-progress-bar {
+    height: 100%;
+    background: $orbital-blue;
+    border-radius: 4px;
+    transition: width $orbital-duration-base $orbital-ease-default;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-blue;
+    }
+  }
+
+  &__request-actions {
+    display: flex;
+    gap: $orbital-space-sm;
+    margin-left: $orbital-space-base;
+  }
+
+  // Create Request Section
+  &__create {
+    padding: $orbital-space-base;
+    background: $orbital-surface;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  // Time Range Selector
+  &__time-range {
+    display: flex;
+    flex-direction: column;
+    gap: $orbital-space-sm;
+    margin-bottom: $orbital-space-lg;
+  }
+
+  &__time-option {
+    display: flex;
+    align-items: flex-start;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-md;
+    border: 2px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    background: $orbital-surface-elevated;
+    cursor: pointer;
+    transition: border-color $orbital-duration-fast $orbital-ease-default,
+                background-color $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      border-color: $orbital-blue;
+      background: $orbital-blue-tint-light;
+    }
+
+    &--selected {
+      border-color: $orbital-blue;
+      background: $orbital-blue-tint;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-subtle;
+
+      &:hover {
+        border-color: $orbital-dark-blue;
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+
+      &--selected {
+        border-color: $orbital-dark-blue;
+        background: rgba($orbital-dark-blue, 0.15);
+      }
+    }
+  }
+
+  &__time-radio {
+    margin-top: 2px;
+    accent-color: $orbital-blue;
+
+    @include mixins.dark-theme {
+      accent-color: $orbital-dark-blue;
+    }
+  }
+
+  &__time-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__time-name {
+    font-weight: bold;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__time-description {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  // Error Display
+  &__error {
+    padding: $orbital-space-sm $orbital-space-md;
+    margin-bottom: $orbital-space-base;
+    font-size: $orbital-font-size-sm;
+    color: white;
+    background-color: $orbital-error;
+    border-radius: $orbital-radius-base;
+    text-align: center;
+  }
+
+  // Note
+  &__note {
+    margin-top: $orbital-space-base;
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    font-style: italic;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  // Loading State
+  &__loading {
+    padding: $orbital-space-xl;
+    text-align: center;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  // Button Styles
+  &__button {
+    padding: $orbital-btn-padding-y $orbital-btn-padding-x;
+    border: $orbital-btn-border-width solid transparent;
+    border-radius: $orbital-btn-border-radius;
+    font-family: $orbital-font-body;
+    font-size: $orbital-btn-font-size;
+    font-weight: $orbital-btn-font-weight;
+    cursor: pointer;
+    transition: $orbital-btn-transition;
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &--primary {
+      background: $orbital-blue;
+      color: white;
+      border-color: $orbital-blue-dark;
+
+      &:hover:not(:disabled) {
+        background: $orbital-blue-hover;
+      }
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-blue;
+        border-color: $orbital-blue;
+      }
+    }
+
+    &--secondary {
+      background: $orbital-surface-elevated;
+      color: $orbital-text-primary;
+      border-color: $orbital-border-strong;
+
+      &:hover:not(:disabled) {
+        background: $orbital-blue-tint-light;
+      }
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface-elevated;
+        color: $orbital-dark-text-primary;
+        border-color: $orbital-dark-border-strong;
+
+        &:hover:not(:disabled) {
+          background: rgba($orbital-dark-blue, 0.1);
+        }
+      }
+    }
+
+    &--create {
+      width: 100%;
+      background: $orbital-purple;
+      color: white;
+      border-color: $orbital-purple-dark;
+      font-size: $orbital-font-size-lg;
+      padding: $orbital-space-md $orbital-space-lg;
+
+      &:hover:not(:disabled) {
+        background: $orbital-purple-hover;
+      }
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-purple;
+        border-color: $orbital-purple;
+
+        &:hover:not(:disabled) {
+          background: $orbital-purple;
+        }
+      }
+    }
+  }
+}
+
+// =============================================================================
+// PENDING UPLOADS (Notification Banner)
+// =============================================================================
+
+.OrbitalPendingUploads {
+  background: $orbital-surface;
+  border: 1px solid $orbital-border-subtle;
+  border-radius: $orbital-radius-base;
+  margin: $orbital-space-sm;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface;
+    border-color: $orbital-dark-border-subtle;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  // Collapsed Banner Header
+  &__banner {
+    display: flex;
+    align-items: center;
+    gap: $orbital-space-sm;
+    padding: $orbital-space-md;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-blue-tint-light;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: -2px;
+    }
+
+    @include mixins.dark-theme {
+      &:hover {
+        background: rgba($orbital-dark-blue, 0.1);
+      }
+    }
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: $orbital-yellow;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__icon-emoji {
+    font-size: $orbital-font-size-base;
+    font-weight: bold;
+    color: $orbital-text-primary;
+  }
+
+  &__summary {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-weight: bold;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+    margin-bottom: 2px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__subtitle {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__expand {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+    padding: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: $orbital-text-tertiary;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-border-subtle;
+      color: $orbital-text-secondary;
+    }
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+
+      &:hover {
+        background: $orbital-dark-border-subtle;
+        color: $orbital-dark-text-secondary;
+      }
+    }
+  }
+
+  // Expanded Request List
+  &__list {
+    border-top: 1px solid $orbital-border-subtle;
+    padding: $orbital-space-sm;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__request {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $orbital-space-md;
+    background: $orbital-surface-elevated;
+    border: 1px solid $orbital-border-subtle;
+    border-radius: $orbital-radius-base;
+    margin-bottom: $orbital-space-sm;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface-elevated;
+      border-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__request-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__request-name {
+    font-weight: bold;
+    font-size: $orbital-font-size-base;
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
+  }
+
+  &__request-group {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    margin-bottom: $orbital-space-xs;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__request-details {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-tertiary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-tertiary;
+    }
+  }
+
+  &__request-time {
+    margin-left: $orbital-space-sm;
+    font-style: italic;
+  }
+
+  &__request-actions {
+    display: flex;
+    gap: $orbital-space-sm;
+    margin-left: $orbital-space-base;
+  }
+
+  // Progress Bar
+  &__progress {
+    height: 8px;
+    margin-top: $orbital-space-sm;
+    background: $orbital-border-subtle;
+    border-radius: 4px;
+    overflow: hidden;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-border-subtle;
+    }
+  }
+
+  &__progress-bar {
+    height: 100%;
+    background: $orbital-success;
+    border-radius: 4px;
+    transition: width $orbital-duration-base $orbital-ease-default;
+  }
+
+  // Actions Footer
+  &__actions {
+    padding: $orbital-space-sm;
+    border-top: 1px solid $orbital-border-subtle;
+    text-align: center;
+
+    @include mixins.dark-theme {
+      border-top-color: $orbital-dark-border-subtle;
+    }
+  }
+
+  // Button Styles
+  &__button {
+    padding: $orbital-space-xs $orbital-space-md;
+    border: 1px solid transparent;
+    border-radius: $orbital-radius-base;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-sm;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &--share {
+      background: $orbital-success;
+      color: white;
+      border-color: color.adjust($orbital-success, $lightness: -10%);
+
+      &:hover:not(:disabled) {
+        background: color.adjust($orbital-success, $lightness: -5%);
+      }
+    }
+
+    &--decline {
+      background: transparent;
+      color: $orbital-text-secondary;
+      border-color: $orbital-border-strong;
+
+      &:hover:not(:disabled) {
+        background: $orbital-border-subtle;
+        color: $orbital-text-primary;
+      }
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-secondary;
+        border-color: $orbital-dark-border-strong;
+
+        &:hover:not(:disabled) {
+          background: $orbital-dark-border-subtle;
+          color: $orbital-dark-text-primary;
+        }
+      }
+    }
+
+    &--share-all {
+      background: $orbital-purple;
+      color: white;
+      border-color: $orbital-purple-dark;
+      padding: $orbital-space-sm $orbital-space-lg;
+
+      &:hover:not(:disabled) {
+        background: $orbital-purple-hover;
+      }
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-purple;
+        border-color: $orbital-purple;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// PENDING UPLOADS BADGE (Sidebar/Header Notification)
+// =============================================================================
+
+.OrbitalPendingUploadsBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus {
+    outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+    outline-offset: $orbital-focus-outline-offset;
+    border-radius: 50%;
+  }
+
+  &__count {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: $orbital-yellow;
+    color: $orbital-text-primary;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-xs;
+    font-weight: bold;
+    border-radius: 10px;
+    animation: orbital-badge-pulse 2s ease-in-out infinite;
+  }
+}
+
+@keyframes orbital-badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+// =============================================================================
+// MEDIA VIEWER - Expired Media Recovery Button
+// =============================================================================
+
+.OrbitalMediaViewer {
+  &__error-hint {
+    font-size: $orbital-font-size-sm;
+    color: $orbital-text-secondary;
+    margin-bottom: $orbital-space-sm;
+    text-align: center;
+    max-width: 300px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+  }
+
+  &__error-recovery {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: $orbital-space-sm $orbital-space-lg;
+    background: $orbital-purple;
+    color: white;
+    border: 1px solid $orbital-purple-dark;
+    border-radius: $orbital-radius-base;
+    font-family: $orbital-font-body;
+    font-size: $orbital-font-size-base;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background $orbital-duration-fast $orbital-ease-default;
+
+    &:hover {
+      background: $orbital-purple-hover;
+    }
+
+    &:focus {
+      outline: $orbital-focus-outline-width solid $orbital-focus-outline-color;
+      outline-offset: $orbital-focus-outline-offset;
+    }
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-purple;
+      border-color: $orbital-purple;
+
+      &:hover {
+        background: $orbital-purple;
+      }
+    }
+  }
+}

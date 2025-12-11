@@ -311,13 +311,15 @@ async function getGroupKey(groupId: string): Promise<Uint8Array | null> {
  * @param groupId The group/orbit ID
  * @param text Plain text message
  * @param senderId Sender's user ID
+ * @param mediaIds Optional array of media IDs attached to this message
  * @returns Base64 encoded encrypted envelope
  * @throws Error if no group key is found
  */
 export async function encryptEnvelope(
   groupId: string,
   text: string,
-  senderId: string
+  senderId: string,
+  mediaIds?: string[]
 ): Promise<string> {
   // Get the group key
   const groupKey = await getGroupKey(groupId);
@@ -327,12 +329,24 @@ export async function encryptEnvelope(
   }
 
   // Create the plaintext envelope
-  const envelope = {
+  const envelope: {
+    type: string;
+    body: string;
+    sender: string;
+    timestamp: number;
+    mediaIds?: string[];
+  } = {
     type: 'text',
     body: text,
     sender: senderId,
     timestamp: Date.now(),
   };
+
+  // Include mediaIds if provided
+  if (mediaIds && mediaIds.length > 0) {
+    envelope.mediaIds = mediaIds;
+  }
+
   const plaintextBytes = Bytes.fromString(JSON.stringify(envelope));
 
   // Generate random IV (12 bytes is NIST recommendation for GCM)
@@ -373,6 +387,7 @@ export async function decryptEnvelope(
   body: string;
   sender: string;
   timestamp: number;
+  mediaIds?: string[];
 } | null> {
   try {
     // Get the group key

@@ -516,12 +516,13 @@ export async function handleDataMessage(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataMessage = await upgradeMessageSchema(withQuoteReference as any);
 
-    // ORBITAL: Check for media sync messages
-    // These are sent when a user uploads media to a thread
-    // Contains encryption keys and metadata for distributed backup
+    // ORBITAL: Check for Orbital-specific messages
+    // These include media sync, keys backfill requests/responses
     if (dataMessage.body) {
       try {
         const parsedBody = JSON.parse(dataMessage.body);
+
+        // Handle media sync messages (sent when user uploads media to a thread)
         if (parsedBody && parsedBody.type === 'orbital-media-sync') {
           const { handleMediaSyncMessage, isValidMediaSyncMessage } = await import(
             '../services/orbitalMediaSync.preload.js'
@@ -547,6 +548,56 @@ export async function handleDataMessage(
             return;
           } else {
             log.warn(`${idLog}: Invalid Orbital media sync message format`, { parsedBody });
+          }
+        }
+
+        // Handle keys backfill request (sent when new member joins orbit)
+        if (parsedBody && parsedBody.type === 'orbital-media-keys-backfill-request') {
+          const {
+            handleKeysBackfillRequest,
+            isValidKeysBackfillRequest,
+          } = await import('../services/orbitalMediaKeysBackfill.preload.js');
+
+          if (isValidKeysBackfillRequest(parsedBody)) {
+            log.info(
+              `${idLog}: Processing Orbital keys backfill request`,
+              { groupId: parsedBody.groupId, requestorId: parsedBody.requestorId }
+            );
+
+            // Handle the request (sends keys via direct message to requestor)
+            await handleKeysBackfillRequest(parsedBody);
+
+            // Confirm receipt and return early - don't save as a regular message
+            log.info(`${idLog}: Orbital keys backfill request processed`);
+            confirm();
+            return;
+          } else {
+            log.warn(`${idLog}: Invalid Orbital keys backfill request format`, { parsedBody });
+          }
+        }
+
+        // Handle keys backfill response (sent directly from existing member to new member)
+        if (parsedBody && parsedBody.type === 'orbital-media-keys-backfill-response') {
+          const {
+            handleKeysBackfillResponse,
+            isValidKeysBackfillResponse,
+          } = await import('../services/orbitalMediaKeysBackfill.preload.js');
+
+          if (isValidKeysBackfillResponse(parsedBody)) {
+            log.info(
+              `${idLog}: Processing Orbital keys backfill response`,
+              { groupId: parsedBody.groupId, keysCount: parsedBody.keys?.length }
+            );
+
+            // Handle the response (saves keys to SQLCipher)
+            await handleKeysBackfillResponse(parsedBody);
+
+            // Confirm receipt and return early - don't save as a regular message
+            log.info(`${idLog}: Orbital keys backfill response processed`);
+            confirm();
+            return;
+          } else {
+            log.warn(`${idLog}: Invalid Orbital keys backfill response format`, { parsedBody });
           }
         }
       } catch (parseError) {

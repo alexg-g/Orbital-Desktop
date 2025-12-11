@@ -34,6 +34,7 @@ const signalRelayRoutes = require('./routes/signal-relay');
 const threadsRoutes = require('./routes/threads');
 const groupsRoutes = require('./routes/groups');
 const mediaRoutes = require('./routes/media');
+const mediaSyncRoutes = require('./routes/mediaSync');
 const usersRoutes = require('./routes/users');
 const invitesRoutes = require('./routes/invites');
 
@@ -147,6 +148,7 @@ app.use('/v1', signalRelayRoutes); // Signal Protocol relay endpoints
 app.use('/api/threads', threadsRoutes);
 app.use('/api/groups', groupsRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/media-sync', mediaSyncRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/invites', invitesRoutes);
 

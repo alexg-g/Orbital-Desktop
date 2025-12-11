@@ -51,11 +51,16 @@ pm2 stop orbital-backend 2>/dev/null || systemctl stop orbital-backend 2>/dev/nu
 echo ""
 echo "Step 2: Clearing PostgreSQL Orbital tables..."
 PGPASSWORD="$DATABASE_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
--- Clear orbital-specific data in correct order (foreign key dependencies)
+-- Clear orbital-specific data in correct order (child tables first, foreign key dependencies)
+TRUNCATE TABLE media_sync_items CASCADE;
+TRUNCATE TABLE media_sync_requests CASCADE;
 TRUNCATE TABLE media_downloads CASCADE;
 TRUNCATE TABLE media CASCADE;
+TRUNCATE TABLE temp_uploads CASCADE;
 TRUNCATE TABLE replies CASCADE;
 TRUNCATE TABLE threads CASCADE;
+TRUNCATE TABLE signal_messages CASCADE;
+TRUNCATE TABLE invite_codes CASCADE;
 TRUNCATE TABLE members CASCADE;
 TRUNCATE TABLE group_quotas CASCADE;
 TRUNCATE TABLE groups CASCADE;

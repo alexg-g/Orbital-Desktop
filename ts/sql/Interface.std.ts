@@ -1330,6 +1330,7 @@ type WritableInterface = {
   // Orbital Media
   saveOrbitalMedia: (media: OrbitalMediaAttachmentForIpc) => void;
   updateMediaDownloadStatus: (mediaId: string, localPath: string) => void;
+  resetMediaDownloadStatus: (mediaId: string) => void;
   updateOrbitalMediaThreadId: (mediaId: string, threadId: string) => void;
 
   // Orbital Threads

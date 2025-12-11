@@ -59,46 +59,15 @@ async function createGroup(userId, encryptedName, encryptedGroupKey) {
   try {
     await client.query('BEGIN');
 
-    // Create the group (use placeholder invite_code for legacy compatibility)
+    // Create the group (no invite_code - codes are generated on-demand by user action)
     const groupResult = await client.query(
       `INSERT INTO groups (encrypted_name, created_by, invite_code, max_members)
-       VALUES ($1, $2, $3, $4)
+       VALUES ($1, $2, NULL, $3)
        RETURNING id, created_at`,
-      [encryptedName, userId, 'LEGACY00', MAX_MEMBERS]
+      [encryptedName, userId, MAX_MEMBERS]
     );
 
     const group = groupResult.rows[0];
-
-    // Generate unique invite code
-    let inviteCode;
-    let attempts = 0;
-    while (attempts < 10) {
-      inviteCode = generateInviteCode();
-      const existing = await client.query(
-        'SELECT 1 FROM invite_codes WHERE code = $1',
-        [inviteCode]
-      );
-      if (existing.rowCount === 0) break;
-      attempts++;
-    }
-
-    if (attempts === 10) {
-      throw new Error('Failed to generate unique invite code');
-    }
-
-    // Create the invite code
-    const expiresAt = getExpirationDate();
-    await client.query(
-      `INSERT INTO invite_codes (group_id, code, expires_at)
-       VALUES ($1, $2, $3)`,
-      [group.id, inviteCode, expiresAt]
-    );
-
-    // Update the legacy invite_code field for backwards compatibility
-    await client.query(
-      'UPDATE groups SET invite_code = $1 WHERE id = $2',
-      [inviteCode, group.id]
-    );
 
     // Add creator as first member
     await client.query(
@@ -115,13 +84,10 @@ async function createGroup(userId, encryptedName, encryptedGroupKey) {
     logger.info('Group created', {
       groupId: group.id,
       creatorId: userId,
-      inviteCode
     });
 
     return {
       group_id: group.id,
-      invite_code: inviteCode,
-      expires_at: expiresAt.toISOString(),
       created_at: group.created_at
     };
   } catch (error) {
@@ -762,6 +728,7 @@ async function getDMGroups(userId) {
        g.created_at,
        other_user.id as recipient_id,
        other_user.username as recipient_username,
+       other_user.avatar_url as recipient_avatar_url,
        creator_member.encrypted_group_key,
        (SELECT MAX(server_timestamp) FROM signal_messages WHERE conversation_id = g.id) as last_message_at
      FROM groups g
@@ -779,6 +746,7 @@ async function getDMGroups(userId) {
     recipient: {
       id: row.recipient_id,
       username: row.recipient_username,
+      avatar_url: row.recipient_avatar_url,
     },
     encrypted_group_key: row.encrypted_group_key,
     last_message_at: row.last_message_at,

@@ -13,6 +13,8 @@ const PRELOAD_MOCKS: Record<string, string> = {
   'orbitalNotifications.preload': path.resolve(__dirname, './__mocks__/orbitalNotifications.preload.ts'),
   'orbitalThreads.preload': path.resolve(__dirname, './__mocks__/orbitalThreads.preload.ts'),
   'orbitalQuota.preload': path.resolve(__dirname, './__mocks__/orbitalQuota.preload.ts'),
+  'orbitalHistoricMediaSync.preload': path.resolve(__dirname, './__mocks__/orbitalHistoricMediaSync.preload.ts'),
+  'orbitalMediaDownload.preload': path.resolve(__dirname, './__mocks__/orbitalMediaDownload.preload.ts'),
 };
 
 const EXTERNALS = new Set(builtinModules);

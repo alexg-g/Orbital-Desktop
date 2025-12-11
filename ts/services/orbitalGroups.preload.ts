@@ -1464,6 +1464,7 @@ export type DMListItem = {
   recipient: {
     id: string;
     username: string;
+    avatarUrl?: string;
   };
   lastMessageAt: number | null;
   createdAt: string;
@@ -1582,11 +1583,22 @@ export async function listDMGroups(): Promise<DMListItem[]> {
         await storeGroupKey(dm.group_id, dm.encrypted_group_key);
       }
 
+      // Convert avatar URL to data URL if present
+      let avatarDataUrl: string | undefined;
+      if (dm.recipient.avatar_url) {
+        try {
+          avatarDataUrl = await fetchAvatarAsDataUrl(dm.recipient.avatar_url);
+        } catch (err) {
+          log.warn(`${logId}: Failed to fetch avatar for recipient ${dm.recipient.id}`, Errors.toLogFormat(err));
+        }
+      }
+
       dms.push({
         groupId: dm.group_id,
         recipient: {
           id: dm.recipient.id,
           username: dm.recipient.username,
+          avatarUrl: avatarDataUrl,
         },
         lastMessageAt: dm.last_message_at ? new Date(dm.last_message_at).getTime() : null,
         createdAt: dm.created_at,

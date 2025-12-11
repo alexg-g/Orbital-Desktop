@@ -744,6 +744,7 @@ export const DataWriter: ServerWritableInterface = {
   // Orbital Media
   saveOrbitalMedia,
   updateMediaDownloadStatus,
+  resetMediaDownloadStatus,
   updateOrbitalMediaThreadId,
   deleteOrbitalMedia,
 
@@ -9282,6 +9283,20 @@ function updateMediaDownloadStatus(
   ).run({
     mediaId,
     localPath,
+  });
+}
+
+function resetMediaDownloadStatus(db: WritableDB, mediaId: string): void {
+  db.prepare(
+    `
+    UPDATE orbital_media
+    SET
+      local_path = NULL,
+      downloaded = 0
+    WHERE media_id = $mediaId
+  `
+  ).run({
+    mediaId,
   });
 }
 

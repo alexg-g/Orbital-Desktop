@@ -6,6 +6,7 @@
  * 2. Update group quotas
  * 3. Clean up abandoned temp uploads (>24 hours old)
  * 4. Clean up orphaned files
+ * 5. Clean up expired media sync requests and files
  */
 
 const fs = require('fs').promises;
@@ -276,6 +277,133 @@ async function cleanupOrphanedFiles() {
 }
 
 /**
+ * Clean up expired media sync requests and their files
+ * @returns {Promise<Object>} Cleanup stats
+ */
+async function cleanupExpiredSyncRequests() {
+  const client = await db.getClient();
+  const stats = {
+    requestsExpired: 0,
+    filesDeleted: 0,
+    bytesFreed: 0,
+    errors: 0
+  };
+
+  try {
+    await client.query('BEGIN');
+
+    // Mark expired requests
+    const expiredResult = await client.query(
+      `UPDATE media_sync_requests
+       SET status = 'expired'
+       WHERE expires_at < NOW() AND status IN ('pending', 'in_progress')
+       RETURNING id`
+    );
+
+    stats.requestsExpired = expiredResult.rowCount;
+
+    if (stats.requestsExpired > 0) {
+      logger.info(`Marked ${stats.requestsExpired} sync requests as expired`);
+    }
+
+    // Get sync files to delete (from expired, completed, or cancelled requests)
+    const filesToDelete = await client.query(
+      `SELECT msi.id, msi.storage_url, msi.size_bytes
+       FROM media_sync_items msi
+       INNER JOIN media_sync_requests msr ON msr.id = msi.request_id
+       WHERE msr.status IN ('expired', 'completed', 'cancelled')
+         AND msi.storage_url IS NOT NULL`
+    );
+
+    const uploadDir = process.env.MEDIA_STORAGE_PATH || './uploads';
+
+    // Delete files
+    for (const item of filesToDelete.rows) {
+      try {
+        await fs.unlink(item.storage_url);
+        stats.filesDeleted++;
+        stats.bytesFreed += parseInt(item.size_bytes || 0, 10);
+
+        logger.debug('Deleted sync file', {
+          itemId: item.id,
+          path: item.storage_url
+        });
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          logger.error('Failed to delete sync file', {
+            itemId: item.id,
+            path: item.storage_url,
+            error: error.message
+          });
+          stats.errors++;
+        }
+      }
+    }
+
+    // Clear storage_url for deleted files
+    if (filesToDelete.rowCount > 0) {
+      await client.query(
+        `UPDATE media_sync_items
+         SET storage_url = NULL
+         WHERE id = ANY($1)`,
+        [filesToDelete.rows.map(r => r.id)]
+      );
+    }
+
+    // Delete old completed/expired/cancelled requests (>30 days old)
+    const deletedRequests = await client.query(
+      `DELETE FROM media_sync_requests
+       WHERE created_at < NOW() - INTERVAL '30 days'
+         AND status IN ('completed', 'expired', 'cancelled')
+       RETURNING id`
+    );
+
+    if (deletedRequests.rowCount > 0) {
+      logger.info(`Deleted ${deletedRequests.rowCount} old sync requests`);
+    }
+
+    // Clean up orphaned sync chunk directories
+    const syncTempDir = path.join(uploadDir, 'sync');
+    try {
+      const syncDirs = await fs.readdir(syncTempDir);
+      for (const dir of syncDirs) {
+        const dirPath = path.join(syncTempDir, dir);
+        const dirStat = await fs.stat(dirPath);
+
+        // Delete directories older than 24 hours
+        if (dirStat.isDirectory()) {
+          const ageMs = Date.now() - dirStat.mtimeMs;
+          if (ageMs > 24 * 60 * 60 * 1000) {
+            await fs.rm(dirPath, { recursive: true, force: true });
+            logger.debug('Deleted orphaned sync chunk directory', { path: dirPath });
+          }
+        }
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.error('Failed to clean sync temp directories', {
+          error: error.message
+        });
+      }
+    }
+
+    await client.query('COMMIT');
+
+    logger.info('Sync requests cleanup complete', stats);
+    return stats;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Sync requests cleanup failed', {
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Run all cleanup tasks
  * @returns {Promise<Object>} Combined stats
  */
@@ -286,10 +414,11 @@ async function runMediaCleanup() {
 
   try {
     // Run all cleanup tasks
-    const [expiredStats, abandonedStats, orphanedStats] = await Promise.all([
+    const [expiredStats, abandonedStats, orphanedStats, syncStats] = await Promise.all([
       cleanupExpiredMedia(),
       cleanupAbandonedUploads(),
-      cleanupOrphanedFiles()
+      cleanupOrphanedFiles(),
+      cleanupExpiredSyncRequests()
     ]);
 
     const duration = Date.now() - startTime;
@@ -299,8 +428,9 @@ async function runMediaCleanup() {
       expired: expiredStats,
       abandoned: abandonedStats,
       orphaned: orphanedStats,
-      totalBytesFreed: expiredStats.bytesFreed + orphanedStats.bytesFreed,
-      totalErrors: expiredStats.errors + abandonedStats.errors + orphanedStats.errors
+      sync: syncStats,
+      totalBytesFreed: expiredStats.bytesFreed + orphanedStats.bytesFreed + syncStats.bytesFreed,
+      totalErrors: expiredStats.errors + abandonedStats.errors + orphanedStats.errors + syncStats.errors
     };
 
     logger.info('Media cleanup job complete', totalStats);
@@ -356,5 +486,6 @@ module.exports = {
   scheduleMediaCleanup,
   cleanupExpiredMedia,
   cleanupAbandonedUploads,
-  cleanupOrphanedFiles
+  cleanupOrphanedFiles,
+  cleanupExpiredSyncRequests
 };

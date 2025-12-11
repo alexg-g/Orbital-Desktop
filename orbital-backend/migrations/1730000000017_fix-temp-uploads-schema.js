@@ -24,21 +24,24 @@ exports.up = (pgm) => {
   // Drop the thread_id column (this also drops its FK constraint)
   pgm.dropColumn('temp_uploads', 'thread_id', { ifExists: true });
 
-  // Add group_id column with FK to groups
-  pgm.addColumn('temp_uploads', {
-    group_id: {
-      type: 'uuid',
-      notNull: true,
-      references: 'groups(id)',
-      onDelete: 'CASCADE',
-      comment: 'Group that media belongs to (for access control)',
-    },
-  });
+  // Add group_id column with FK to groups (if not already present)
+  pgm.sql(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'temp_uploads' AND column_name = 'group_id'
+      ) THEN
+        ALTER TABLE temp_uploads ADD COLUMN group_id uuid NOT NULL REFERENCES groups(id) ON DELETE CASCADE;
+        COMMENT ON COLUMN temp_uploads.group_id IS 'Group that media belongs to (for access control)';
+      END IF;
+    END $$;
+  `);
 
-  // Create new index with group_id
-  pgm.createIndex('temp_uploads', ['group_id', 'user_id'], {
-    name: 'idx_temp_uploads_group_user',
-  });
+  // Create new index with group_id (if not exists)
+  pgm.sql(`
+    CREATE INDEX IF NOT EXISTS idx_temp_uploads_group_user ON temp_uploads (group_id, user_id);
+  `);
 };
 
 exports.down = (pgm) => {

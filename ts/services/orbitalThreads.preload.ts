@@ -918,7 +918,7 @@ type SyncResult = {
  * @param threadId Thread ID the media belongs to
  * @param mediaIds Array of media IDs to sync
  */
-async function sendMediaSyncMessages(
+export async function sendMediaSyncMessages(
   groupId: string,
   threadId: string,
   mediaIds: string[]

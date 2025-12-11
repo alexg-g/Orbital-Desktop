@@ -106,12 +106,18 @@ async function fetchChatMessagesWrapper(conversationId: string) {
 }
 
 // Wrapper for sending chat message - encrypts and sends via Signal relay
-async function sendChatMessageWrapper(conversationId: string, text: string) {
+async function sendChatMessageWrapper(conversationId: string, text: string, mediaIds?: string[]) {
   // Encrypt message with group key using AES-256-GCM
   const { getUserId } = await import('../../services/orbitalAuth.preload.js');
   const userId = await getUserId() || 'unknown';
-  const encryptedEnvelope = await encryptEnvelope(conversationId, text, userId);
+  const encryptedEnvelope = await encryptEnvelope(conversationId, text, userId, mediaIds);
   return sendMessage(conversationId, encryptedEnvelope);
+}
+
+// Wrapper for getMediaDownloadStatus to inject getAbsoluteAttachmentPath
+// This enables file existence verification on disk
+async function getMediaDownloadStatusWithPath(mediaId: string) {
+  return getMediaDownloadStatus(mediaId, getAbsoluteAttachmentPath);
 }
 
 // Wrapper for downloadAllPendingMedia to match expected signature
@@ -151,7 +157,7 @@ export const SmartOrbitalInbox = memo(function SmartOrbitalInbox(): JSX.Element 
       formatBytes={formatBytes}
       uploadMedia={uploadMedia}
       downloadMedia={downloadMedia}
-      getMediaDownloadStatus={getMediaDownloadStatus}
+      getMediaDownloadStatus={getMediaDownloadStatusWithPath}
       deleteMedia={deleteMedia}
       getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
       // Contact picker (uses group members)

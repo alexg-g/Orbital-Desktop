@@ -50,6 +50,7 @@ export type OrbitalMediaViewerProps = {
   uploadedBy?: string; // Member ID of uploader
   currentUserId?: string; // Current user's member ID
   onDelete?: (mediaId: string) => void; // Callback when media is deleted
+  onRequestRecovery?: () => void; // Callback to request media recovery (Issue #79)
   // Dependency injection for Node.js operations (allows Storybook mocking)
   downloadMedia: DownloadMediaFunction;
   getMediaDownloadStatus: GetMediaDownloadStatusFunction;
@@ -76,6 +77,7 @@ export function OrbitalMediaViewer({
   uploadedBy,
   currentUserId,
   onDelete,
+  onRequestRecovery,
   downloadMedia,
   getMediaDownloadStatus,
   deleteMedia,
@@ -87,6 +89,7 @@ export function OrbitalMediaViewer({
   const [error, setError] = useState<string | null>(null);
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [isExpiringSoon, setIsExpiringSoon] = useState(false);
+  const [isExpired, setIsExpired] = useState(false); // Issue #79: Track if media has expired
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -119,6 +122,11 @@ export function OrbitalMediaViewer({
         err instanceof Error ? err.message : 'Download failed';
       setError(errorMessage);
       setDownloadProgress(null);
+
+      // Issue #79: Check if error indicates expired media (recoverable)
+      if (err && typeof err === 'object' && 'isExpired' in err && (err as any).isExpired) {
+        setIsExpired(true);
+      }
     }
   }, [mediaId, isDownloaded, downloadProgress, downloadMedia, getAbsoluteAttachmentPath]);
 
@@ -220,15 +228,34 @@ export function OrbitalMediaViewer({
         {/* Error State */}
         {error && (
           <div className="OrbitalMediaViewer__error">
-            <div className="OrbitalMediaViewer__error-icon">⚠️</div>
-            <div className="OrbitalMediaViewer__error-message">{error}</div>
-            <button
-              type="button"
-              className="OrbitalMediaViewer__error-retry"
-              onClick={handleDownload}
-            >
-              Retry Download
-            </button>
+            <div className="OrbitalMediaViewer__error-icon">{isExpired ? '⏰' : '⚠️'}</div>
+            <div className="OrbitalMediaViewer__error-message">
+              {isExpired
+                ? 'This media has expired from the server.'
+                : error}
+            </div>
+            {isExpired && onRequestRecovery ? (
+              <>
+                <div className="OrbitalMediaViewer__error-hint">
+                  Request recovery from other orbit members who have this file.
+                </div>
+                <button
+                  type="button"
+                  className="OrbitalMediaViewer__error-recovery"
+                  onClick={onRequestRecovery}
+                >
+                  Request Recovery
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="OrbitalMediaViewer__error-retry"
+                onClick={handleDownload}
+              >
+                Retry Download
+              </button>
+            )}
           </div>
         )}
 

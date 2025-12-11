@@ -77,7 +77,10 @@ export type WebSocketEventType =
   | 'new_reply'
   | 'media_uploaded'
   | 'member_left'
-  | 'key_rotated';
+  | 'key_rotated'
+  | 'media_sync_request'
+  | 'media_sync_item_ready'
+  | 'media_sync_all_ready';
 
 /**
  * WebSocket event structure

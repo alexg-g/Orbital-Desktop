@@ -34,13 +34,29 @@ import type {
   CreateThreadResult,
   CreateReplyResult,
 } from '../../services/orbitalThreads.preload.js';
-import { incrementThreadReplyCount } from '../../services/orbitalThreads.preload.js';
+import { incrementThreadReplyCount, sendMediaSyncMessages } from '../../services/orbitalThreads.preload.js';
 // Legacy localThreadStorage removed - threads now come only from server API
 import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache, getSetting } from './settingsStorage';
 import {
   orbitalNotifications,
   type OrbitalNotificationSettings,
 } from '../../services/orbitalNotifications.preload.js';
+import {
+  OrbitalPendingUploads,
+  type PendingUploadRequest,
+} from './OrbitalPendingUploads';
+import type {
+  MediaSyncRequestEvent,
+  MediaSyncItemReadyEvent,
+  MediaSyncAllReadyEvent,
+} from '../../types/OrbitalMediaSync.std';
+import { formatFileSize } from '../../util/formatFileSize.std';
+import {
+  getItemsNeededForRequest,
+  uploadItemForSync,
+  downloadSyncItem,
+  downloadReadyItems,
+} from '../../services/orbitalHistoricMediaSync.preload';
 
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
@@ -112,7 +128,7 @@ export type DownloadAllPendingMediaFunction = (options: {
 export type WebSocketConnectFunction = () => Promise<boolean>;
 export type WebSocketDisconnectFunction = () => void;
 export type WebSocketSubscribeFunction = (
-  eventType: 'new_thread' | 'new_reply' | 'media_uploaded' | 'new_message' | 'member_left' | 'key_rotated' | 'all',
+  eventType: 'new_thread' | 'new_reply' | 'media_uploaded' | 'new_message' | 'member_left' | 'key_rotated' | 'media_sync_request' | 'media_sync_item_ready' | 'media_sync_all_ready' | 'all',
   callback: (event: any) => void
 ) => () => void;
 export type WebSocketIsConnectedFunction = () => boolean;
@@ -127,11 +143,11 @@ export type FetchChatMessagesFunction = (conversationId: string) => Promise<{
   }>;
   hasMore: boolean;
 }>;
-export type SendChatMessageFunction = (conversationId: string, text: string) => Promise<{
+export type SendChatMessageFunction = (conversationId: string, text: string, mediaIds?: string[]) => Promise<{
   messageId: string;
   serverTimestamp: number;
 }>;
-export type DecodeChatEnvelopeFunction = (groupId: string, base64: string) => Promise<{ type: string; body: string; sender: string; timestamp: number } | null>;
+export type DecodeChatEnvelopeFunction = (groupId: string, base64: string) => Promise<{ type: string; body: string; sender: string; timestamp: number; mediaIds?: string[] } | null>;
 
 export type OrbitalInboxProps = {
   i18n: LocalizerType;
@@ -416,12 +432,19 @@ export function OrbitalInbox({
   // Member avatar cache (maps userId -> avatarUrl)
   const [memberAvatars, setMemberAvatars] = useState<Map<string, string>>(new Map());
 
+  // DM recipient avatar cache (maps recipientId -> avatarUrl)
+  const [dmRecipientAvatars, setDmRecipientAvatars] = useState<Map<string, string>>(new Map());
+
   // Session caches for messages (persists user-posted messages during session)
   const [threadMessagesCache, setThreadMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
   const [chatMessagesCache, setChatMessagesCache] = useState<Record<string, OrbitalMessageType[]>>({});
 
   // Current user identity (loaded dynamically from auth service)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Pending upload requests (from other users asking for media sync)
+  const [pendingUploadRequests, setPendingUploadRequests] = useState<PendingUploadRequest[]>([]);
+  const [showPendingUploads, setShowPendingUploads] = useState(true);
 
   // Check if user is logged in to Orbital
   useEffect(() => {
@@ -525,11 +548,21 @@ export function OrbitalInbox({
         // Load DM groups from backend (proper conversation architecture)
         const dmGroups = await listDMGroups();
 
+        // Build avatar map from DM recipient data
+        const avatarMap = new Map<string, string>();
+        for (const dm of dmGroups) {
+          if (dm.recipient.avatarUrl) {
+            avatarMap.set(dm.recipient.id, dm.recipient.avatarUrl);
+          }
+        }
+        setDmRecipientAvatars(avatarMap);
+
         // Convert DM groups to OrbitalChat format
         const dmChats: OrbitalChat[] = dmGroups.map(dm => ({
           id: dm.groupId,  // Use actual group_id as chat ID (= conversation_id)
           recipientId: dm.recipient.id,
           name: dm.recipient.username,  // Proper username from backend
+          avatarUrl: dm.recipient.avatarUrl,  // Include avatar for chat list
           lastMessage: '',  // Will be populated when loading messages
           lastMessageTimestamp: dm.lastMessageAt || 0,
           unreadCount: 0,
@@ -553,6 +586,11 @@ export function OrbitalInbox({
               // Determine author name - if sender is current user, use "You", else use recipient name
               const authorName = decoded.sender === currentUserId ? 'You' : dm.recipient.username;
 
+              // Get avatar for the sender (recipient's avatar for non-self messages)
+              const senderAvatarUrl = decoded.sender === currentUserId
+                ? undefined  // Current user's avatar handled by applyCurrentUserProfile
+                : dm.recipient.avatarUrl;
+
               messages.push({
                 id: msg.messageId,
                 author: authorName,
@@ -560,7 +598,9 @@ export function OrbitalInbox({
                 timestamp: decoded.timestamp,
                 body: decoded.body,
                 level: 0,
-                hasMedia: false,
+                hasMedia: !!(decoded.mediaIds && decoded.mediaIds.length > 0),
+                mediaIds: decoded.mediaIds,
+                avatarUrl: senderAvatarUrl,
               });
             }
 
@@ -759,10 +799,43 @@ export function OrbitalInbox({
       }
     });
 
-    const unsubMediaUploaded = wsSubscribe('media_uploaded', (event) => {
+    const unsubMediaUploaded = wsSubscribe('media_uploaded', async (event) => {
       console.log('[OrbitalInbox] Received media_uploaded event:', event);
-      // Trigger media download if needed - for now just log
-      // TODO: Auto-download new media to local storage
+      const data = event.data;
+
+      // Extract media_id from the event
+      const mediaId = data?.media_id;
+      if (!mediaId) {
+        console.warn('[OrbitalInbox] media_uploaded event missing media_id');
+        return;
+      }
+
+      // Check if we already have this media in our local database
+      // (keys would have arrived via Signal Protocol OrbitalMediaSyncMessage)
+      try {
+        const status = await getMediaDownloadStatus(mediaId);
+
+        if (status.isDownloaded) {
+          console.log('[OrbitalInbox] Media already downloaded:', mediaId);
+          return;
+        }
+
+        // Media exists in DB but not downloaded yet - trigger download
+        if (status.isAvailableOnServer) {
+          console.log('[OrbitalInbox] Auto-downloading new media:', mediaId);
+          try {
+            await downloadMedia({ mediaId });
+            console.log('[OrbitalInbox] Auto-download complete:', mediaId);
+          } catch (downloadError) {
+            console.error('[OrbitalInbox] Auto-download failed:', mediaId, downloadError);
+            // Don't throw - download will be retried later via manual sync
+          }
+        }
+      } catch (error) {
+        // Media not in local DB yet - keys haven't arrived via Signal Protocol
+        // Download will happen when OrbitalMediaSyncMessage is processed
+        console.log('[OrbitalInbox] Media not in local DB yet, will download when keys arrive:', mediaId);
+      }
     });
 
     // Handle incoming chat messages from Signal relay
@@ -805,7 +878,9 @@ export function OrbitalInbox({
         timestamp: decoded.timestamp,
         body: decoded.body,
         level: 0,
-        hasMedia: false,
+        hasMedia: !!(decoded.mediaIds && decoded.mediaIds.length > 0),
+        mediaIds: decoded.mediaIds,
+        avatarUrl: dmRecipientAvatars.get(decoded.sender),
       };
 
       // Update chat list using conversation_id
@@ -870,6 +945,108 @@ export function OrbitalInbox({
       }
     });
 
+    // Handle media sync request from another user
+    // This means someone is requesting historic media that we might have locally
+    const unsubMediaSyncRequest = wsSubscribe('media_sync_request', async (event) => {
+      console.log('[OrbitalInbox] Received media_sync_request event:', event);
+      const data = event.data as MediaSyncRequestEvent;
+
+      // Skip requests we made ourselves
+      if (data.requestor_id === currentUserId) {
+        console.log('[OrbitalInbox] Ignoring our own sync request');
+        return;
+      }
+
+      // Only show for requests from groups we're currently viewing or are members of
+      const requestGroup = groups.find(g => g.groupId === data.group_id);
+      if (!requestGroup) {
+        console.log('[OrbitalInbox] Sync request for group we are not a member of');
+        return;
+      }
+
+      // Query local DB to find what media we can provide for this request
+      // Only show notification if we actually have files to share
+      let itemsWeCanProvide;
+      try {
+        itemsWeCanProvide = await getItemsNeededForRequest(data.request_id);
+      } catch (error) {
+        console.error('[OrbitalInbox] Failed to query local media for sync request:', error);
+        return;
+      }
+
+      if (itemsWeCanProvide.length === 0) {
+        console.log('[OrbitalInbox] No local media to provide for sync request:', data.request_id);
+        return;
+      }
+
+      // Calculate actual bytes from items we have locally
+      const localTotalBytes = itemsWeCanProvide.reduce((sum, item) => sum + item.sizeBytes, 0);
+
+      // Find requestor name from available contacts
+      const requestor = availableContacts.find(c => c.id === data.requestor_id);
+      const requestorName = requestor?.name || 'An orbit member';
+
+      // Add to pending upload requests with accurate local counts
+      const newRequest: PendingUploadRequest = {
+        requestId: data.request_id,
+        requestorName,
+        groupName: requestGroup.name,
+        itemsCount: itemsWeCanProvide.length,  // Actual count from local DB
+        totalBytes: localTotalBytes,            // Actual bytes from local DB
+        receivedAt: data.timestamp,
+        expiresAt: data.timestamp + (7 * 24 * 60 * 60 * 1000), // 7 days from now
+      };
+
+      setPendingUploadRequests(prev => {
+        // Don't add duplicates
+        if (prev.some(r => r.requestId === data.request_id)) {
+          return prev;
+        }
+        return [...prev, newRequest];
+      });
+
+      // Show the pending uploads banner
+      setShowPendingUploads(true);
+
+      console.log('[OrbitalInbox] Added pending upload request:', newRequest.requestId);
+    });
+
+    // Handle media sync item ready (for requestors - when someone uploads media we requested)
+    const unsubMediaSyncItemReady = wsSubscribe('media_sync_item_ready', async (event) => {
+      console.log('[OrbitalInbox] Received media_sync_item_ready event:', event);
+      const data = event.data as MediaSyncItemReadyEvent;
+
+      console.log('[OrbitalInbox] Media sync item ready:', data.item_id, 'from', data.uploaded_by);
+
+      // Auto-download the ready item
+      try {
+        await downloadSyncItem({
+          itemId: data.item_id,
+          mediaId: data.media_id,
+          getAbsoluteAttachmentPath,
+        });
+        console.log('[OrbitalInbox] Successfully downloaded sync item:', data.item_id);
+      } catch (downloadError) {
+        console.error('[OrbitalInbox] Failed to download sync item:', data.item_id, downloadError);
+      }
+    });
+
+    // Handle media sync all ready (for requestors - when all items have been uploaded)
+    const unsubMediaSyncAllReady = wsSubscribe('media_sync_all_ready', async (event) => {
+      console.log('[OrbitalInbox] Received media_sync_all_ready event:', event);
+      const data = event.data as MediaSyncAllReadyEvent;
+
+      console.log('[OrbitalInbox] All media sync items ready for request:', data.request_id);
+
+      // Download all ready items for this request
+      try {
+        await downloadReadyItems(data.request_id);
+        console.log('[OrbitalInbox] Successfully downloaded all ready items for request:', data.request_id);
+      } catch (downloadError) {
+        console.error('[OrbitalInbox] Failed to download ready items for request:', data.request_id, downloadError);
+      }
+    });
+
     // Cleanup on unmount or when deps change
     return () => {
       console.log('[OrbitalInbox] Unsubscribing from WebSocket events');
@@ -877,6 +1054,9 @@ export function OrbitalInbox({
       unsubNewReply();
       unsubMediaUploaded();
       unsubNewMessage();
+      unsubMediaSyncRequest();
+      unsubMediaSyncItemReady();
+      unsubMediaSyncAllReady();
     };
   }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, availableContacts, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope, groups]);
 
@@ -953,7 +1133,7 @@ export function OrbitalInbox({
             timestamp: thread.timestamp,
             body: thread.body,
             level: 0, // Original post is level 0
-            hasMedia: thread.hasMedia || (threadMediaIds && threadMediaIds.length > 0),
+            hasMedia: !!(thread.hasMedia || (threadMediaIds && threadMediaIds.length > 0)),
             // Use mediaIds from API response (persists after logout/login) or fallback to thread cache
             mediaIds: threadMediaIds && threadMediaIds.length > 0 ? threadMediaIds : thread.mediaIds,
             avatarUrl: thread.avatarUrl,
@@ -1338,7 +1518,73 @@ export function OrbitalInbox({
     setShowOrbitSelector(false);
     setShowCreateGroup(false);
     setIsCreatingThread(false);
+    // Clear pending uploads
+    setPendingUploadRequests([]);
     console.log('Logged out - showing login screen');
+  }, []);
+
+  // Pending uploads handlers
+  const handleSharePendingUpload = useCallback(async (requestId: string) => {
+    console.log('[OrbitalInbox] User chose to share files for request:', requestId);
+
+    try {
+      // Get items we can provide for this request
+      const itemsWeCanProvide = await getItemsNeededForRequest(requestId);
+
+      if (itemsWeCanProvide.length === 0) {
+        console.log('[OrbitalInbox] No items we can provide for request:', requestId);
+        setPendingUploadRequests(prev => prev.filter(r => r.requestId !== requestId));
+        return;
+      }
+
+      console.log(`[OrbitalInbox] Uploading ${itemsWeCanProvide.length} items for request:`, requestId);
+
+      // Upload each item
+      for (const item of itemsWeCanProvide) {
+        try {
+          await uploadItemForSync({
+            itemId: item.itemId,
+            mediaId: item.mediaId,
+            getAbsoluteAttachmentPath: getAbsoluteAttachmentPath,
+          });
+          console.log(`[OrbitalInbox] Uploaded item ${item.itemId}`);
+        } catch (itemError) {
+          console.error(`[OrbitalInbox] Failed to upload item ${item.itemId}:`, itemError);
+          // Continue with other items even if one fails
+        }
+      }
+
+      // Remove from pending list after upload attempt
+      setPendingUploadRequests(prev => prev.filter(r => r.requestId !== requestId));
+      console.log('[OrbitalInbox] Upload complete for request:', requestId);
+    } catch (error) {
+      console.error('[OrbitalInbox] Failed to share files for request:', requestId, error);
+      // Keep in pending list if there was an error so user can retry
+    }
+  }, [getAbsoluteAttachmentPath]);
+
+  const handleDeclinePendingUpload = useCallback((requestId: string) => {
+    console.log('[OrbitalInbox] User declined to share files for request:', requestId);
+    setPendingUploadRequests(prev => prev.filter(r => r.requestId !== requestId));
+  }, []);
+
+  const handleDismissPendingUploads = useCallback(() => {
+    setShowPendingUploads(false);
+  }, []);
+
+  // Format relative time for pending uploads
+  const formatRelativeTime = useCallback((timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
   }, []);
 
   // Orbit selection handlers
@@ -1484,9 +1730,18 @@ export function OrbitalInbox({
 
       // Send to backend via Signal relay
       // Use activeChatId (DM group ID) as conversation_id, not selectedGroupId (orbit)
-      console.log('[OrbitalInbox] Sending chat message via Signal relay to DM:', activeChatId);
-      const result = await sendChatMessage(activeChatId, body);
+      console.log('[OrbitalInbox] Sending chat message via Signal relay to DM:', activeChatId, 'mediaIds:', mediaIds);
+      const result = await sendChatMessage(activeChatId, body, mediaIds);
       console.log('[OrbitalInbox] Chat message sent:', result.messageId);
+
+      // Send media sync messages for key distribution (so recipient can decrypt media)
+      if (mediaIds && mediaIds.length > 0) {
+        console.log('[OrbitalInbox] Sending media sync for DM media keys:', mediaIds);
+        // For DMs, use the DM group ID as both groupId and threadId
+        // This distributes the media encryption keys to the recipient
+        await sendMediaSyncMessages(activeChatId, activeChatId, mediaIds);
+        console.log('[OrbitalInbox] Media sync messages sent for DM');
+      }
 
       // Update message with real ID from server
       const finalMessage = { ...newMessage, id: result.messageId };
@@ -1586,6 +1841,17 @@ export function OrbitalInbox({
         onSelectGif={() => null}
       >
         <div className="OrbitalInbox">
+        {/* Pending Uploads Notification Banner */}
+        {showPendingUploads && pendingUploadRequests.length > 0 && (
+          <OrbitalPendingUploads
+            requests={pendingUploadRequests}
+            onShare={handleSharePendingUpload}
+            onDecline={handleDeclinePendingUpload}
+            onDismiss={handleDismissPendingUploads}
+            formatBytes={formatFileSize}
+            formatRelativeTime={formatRelativeTime}
+          />
+        )}
         {/* Left Sidebar - Settings Nav, Thread List, or Chat List */}
         <div className="OrbitalInbox__sidebar">
           {showSettings ? (

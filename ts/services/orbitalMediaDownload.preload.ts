@@ -29,6 +29,7 @@ import { Readable } from 'node:stream';
 import * as https from 'node:https';
 import * as http from 'node:http';
 import { URL } from 'node:url';
+import { existsSync } from 'node:fs';
 import { fromBase64 } from '../Bytes.std.js';
 
 import {
@@ -120,23 +121,37 @@ export async function downloadMediaFromOrbital(
     throw new Error(`${logId}: Media not found in database`);
   }
 
-  // If already downloaded, return local path
+  // If already downloaded, verify file exists and return local path
   if (media.downloaded === 1 && media.localPath) {
     const absolutePath = getAbsoluteAttachmentPath(media.localPath);
-    log.info(`${logId}: Already downloaded: ${absolutePath}`);
-    return absolutePath;
+
+    // Verify file actually exists on disk
+    if (existsSync(absolutePath)) {
+      log.info(`${logId}: Already downloaded: ${absolutePath}`);
+      return absolutePath;
+    }
+
+    // File doesn't exist on disk - reset download status and re-download
+    log.warn(`${logId}: File missing from disk, will re-download: ${absolutePath}`);
+    await DataWriter.resetMediaDownloadStatus(mediaId);
   }
 
   log.info(`${logId}: Starting download (${media.size} bytes)`);
 
   // Step 2: Check if media expired on server
   if (media.expiresAt < Date.now()) {
-    // Media expired on server, need to recover from other orbit members
-    throw new Error(
+    // Media expired on server - can potentially recover from other orbit members
+    // Issue #79: Historic media sync enables async recovery from peers
+    const expiredError = new Error(
       `${logId}: Media expired on server (expired at ${new Date(
         media.expiresAt
-      ).toISOString()}). Recovery from orbit members not yet implemented.`
+      ).toISOString()}). Use historic media sync to recover from orbit members.`
     );
+    // Add metadata for UI to show recovery option
+    (expiredError as any).isExpired = true;
+    (expiredError as any).mediaId = mediaId;
+    (expiredError as any).isRecoverable = true;
+    throw expiredError;
   }
 
   // Step 3: Download encrypted blob with retry
@@ -407,9 +422,16 @@ async function downloadEncryptedBlob(params: {
 /**
  * Get download progress for a media item
  *
- * Useful for displaying download status in UI
+ * Useful for displaying download status in UI.
+ * Verifies file actually exists on disk before reporting as downloaded.
+ *
+ * @param mediaId Media ID to check
+ * @param getAbsoluteAttachmentPath Function to resolve relative paths (optional - if not provided, won't verify file exists)
  */
-export async function getMediaDownloadStatus(mediaId: string): Promise<{
+export async function getMediaDownloadStatus(
+  mediaId: string,
+  getAbsoluteAttachmentPath?: (relativePath: string) => string
+): Promise<{
   isDownloaded: boolean;
   isAvailableOnServer: boolean;
   expiresAt: number;
@@ -421,11 +443,23 @@ export async function getMediaDownloadStatus(mediaId: string): Promise<{
     throw new Error(`Media not found: ${mediaId}`);
   }
 
+  // Verify file actually exists on disk if we have the path resolver
+  let isActuallyDownloaded = media.downloaded === 1;
+  if (isActuallyDownloaded && media.localPath && getAbsoluteAttachmentPath) {
+    const absolutePath = getAbsoluteAttachmentPath(media.localPath);
+    if (!existsSync(absolutePath)) {
+      log.warn(`getMediaDownloadStatus(${mediaId}): File missing from disk: ${absolutePath}`);
+      isActuallyDownloaded = false;
+      // Reset the download status in the database
+      await DataWriter.resetMediaDownloadStatus(mediaId);
+    }
+  }
+
   return {
-    isDownloaded: media.downloaded === 1,
+    isDownloaded: isActuallyDownloaded,
     isAvailableOnServer: media.expiresAt > Date.now(),
     expiresAt: media.expiresAt,
-    localPath: media.localPath,
+    localPath: isActuallyDownloaded ? media.localPath : null,
   };
 }
 
@@ -580,4 +614,83 @@ export async function getExpiredUndownloadedMedia(): Promise<string[]> {
   // For now, return empty array - this needs a separate DAL method
   // TODO: Add getExpiredUndownloadedMedia to DAL
   return [];
+}
+
+/**
+ * Decrypt and save media from pre-downloaded encrypted data
+ *
+ * Used by historic media sync when we've already received the encrypted blob
+ * from the server via a sync item download. Decrypts using keys from SQLCipher
+ * and saves to permanent local storage.
+ *
+ * Issue #79: Async peer-to-peer recovery for expired media.
+ *
+ * @param params Decryption parameters
+ */
+export async function decryptAndSaveMedia(params: {
+  media: import('../types/OrbitalMedia.std.js').OrbitalMediaAttachment;
+  encryptedData: Uint8Array;
+  getAbsoluteAttachmentPath: (relativePath: string) => string;
+}): Promise<string> {
+  const { media, encryptedData, getAbsoluteAttachmentPath } = params;
+  const logId = `decryptAndSaveMedia(${media.mediaId})`;
+
+  let decryptedPath: string | undefined;
+
+  try {
+    log.info(`${logId}: Decrypting ${encryptedData.length} bytes`);
+
+    // Convert attachment keys from base64 string to Uint8Array for decryption
+    const attachmentKeysBytes = fromBase64(media.attachmentKeys);
+
+    const decryptResult = await decryptAttachmentV2({
+      idForLogging: media.mediaId,
+      ciphertextStream: Readable.from([Buffer.from(encryptedData)]),
+      size: media.size,
+      type: 'standard',
+      aesKey: attachmentKeysBytes.subarray(0, 32),
+      macKey: attachmentKeysBytes.subarray(32, 64),
+      theirIncrementalMac: media.incrementalMac
+        ? fromBase64(media.incrementalMac)
+        : undefined,
+      theirChunkSize: media.chunkSize,
+      integrityCheck: {
+        type: 'plaintext',
+        plaintextHash: Buffer.from(media.plaintextHash, 'hex'),
+      },
+      getAbsoluteAttachmentPath,
+    });
+
+    decryptedPath = getAbsoluteAttachmentPath(decryptResult.path);
+    log.info(`${logId}: Decrypted to: ${decryptedPath}`);
+
+    // Verify plaintext hash matches
+    strictAssert(
+      decryptResult.plaintextHash === media.plaintextHash,
+      `${logId}: Plaintext hash mismatch! Expected ${media.plaintextHash}, got ${decryptResult.plaintextHash}`
+    );
+
+    // Update SQLCipher
+    await DataWriter.updateMediaDownloadStatus(media.mediaId, decryptResult.path);
+    log.info(`${logId}: Updated database with download status`);
+
+    return decryptedPath;
+  } catch (error) {
+    log.error(`${logId}: Decryption failed`, Errors.toLogFormat(error));
+
+    // Clean up temp decrypted file on error
+    if (decryptedPath) {
+      try {
+        await safeUnlink(decryptedPath);
+        log.info(`${logId}: Cleaned up temp decrypted file`);
+      } catch (cleanupError) {
+        log.error(
+          `${logId}: Failed to clean up temp file`,
+          Errors.toLogFormat(cleanupError)
+        );
+      }
+    }
+
+    throw error;
+  }
 }
