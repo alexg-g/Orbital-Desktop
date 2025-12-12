@@ -509,6 +509,7 @@ export const DataReader: ServerReadableInterface = {
   getOrbitalMedia,
   getOrbitalMediaById,
   getOrbitalMediaForDisplay,
+  getOrbitalFileBrowserMedia,
   getThreadMedia,
   getStorageStats,
   getPendingDownloads,
@@ -747,6 +748,7 @@ export const DataWriter: ServerWritableInterface = {
   resetMediaDownloadStatus,
   updateOrbitalMediaThreadId,
   deleteOrbitalMedia,
+  getOrbitalFileBrowserMedia,
 
   // Orbital Threads
   saveOrbitalThread,
@@ -9437,6 +9439,192 @@ function deleteOrbitalMedia(
     WHERE media_id = $mediaId
   `
   ).run({ mediaId });
+}
+
+// =============================================================================
+// Orbital File Browser
+// =============================================================================
+
+/**
+ * Row type for file browser query results
+ */
+type FileBrowserMediaRow = {
+  id: string;
+  source: 'orbital' | 'signal';
+  content_type: string;
+  file_name: string | null;
+  size: number;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  blur_hash: string | null;
+  local_path: string | null;
+  created_at: number;
+  group_id: string | null;
+  thread_id: string | null;
+  message_id: string | null;
+};
+
+/**
+ * Get media items for the File Library Browser
+ * Aggregates media from both orbital_media and message_attachments tables
+ */
+function getOrbitalFileBrowserMedia(
+  db: ReadableDB,
+  options: {
+    groupId?: string;
+    mediaType: 'images' | 'videos' | 'other' | 'all';
+    sortOrder: 'newest' | 'oldest';
+    limit: number;
+    cursor?: { createdAt: number; id: string };
+  }
+): {
+  items: Array<{
+    id: string;
+    source: 'orbital' | 'signal';
+    contentType: string;
+    fileName?: string;
+    size: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+    blurHash?: string;
+    localPath?: string;
+    createdAt: number;
+    groupId?: string;
+    threadId?: string;
+    messageId?: string;
+  }>;
+  hasMore: boolean;
+  nextCursor?: { createdAt: number; id: string };
+} {
+  const { groupId, mediaType, sortOrder, limit, cursor } = options;
+
+  // Build content type filter based on mediaType
+  let contentTypeFilter: string;
+  switch (mediaType) {
+    case 'images':
+      contentTypeFilter = `content_type LIKE 'image/%'`;
+      break;
+    case 'videos':
+      contentTypeFilter = `content_type LIKE 'video/%'`;
+      break;
+    case 'other':
+      contentTypeFilter = `
+        content_type IS NOT NULL AND
+        content_type != '' AND
+        content_type NOT LIKE 'image/%' AND
+        content_type NOT LIKE 'video/%' AND
+        content_type NOT LIKE 'audio/%' AND
+        content_type != 'text/x-signal-plain'
+      `;
+      break;
+    case 'all':
+    default:
+      contentTypeFilter = `content_type IS NOT NULL AND content_type != ''`;
+      break;
+  }
+
+  // Build cursor filter for pagination
+  const cursorFilter = cursor
+    ? sortOrder === 'newest'
+      ? `AND (created_at < ${cursor.createdAt} OR (created_at = ${cursor.createdAt} AND id < '${cursor.id}'))`
+      : `AND (created_at > ${cursor.createdAt} OR (created_at = ${cursor.createdAt} AND id > '${cursor.id}'))`
+    : '';
+
+  // Build group filter
+  const groupFilter = groupId ? `AND group_id = '${groupId}'` : '';
+
+  // Order direction
+  const orderDir = sortOrder === 'newest' ? 'DESC' : 'ASC';
+
+  // Combined query using UNION ALL for both data sources
+  const query = `
+    SELECT * FROM (
+      -- Orbital media (via thread -> group relationship)
+      SELECT
+        om.id as id,
+        'orbital' as source,
+        om.content_type as content_type,
+        om.file_name as file_name,
+        om.size as size,
+        om.width as width,
+        om.height as height,
+        om.duration as duration,
+        om.blur_hash as blur_hash,
+        om.local_path as local_path,
+        om.created_at as created_at,
+        ot.group_id as group_id,
+        om.thread_id as thread_id,
+        NULL as message_id
+      FROM orbital_media om
+      LEFT JOIN orbital_threads ot ON om.thread_id = ot.id
+      WHERE om.local_path IS NOT NULL
+        AND (${contentTypeFilter})
+        ${groupFilter}
+        ${cursorFilter}
+
+      UNION ALL
+
+      -- Signal attachments (messages -> conversations)
+      SELECT
+        ma.messageId || '-' || ma.orderInMessage as id,
+        'signal' as source,
+        ma.contentType as content_type,
+        ma.fileName as file_name,
+        ma.size as size,
+        ma.width as width,
+        ma.height as height,
+        ma.duration as duration,
+        ma.blurHash as blur_hash,
+        ma.path as local_path,
+        COALESCE(ma.receivedAtMs, ma.receivedAt) as created_at,
+        ma.conversationId as group_id,
+        NULL as thread_id,
+        ma.messageId as message_id
+      FROM message_attachments ma
+      WHERE ma.path IS NOT NULL
+        AND ma.attachmentType = 'attachment'
+        AND ma.editHistoryIndex = -1
+        AND (ma.isViewOnce IS NULL OR ma.isViewOnce != 1)
+        AND (${contentTypeFilter.replace(/content_type/g, 'ma.contentType')})
+        ${groupFilter.replace(/group_id/g, 'ma.conversationId')}
+        ${cursorFilter.replace(/created_at/g, 'COALESCE(ma.receivedAtMs, ma.receivedAt)').replace(/id/g, "(ma.messageId || '-' || ma.orderInMessage)")}
+    )
+    ORDER BY created_at ${orderDir}, id ${orderDir}
+    LIMIT ${limit + 1}
+  `;
+
+  const rows = db.prepare(query).all() as FileBrowserMediaRow[];
+
+  // Check if there are more items (we fetched limit+1)
+  const hasMore = rows.length > limit;
+
+  // Get items (excluding the extra one we fetched)
+  const items = rows.slice(0, limit).map(row => ({
+    id: row.id,
+    source: row.source,
+    contentType: row.content_type,
+    fileName: row.file_name ?? undefined,
+    size: row.size,
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    duration: row.duration ?? undefined,
+    blurHash: row.blur_hash ?? undefined,
+    localPath: row.local_path ?? undefined,
+    createdAt: row.created_at,
+    groupId: row.group_id ?? undefined,
+    threadId: row.thread_id ?? undefined,
+    messageId: row.message_id ?? undefined,
+  }));
+
+  // Create next cursor from the last item
+  const lastItem = items[items.length - 1];
+  const nextCursor = hasMore && lastItem
+    ? { createdAt: lastItem.createdAt, id: lastItem.id }
+    : undefined;
+
+  return { items, hasMore, nextCursor };
 }
 
 // =============================================================================

@@ -94,7 +94,11 @@ export function OrbitalMediaRecovery({
         const requests = await onGetActiveRequests();
         setActiveRequests(requests.filter(r => r.groupId === selectedGroupId));
       } catch (err) {
-        console.error('Failed to load sync requests:', err);
+        // Silently handle "no session" error - expected when not logged in
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (!errorMessage.includes('No session token available')) {
+          console.error('Failed to load sync requests:', err);
+        }
       } finally {
         setIsLoadingRequests(false);
       }

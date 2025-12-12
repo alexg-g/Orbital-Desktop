@@ -11,6 +11,8 @@ import { OrbitalSettingsInvites } from './OrbitalSettingsInvites';
 import { OrbitalSettingsFiles } from './OrbitalSettingsFiles';
 import { OrbitalSettingsOrbit } from './OrbitalSettingsOrbit';
 import type { GroupInfo } from '../../services/orbitalGroups.preload.js';
+import type { MediaSyncRequest, MediaSyncTimeRange } from '../../types/OrbitalMediaSync.std';
+import type { OrbitalFileBrowserItem } from '../../types/OrbitalFileBrowser.std.js';
 
 export type OrbitalSettingsProps = {
   page: OrbitalSettingsPage;
@@ -25,6 +27,19 @@ export type OrbitalSettingsProps = {
   onJoinOrbit?: () => void;
   // Logout handler (for General page)
   onLogout?: () => void;
+  // Media sync handlers (for Files page)
+  onCreateSyncRequest?: (params: {
+    groupId: string;
+    timeRange: MediaSyncTimeRange;
+    maxBytes?: number;
+  }) => Promise<MediaSyncRequest>;
+  onGetActiveSyncRequests?: () => Promise<MediaSyncRequest[]>;
+  onCancelSyncRequest?: (requestId: string) => Promise<void>;
+  onDownloadReadyItems?: (requestId: string) => Promise<void>;
+  formatBytes?: (bytes: number) => string;
+  // File browser handlers (for Files page)
+  onFileBrowserItemClick?: (item: OrbitalFileBrowserItem) => void;
+  getAbsoluteAttachmentPath?: (relativePath: string) => string;
 };
 
 const PAGE_TITLES: Record<OrbitalSettingsPage, string> = {
@@ -37,6 +52,10 @@ const PAGE_TITLES: Record<OrbitalSettingsPage, string> = {
   [OrbitalSettingsPage.Orbit]: 'Switch Orbit',
 };
 
+// Default no-op for required callbacks
+const defaultNoOp = async () => { throw new Error('Not implemented'); };
+const defaultFormatBytes = (bytes: number) => `${bytes} bytes`;
+
 export function OrbitalSettings({
   page,
   groups = [],
@@ -48,6 +67,13 @@ export function OrbitalSettings({
   onCreateOrbit = () => {},
   onJoinOrbit = () => {},
   onLogout,
+  onCreateSyncRequest = defaultNoOp,
+  onGetActiveSyncRequests = async () => [],
+  onCancelSyncRequest = defaultNoOp,
+  onDownloadReadyItems = defaultNoOp,
+  formatBytes = defaultFormatBytes,
+  onFileBrowserItemClick,
+  getAbsoluteAttachmentPath,
 }: OrbitalSettingsProps): JSX.Element {
   const renderPage = (): JSX.Element => {
     switch (page) {
@@ -67,7 +93,20 @@ export function OrbitalSettings({
           />
         );
       case OrbitalSettingsPage.Files:
-        return <OrbitalSettingsFiles />;
+        return (
+          <OrbitalSettingsFiles
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            onSelectOrbit={onSelectOrbit}
+            onCreateRequest={onCreateSyncRequest}
+            onGetActiveRequests={onGetActiveSyncRequests}
+            onCancelRequest={onCancelSyncRequest}
+            onDownloadReadyItems={onDownloadReadyItems}
+            formatBytes={formatBytes}
+            onFileBrowserItemClick={onFileBrowserItemClick}
+            getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+          />
+        );
       case OrbitalSettingsPage.Orbit:
         return (
           <OrbitalSettingsOrbit

@@ -3,30 +3,74 @@
 
 import React from 'react';
 import { OrbitalSettingsSection } from './OrbitalSettingsControl';
+import { OrbitalMediaRecovery } from './OrbitalMediaRecovery';
+import { OrbitalFileBrowser } from './OrbitalFileBrowser';
+import type { GroupInfo } from '../../services/orbitalGroups.preload';
+import type { MediaSyncRequest, MediaSyncTimeRange } from '../../types/OrbitalMediaSync.std';
+import type { OrbitalFileBrowserItem } from '../../types/OrbitalFileBrowser.std';
 
-export function OrbitalSettingsFiles(): JSX.Element {
+export type OrbitalSettingsFilesProps = {
+  /** List of all groups user is a member of */
+  groups: GroupInfo[];
+  /** Currently selected group ID */
+  selectedGroupId?: string | null;
+  /** Callback when user selects a different orbit (syncs with Switch Orbit menu) */
+  onSelectOrbit?: (groupId: string) => void;
+  /** Callback to create sync request */
+  onCreateRequest: (params: {
+    groupId: string;
+    timeRange: MediaSyncTimeRange;
+    maxBytes?: number;
+  }) => Promise<MediaSyncRequest>;
+  /** Callback to get active requests */
+  onGetActiveRequests: () => Promise<MediaSyncRequest[]>;
+  /** Callback to cancel a request */
+  onCancelRequest: (requestId: string) => Promise<void>;
+  /** Callback to download ready items */
+  onDownloadReadyItems: (requestId: string) => Promise<void>;
+  /** Format bytes for display */
+  formatBytes: (bytes: number) => string;
+  /** Callback when user clicks a media item in the file browser */
+  onFileBrowserItemClick?: (item: OrbitalFileBrowserItem) => void;
+  /** Function to convert relative paths to absolute paths */
+  getAbsoluteAttachmentPath?: (relativePath: string) => string;
+};
+
+export function OrbitalSettingsFiles({
+  groups,
+  selectedGroupId,
+  onSelectOrbit,
+  onCreateRequest,
+  onGetActiveRequests,
+  onCancelRequest,
+  onDownloadReadyItems,
+  formatBytes,
+  onFileBrowserItemClick,
+  getAbsoluteAttachmentPath,
+}: OrbitalSettingsFilesProps): JSX.Element {
   return (
     <div className="OrbitalSettingsFiles">
-      <div className="OrbitalSettingsFiles__coming-soon">
-        <div className="OrbitalSettingsFiles__icon">📁</div>
-        <h3 className="OrbitalSettingsFiles__title">File Library</h3>
-        <p className="OrbitalSettingsFiles__description">
-          Coming soon! The File Library will let you browse and manage all files
-          shared in your orbit, organized by thread, date, and file type.
-        </p>
-      </div>
+      <OrbitalSettingsSection title="Media Recovery">
+        <OrbitalMediaRecovery
+          groups={groups}
+          selectedGroupId={selectedGroupId ?? undefined}
+          onSelectOrbit={onSelectOrbit}
+          onCreateRequest={onCreateRequest}
+          onGetActiveRequests={onGetActiveRequests}
+          onCancelRequest={onCancelRequest}
+          onDownloadReadyItems={onDownloadReadyItems}
+          formatBytes={formatBytes}
+        />
+      </OrbitalSettingsSection>
 
-      <OrbitalSettingsSection title="Planned Features">
-        <div className="OrbitalSettingsFiles__features">
-          <ul>
-            <li>📸 Browse all shared images and videos</li>
-            <li>📄 View documents and files</li>
-            <li>🗂️ Organize by thread or chat</li>
-            <li>📅 Filter by date range</li>
-            <li>🔍 Search file names and content</li>
-            <li>💾 Download files to your device</li>
-          </ul>
-        </div>
+      <OrbitalSettingsSection title="Browse Media">
+        <OrbitalFileBrowser
+          groups={groups}
+          selectedGroupId={selectedGroupId}
+          onSelectOrbit={onSelectOrbit}
+          onItemClick={onFileBrowserItemClick}
+          getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+        />
       </OrbitalSettingsSection>
     </div>
   );

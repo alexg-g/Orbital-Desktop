@@ -56,6 +56,9 @@ import {
   uploadItemForSync,
   downloadSyncItem,
   downloadReadyItems,
+  createSyncRequest,
+  getActiveSyncRequests,
+  cancelSyncRequest,
 } from '../../services/orbitalHistoricMediaSync.preload';
 
 /**
@@ -1974,6 +1977,12 @@ export function OrbitalInbox({
               onCreateOrbit={handleCreateOrbit}
               onJoinOrbit={handleJoinOrbit}
               onLogout={handleLogout}
+              onCreateSyncRequest={createSyncRequest}
+              onGetActiveSyncRequests={getActiveSyncRequests}
+              onCancelSyncRequest={cancelSyncRequest}
+              onDownloadReadyItems={downloadReadyItems}
+              formatBytes={formatFileSize}
+              getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
             />
           ) : activeThread ? (
             <OrbitalThreadDetail

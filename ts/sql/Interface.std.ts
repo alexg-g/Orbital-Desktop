@@ -55,6 +55,9 @@ import type {
   OrbitalMediaStorageStats} from '../types/OrbitalMedia.std.js';
 import type { OrbitalThreadType } from '../types/OrbitalThread.std.js';
 import type { DraftType } from '../types/Draft.std.js';
+import type {
+  GetOrbitalFileBrowserMediaOptions,
+  GetOrbitalFileBrowserMediaResult} from '../types/OrbitalFileBrowser.std.js';
 
 // STUB: BadgeType removed for Orbital
 type BadgeType = { id: string };
@@ -970,6 +973,9 @@ type ReadableInterface = {
   getThreadMedia: (threadId: string) => Array<OrbitalMediaAttachment>;
   getStorageStats: (threadId: string) => OrbitalMediaStorageStats;
   getPendingDownloads: () => Array<OrbitalMediaAttachment>;
+  getOrbitalFileBrowserMedia: (
+    options: GetOrbitalFileBrowserMediaOptions
+  ) => GetOrbitalFileBrowserMediaResult;
 
   // Orbital Threads
   getOrbitalThread: (threadId: string) => OrbitalThreadType | undefined;
