@@ -1604,6 +1604,10 @@
   }
 
   &__reply-context {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $orbital-space-sm;
     padding: $orbital-space-sm;
     background: $orbital-surface;
     border-left: 3px solid $orbital-blue;
@@ -1614,6 +1618,11 @@
     @include mixins.dark-theme {
       background: $orbital-dark-bg;
       border-left-color: $orbital-dark-blue;
+    }
+
+    &__content {
+      flex: 1;
+      min-width: 0;
     }
 
     &__label {
@@ -1640,9 +1649,44 @@
       font-size: $orbital-font-size-sm;
       line-height: $orbital-line-height-normal;
       margin-top: $orbital-space-xs;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
 
       @include mixins.dark-theme {
         color: $orbital-dark-text-secondary;
+      }
+    }
+
+    &__cancel {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: $orbital-text-tertiary;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: $orbital-radius-sm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease, color 0.15s ease;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.1);
+        color: $orbital-text-primary;
+      }
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-text-tertiary;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: $orbital-dark-text-primary;
+        }
       }
     }
   }

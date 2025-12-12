@@ -68,6 +68,11 @@ export type OrbitalComposerProps = {
     body: string;
   };
   /**
+   * Callback when user cancels replying to a specific message
+   * (returns to top-level reply mode)
+   */
+  onCancelReply?: () => void;
+  /**
    * Submit handler receives mediaIds in camelCase.
    * IMPORTANT: When implementing API calls, convert to snake_case (media_ids)
    * before sending to backend, as the backend expects snake_case field names.
@@ -112,6 +117,7 @@ export function OrbitalComposer({
   threadId: providedThreadId,
   contextId,
   replyContext,
+  onCancelReply,
   onSubmit,
   onSelectGif,
   onSelectSticker,
@@ -582,15 +588,27 @@ export function OrbitalComposer({
       {/* Reply Context (when replying to a message) */}
       {mode === 'reply' && replyContext && (
         <div className="OrbitalComposer__reply-context">
-          <div className="OrbitalComposer__reply-context__label">
-            Replying to{' '}
-            <span className="OrbitalComposer__reply-context__author">
-              {replyContext.author}
-            </span>
+          <div className="OrbitalComposer__reply-context__content">
+            <div className="OrbitalComposer__reply-context__label">
+              Replying to{' '}
+              <span className="OrbitalComposer__reply-context__author">
+                {replyContext.author}
+              </span>
+            </div>
+            <div className="OrbitalComposer__reply-context__preview">
+              {truncateText(replyContext.body, 100)}
+            </div>
           </div>
-          <div className="OrbitalComposer__reply-context__preview">
-            {truncateText(replyContext.body, 100)}
-          </div>
+          {onCancelReply && (
+            <button
+              type="button"
+              className="OrbitalComposer__reply-context__cancel"
+              onClick={onCancelReply}
+              aria-label="Cancel reply"
+            >
+              x
+            </button>
+          )}
         </div>
       )}
 

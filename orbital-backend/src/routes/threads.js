@@ -392,14 +392,36 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
   const pageLimit = Math.min(parseInt(limit, 10) || 50, 100);
   const pageOffset = parseInt(offset, 10) || 0;
 
-  // Fetch replies
+  // Fetch replies with parent_reply_id and calculated level using recursive CTE
+  // Level 0 = replies to thread (no parent), Level 1+ = replies to specific comments
+  // Uses tree_path array for Reddit-style depth-first ordering (children under parent)
   const result = await db.query(
-    `SELECT r.id, r.thread_id, r.author_id, r.encrypted_body, r.body_iv, r.created_at,
+    `WITH RECURSIVE reply_tree AS (
+       -- Base case: replies without parent (top-level, level 0)
+       -- tree_path starts with just this reply's timestamp for sorting siblings
+       SELECT r.id, r.thread_id, r.author_id, r.encrypted_body, r.body_iv,
+              r.created_at, r.parent_reply_id, 0 as level,
+              ARRAY[r.created_at] as tree_path
+       FROM replies r
+       WHERE r.thread_id = $1 AND r.parent_reply_id IS NULL
+
+       UNION ALL
+
+       -- Recursive case: replies with parent (nested, level = parent + 1)
+       -- tree_path extends parent's path with this reply's timestamp
+       SELECT r.id, r.thread_id, r.author_id, r.encrypted_body, r.body_iv,
+              r.created_at, r.parent_reply_id, rt.level + 1 as level,
+              rt.tree_path || r.created_at as tree_path
+       FROM replies r
+       INNER JOIN reply_tree rt ON r.parent_reply_id = rt.id
+       WHERE r.thread_id = $1
+     )
+     SELECT rt.id, rt.thread_id, rt.author_id, rt.encrypted_body, rt.body_iv,
+            rt.created_at, rt.parent_reply_id, rt.level,
             u.username as author_username
-     FROM replies r
-     LEFT JOIN users u ON u.id = r.author_id
-     WHERE r.thread_id = $1
-     ORDER BY r.created_at ASC
+     FROM reply_tree rt
+     LEFT JOIN users u ON u.id = rt.author_id
+     ORDER BY rt.tree_path ASC
      LIMIT $2 OFFSET $3`,
     [threadId, pageLimit, pageOffset]
   );
@@ -443,6 +465,8 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
     encrypted_body: row.encrypted_body,
     body_iv: row.body_iv,
     created_at: row.created_at,
+    parent_reply_id: row.parent_reply_id || null,
+    level: row.level,
     media: mediaByReplyId.get(row.id) || [] // Attach media to each reply
   }));
 
@@ -463,7 +487,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
  */
 router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) => {
   const { threadId } = req.params;
-  const { encrypted_body, body_iv, message_id, media_ids } = req.body;
+  const { encrypted_body, body_iv, message_id, media_ids, parent_reply_id } = req.body;
 
   if (!encrypted_body) {
     throw validationError('Missing required field: encrypted_body');
@@ -535,12 +559,23 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
       validatedMediaIds = mediaCheck.rows.map(m => m.id);
     }
 
+    // Validate parent_reply_id if provided (must belong to same thread)
+    if (parent_reply_id) {
+      const parentCheck = await client.query(
+        'SELECT id FROM replies WHERE id = $1 AND thread_id = $2',
+        [parent_reply_id, threadId]
+      );
+      if (parentCheck.rowCount === 0) {
+        throw validationError('Invalid parent_reply_id: reply not found or belongs to different thread');
+      }
+    }
+
     // Create reply
     const result = await client.query(
-      `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body, body_iv)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO replies (thread_id, message_id, author_id, encrypted_body, body_iv, parent_reply_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, created_at`,
-      [threadId, message_id || null, req.user.userId, encrypted_body, body_iv || null]
+      [threadId, message_id || null, req.user.userId, encrypted_body, body_iv || null, parent_reply_id || null]
     );
 
     const reply = result.rows[0];
@@ -606,6 +641,7 @@ router.post('/:threadId/replies', authenticate, asyncHandler(async (req, res) =>
           author_name: authorUsername,
           encrypted_body: encrypted_body,
           body_iv: body_iv || null,
+          parent_reply_id: parent_reply_id || null,
           created_at: reply.created_at,
           media: associatedMedia
         });

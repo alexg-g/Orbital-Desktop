@@ -81,11 +81,15 @@ CREATE INDEX idx_threads_message ON threads(root_message_id);
 CREATE INDEX idx_threads_author ON threads(author_id);
 
 -- Replies Table
+-- parent_reply_id enables Reddit-style nested threading:
+-- NULL = top-level reply to thread (Level 0)
+-- UUID = reply to specific comment (Level 1+, calculated from parent chain)
 CREATE TABLE replies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     thread_id UUID NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     message_id UUID REFERENCES signal_messages(id) ON DELETE CASCADE,
     author_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    parent_reply_id UUID REFERENCES replies(id) ON DELETE SET NULL,
     encrypted_body TEXT NOT NULL,
     body_iv VARCHAR(64),
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -94,6 +98,7 @@ CREATE TABLE replies (
 CREATE INDEX idx_replies_thread ON replies(thread_id, created_at ASC);
 CREATE INDEX idx_replies_message ON replies(message_id);
 CREATE INDEX idx_replies_author ON replies(author_id);
+CREATE INDEX idx_replies_parent ON replies(parent_reply_id);
 
 -- Media Table
 CREATE TABLE media (

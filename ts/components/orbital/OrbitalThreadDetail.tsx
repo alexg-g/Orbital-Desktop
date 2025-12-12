@@ -39,7 +39,7 @@ export type OrbitalThreadDetailProps = {
   currentUserId: string;
   i18n: LocalizerType;
   onReply: (parentId: string, body: string) => void;
-  onSendMessage: (body: string, mediaIds: string[]) => void;
+  onSendMessage: (body: string, mediaIds: string[], parentReplyId?: string) => void;
   // Dependency injection for OrbitalComposer (allows Storybook mocking)
   getQuotaInfo: (groupId: string) => Promise<QuotaInfo>;
   checkUploadAllowed: (groupId: string, fileSizeBytes: number) => Promise<UploadCheckResult>;
@@ -89,6 +89,10 @@ export function OrbitalThreadDetail({
   const [mediaMap, setMediaMap] = useState<Map<string, OrbitalMediaDisplayInfo>>(
     new Map()
   );
+  // Track which message the user is replying to (for nested threading)
+  // null = top-level reply to thread (level 0)
+  // OrbitalMessageType = nested reply to specific comment (level 1+)
+  const [replyingToMessage, setReplyingToMessage] = useState<OrbitalMessageType | null>(null);
 
   // Fetch media display info for messages that have mediaIds
   // Uses lightweight getOrbitalMediaForDisplay (no binary data) to avoid IPC serialization issues
@@ -141,10 +145,31 @@ export function OrbitalThreadDetail({
 
   const handleSubmitReply = useCallback(
     (body: string, mediaIds: string[]) => {
-      onSendMessage(body, mediaIds);
+      // Pass parentReplyId if replying to a specific message
+      onSendMessage(body, mediaIds, replyingToMessage?.id);
+      // Clear reply context after submission
+      setReplyingToMessage(null);
     },
-    [onSendMessage]
+    [onSendMessage, replyingToMessage]
   );
+
+  // Handle Reply button click on a message
+  const handleMessageReply = useCallback(
+    (messageId: string) => {
+      const message = messages.find(m => m.id === messageId);
+      if (message) {
+        setReplyingToMessage(message);
+        // Expand composer if collapsed
+        setIsComposerCollapsed(false);
+      }
+    },
+    [messages]
+  );
+
+  // Cancel replying to specific message (return to top-level reply)
+  const handleCancelReply = useCallback(() => {
+    setReplyingToMessage(null);
+  }, []);
 
   const handleToggleComposer = useCallback(() => {
     setIsComposerCollapsed(prev => !prev);
@@ -191,7 +216,7 @@ export function OrbitalThreadDetail({
             key={message.id}
             message={message}
             isOwnMessage={message.authorId === currentUserId}
-            onReply={() => {}} // Reply button click handler (not used when always showing composer)
+            onReply={handleMessageReply}
             i18n={i18n}
             threadId={threadId}
             mediaMap={mediaMap}
@@ -245,6 +270,8 @@ export function OrbitalThreadDetail({
             getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
             contextId={threadId}
             draftOperations={draftOperations}
+            replyContext={replyingToMessage ? { author: replyingToMessage.author, body: replyingToMessage.body } : undefined}
+            onCancelReply={handleCancelReply}
           />
         </div>
       )}

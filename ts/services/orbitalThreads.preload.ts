@@ -223,6 +223,8 @@ export type ReplyInfo = {
   authorUsername: string;
   encryptedBody: string;
   createdAt: string;
+  parentReplyId?: string | null; // ID of the reply this is responding to (null = top-level reply)
+  level?: number; // Nesting depth: 0 = top-level reply to thread, 1+ = nested reply
   mediaCount?: number;
   media?: MediaInfo[];
 };
@@ -697,6 +699,8 @@ export async function getReplies(
           authorUsername: r.author_username,
           encryptedBody: decryptedBody, // Now contains decrypted plaintext
           createdAt: r.created_at,
+          parentReplyId: r.parent_reply_id || null,
+          level: r.level ?? 0, // Backend calculates level from parent chain; 0 = top-level reply
           mediaCount: r.media_count || 0,
           media: r.media
             ? r.media.map((m: any) => ({
@@ -743,12 +747,14 @@ export async function getReplies(
  * @param threadId Thread ID to reply to
  * @param body Plain text reply body (will be encrypted before sending)
  * @param mediaIds Optional array of media IDs to attach
+ * @param parentReplyId Optional ID of the reply being responded to (for nested threading)
  * @returns Created reply information
  */
 export async function createReply(
   threadId: string,
   body: string,
-  mediaIds?: string[]
+  mediaIds?: string[],
+  parentReplyId?: string
 ): Promise<CreateReplyResult> {
   const logId = `createReply(${threadId})`;
 
@@ -841,6 +847,7 @@ export async function createReply(
       encrypted_body: encryptedBody,
       body_iv: bodyIv, // Send IV so server can relay it to other clients
       ...(mediaIds && mediaIds.length > 0 && { media_ids: mediaIds }),
+      ...(parentReplyId && { parent_reply_id: parentReplyId }),
     });
 
     const response = await makeRequest({

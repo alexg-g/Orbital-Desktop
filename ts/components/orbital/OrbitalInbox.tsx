@@ -58,6 +58,47 @@ import {
   downloadReadyItems,
 } from '../../services/orbitalHistoricMediaSync.preload';
 
+/**
+ * Insert a new message into the correct position in a tree-ordered array.
+ * Reddit-style: new message appears immediately after its parent and all parent's descendants.
+ * If no parent (top-level), appends to end.
+ */
+function insertMessageInTreeOrder(
+  messages: OrbitalMessageType[],
+  newMessage: OrbitalMessageType
+): OrbitalMessageType[] {
+  // If no parent, append to end (top-level message)
+  if (!newMessage.parentId) {
+    return [...messages, newMessage];
+  }
+
+  // Find the parent's index
+  const parentIndex = messages.findIndex(m => m.id === newMessage.parentId);
+  if (parentIndex === -1) {
+    // Parent not found, append to end as fallback
+    return [...messages, newMessage];
+  }
+
+  // Find the insertion point: after parent and all descendants of parent
+  // Walk forward from parent until we find a message at same or lower level than parent
+  const parentLevel = messages[parentIndex].level;
+  let insertIndex = parentIndex + 1;
+
+  while (insertIndex < messages.length) {
+    const msg = messages[insertIndex];
+    // Stop when we reach a message at parent's level or higher (sibling or ancestor of parent)
+    if (msg.level <= parentLevel) {
+      break;
+    }
+    insertIndex++;
+  }
+
+  // Insert at the found position
+  const result = [...messages];
+  result.splice(insertIndex, 0, newMessage);
+  return result;
+}
+
 // Browser-compatible type for authentication check
 export type IsAuthenticatedFunction = () => Promise<boolean>;
 
@@ -87,7 +128,8 @@ export type GetRepliesFunction = (
 export type CreateReplyFunction = (
   threadId: string,
   body: string,
-  mediaIds?: string[]
+  mediaIds?: string[],
+  parentReplyId?: string
 ) => Promise<CreateReplyResult>;
 
 // Group API types
@@ -252,6 +294,10 @@ function mapThreadInfoToOrbitalThread(
 /**
  * Map ReplyInfo from backend to OrbitalMessageType for UI
  * Note: Avatar URL will be populated by phpBB-style profile transformation for current user
+ *
+ * Reddit-style threading:
+ * - Level 0: Top-level reply to thread (no parent, white background)
+ * - Level 1+: Nested reply to specific comment (indented, color-coded)
  */
 function mapReplyInfoToOrbitalMessage(
   reply: ReplyInfo,
@@ -264,7 +310,8 @@ function mapReplyInfoToOrbitalMessage(
     authorId: reply.authorId,
     timestamp: new Date(reply.createdAt).getTime(),
     body: reply.encryptedBody, // Already decrypted by service
-    level: 1, // Replies are always level 1 (flat structure for now)
+    level: reply.level ?? 0, // Use backend-provided level; 0 = top-level reply to thread
+    parentId: reply.parentReplyId || undefined, // ID of parent reply (for "Replying to" context)
     hasMedia: (mediaIds && mediaIds.length > 0) || (reply.mediaCount || 0) > 0,
     mediaIds,
     avatarUrl: memberAvatars.get(reply.authorId) || undefined,
@@ -774,16 +821,29 @@ export function OrbitalInbox({
           if (prevMessages.some(m => m.id === data.reply_id)) {
             return prevMessages;
           }
+
+          // Calculate level from parent (0 = top-level, parent.level + 1 for nested)
+          let level = 0;
+          if (data.parent_reply_id) {
+            const parentMessage = prevMessages.find(m => m.id === data.parent_reply_id);
+            if (parentMessage) {
+              level = parentMessage.level + 1;
+            }
+          }
+
           const newReply: OrbitalMessageType = {
             id: data.reply_id,
             author: data.author_name || 'Unknown',
             authorId: data.author_id || 'unknown',
             timestamp: new Date(data.created_at).getTime(),
             body: data.encrypted_body || '',
-            level: 1,
+            level,
+            parentId: data.parent_reply_id || undefined,
             hasMedia: false,
           };
-          return [...prevMessages, newReply];
+
+          // Insert in tree order (after parent and its descendants)
+          return insertMessageInTreeOrder(prevMessages, newReply);
         });
       }
 
@@ -1392,7 +1452,7 @@ export function OrbitalInbox({
     }
   }, [selectedGroupId, createThreadAPI]);
 
-  const handleSendMessage = useCallback(async (body: string, mediaIds?: string[]) => {
+  const handleSendMessage = useCallback(async (body: string, mediaIds: string[], parentReplyId?: string) => {
     if (!activeThreadId) {
       return;
     }
@@ -1400,11 +1460,22 @@ export function OrbitalInbox({
     // Get current user profile for display name and avatar
     const userProfile = getCurrentUserProfile();
 
+    // Calculate the level based on parent message
+    // Level 0 = top-level reply (no parent)
+    // Level 1+ = nested reply (parent level + 1)
+    let level = 0;
+    if (parentReplyId) {
+      const parentMessage = messages.find(m => m.id === parentReplyId);
+      if (parentMessage) {
+        level = parentMessage.level + 1;
+      }
+    }
+
     setIsSubmittingReply(true);
     try {
       if (createReplyAPI) {
-        // Use real API
-        const result = await createReplyAPI(activeThreadId, body, mediaIds);
+        // Use real API - pass parentReplyId
+        const result = await createReplyAPI(activeThreadId, body, mediaIds.length > 0 ? mediaIds : undefined, parentReplyId);
 
         // Create the reply message for UI
         const newMessage: OrbitalMessageType = {
@@ -1413,20 +1484,20 @@ export function OrbitalInbox({
           authorId: currentUserId || 'unknown',
           timestamp: new Date(result.createdAt).getTime(),
           body,
-          level: 1,
-          parentId: undefined,
-          hasMedia: mediaIds ? mediaIds.length > 0 : false,
-          mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+          level,
+          parentId: parentReplyId,
+          hasMedia: mediaIds.length > 0,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
           avatarUrl: userProfile.avatarUrl || undefined,
         };
 
-        // Add to messages
-        setMessages(prev => [...prev, newMessage]);
+        // Add to messages in tree order (after parent and its descendants)
+        setMessages(prev => insertMessageInTreeOrder(prev, newMessage));
 
-        // Update cache
+        // Update cache in tree order
         setThreadMessagesCache(prev => ({
           ...prev,
-          [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
+          [activeThreadId]: insertMessageInTreeOrder(prev[activeThreadId] || [], newMessage)
         }));
 
         // Update thread reply count
@@ -1447,17 +1518,18 @@ export function OrbitalInbox({
           authorId: currentUserId || 'unknown',
           timestamp: Date.now(),
           body,
-          level: 1,
-          parentId: undefined,
-          hasMedia: mediaIds ? mediaIds.length > 0 : false,
-          mediaIds: mediaIds && mediaIds.length > 0 ? mediaIds : undefined,
+          level,
+          parentId: parentReplyId,
+          hasMedia: mediaIds.length > 0,
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
           avatarUrl: userProfile.avatarUrl || undefined,
         };
 
-        setMessages(prev => [...prev, newMessage]);
+        // Add to messages in tree order (after parent and its descendants)
+        setMessages(prev => insertMessageInTreeOrder(prev, newMessage));
         setThreadMessagesCache(prev => ({
           ...prev,
-          [activeThreadId]: [...(prev[activeThreadId] || []), newMessage]
+          [activeThreadId]: insertMessageInTreeOrder(prev[activeThreadId] || [], newMessage)
         }));
         setThreads(prev => prev.map(thread =>
           thread.id === activeThreadId
@@ -1471,7 +1543,7 @@ export function OrbitalInbox({
     } finally {
       setIsSubmittingReply(false);
     }
-  }, [activeThreadId, createReplyAPI]);
+  }, [activeThreadId, createReplyAPI, messages]);
 
   const handleReply = useCallback(async (parentId: string, body: string, mediaIds?: string[]) => {
     try {
