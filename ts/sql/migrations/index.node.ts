@@ -130,6 +130,7 @@ import updateToSchemaVersion1501 from './1501-orbital-threads.std.js';
 import updateToSchemaVersion1510 from './1510-add-drafts.std.js';
 import updateToSchemaVersion1511 from './1511-orbital-threads-author-username.std.js';
 import updateToSchemaVersion1512 from './1512-orbital-media-sync.std.js';
+import updateToSchemaVersion1513 from './1513-orbital-media-group-id.std.js';
 
 import { DataWriter } from '../Server.node.js';
 
@@ -1617,6 +1618,7 @@ export const SCHEMA_VERSIONS: ReadonlyArray<SchemaUpdateType> = [
   { version: 1510, update: updateToSchemaVersion1510 },
   { version: 1511, update: updateToSchemaVersion1511 },
   { version: 1512, update: updateToSchemaVersion1512 },
+  { version: 1513, update: updateToSchemaVersion1513 },
 ];
 
 export class DBVersionFromFutureError extends Error {

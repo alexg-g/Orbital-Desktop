@@ -288,6 +288,7 @@ export async function uploadMediaToOrbital(
       id,
       mediaId,
       threadId: '', // Empty - will be updated after thread/reply creation
+      groupId, // Store group_id directly for File Library Browser filtering
       attachmentKeys: toBase64(attachmentKeys), // Base64 for IPC safety
       plaintextHash: encryptResult.plaintextHash,
       digest: toBase64(encryptResult.digest),

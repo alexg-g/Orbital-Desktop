@@ -9202,6 +9202,7 @@ function saveOrbitalMedia(
       id,
       media_id,
       thread_id,
+      group_id,
       attachment_keys,
       plaintext_hash,
       digest,
@@ -9224,6 +9225,7 @@ function saveOrbitalMedia(
       $id,
       $mediaId,
       $threadId,
+      $groupId,
       $attachmentKeys,
       $plaintextHash,
       $digest,
@@ -9248,6 +9250,7 @@ function saveOrbitalMedia(
     id: media.id,
     mediaId: media.mediaId,
     threadId: media.threadId,
+    groupId: media.groupId ?? null,
     attachmentKeys: attachmentKeysBuffer,
     plaintextHash: media.plaintextHash,
     digest: media.digest,
@@ -9500,6 +9503,68 @@ function getOrbitalFileBrowserMedia(
 } {
   const { groupId, mediaType, sortOrder, limit, cursor } = options;
 
+  logger.info(`getOrbitalFileBrowserMedia: options`, {
+    groupId,
+    mediaType,
+    sortOrder,
+    limit,
+    hasCursor: !!cursor,
+  });
+
+  // Debug: Check what's in the message_attachments table
+  try {
+    // First check total count and paths
+    const countQuery = `SELECT COUNT(*) as total FROM message_attachments`;
+    const countResult = db.prepare(countQuery).get() as { total: number };
+
+    const pathCountQuery = `SELECT COUNT(*) as withPath FROM message_attachments WHERE path IS NOT NULL AND path != ''`;
+    const pathCountResult = db.prepare(pathCountQuery).get() as { withPath: number };
+
+    // Sample some rows to see structure
+    const debugQuery = `
+      SELECT
+        ma.conversationId,
+        ma.contentType,
+        ma.path,
+        ma.attachmentType,
+        ma.editHistoryIndex,
+        ma.isViewOnce
+      FROM message_attachments ma
+      LIMIT 10
+    `;
+    const debugRows = db.prepare(debugQuery).all();
+
+    // Also check orbital_media table
+    const orbitalCountQuery = `SELECT COUNT(*) as total FROM orbital_media`;
+    const orbitalCount = db.prepare(orbitalCountQuery).get() as { total: number };
+
+    const orbitalPathQuery = `SELECT COUNT(*) as withPath FROM orbital_media WHERE local_path IS NOT NULL`;
+    const orbitalPathCount = db.prepare(orbitalPathQuery).get() as { withPath: number };
+
+    // Sample orbital_media rows to see their structure
+    const orbitalSampleQuery = `
+      SELECT om.id, om.thread_id, om.group_id, om.content_type, om.local_path
+      FROM orbital_media om
+      LIMIT 5
+    `;
+    const orbitalSample = db.prepare(orbitalSampleQuery).all();
+
+    logger.info(`getOrbitalFileBrowserMedia: DEBUG - table stats`, {
+      messageAttachments: {
+        total: countResult.total,
+        withPath: pathCountResult.withPath,
+      },
+      orbitalMedia: {
+        total: orbitalCount.total,
+        withPath: orbitalPathCount.withPath,
+      },
+    });
+    // Log sample separately to see full object
+    logger.info(`getOrbitalFileBrowserMedia: DEBUG - orbital_media sample: ${JSON.stringify(orbitalSample, null, 2)}`);
+  } catch (debugError) {
+    logger.warn(`getOrbitalFileBrowserMedia: DEBUG query failed`, { error: debugError });
+  }
+
   // Build content type filter based on mediaType
   let contentTypeFilter: string;
   switch (mediaType) {
@@ -9541,7 +9606,7 @@ function getOrbitalFileBrowserMedia(
   // Combined query using UNION ALL for both data sources
   const query = `
     SELECT * FROM (
-      -- Orbital media (via thread -> group relationship)
+      -- Orbital media (direct group_id lookup)
       SELECT
         om.id as id,
         'orbital' as source,
@@ -9554,11 +9619,10 @@ function getOrbitalFileBrowserMedia(
         om.blur_hash as blur_hash,
         om.local_path as local_path,
         om.created_at as created_at,
-        ot.group_id as group_id,
+        om.group_id as group_id,
         om.thread_id as thread_id,
         NULL as message_id
       FROM orbital_media om
-      LEFT JOIN orbital_threads ot ON om.thread_id = ot.id
       WHERE om.local_path IS NOT NULL
         AND (${contentTypeFilter})
         ${groupFilter}
@@ -9595,7 +9659,14 @@ function getOrbitalFileBrowserMedia(
     LIMIT ${limit + 1}
   `;
 
+  logger.info(`getOrbitalFileBrowserMedia: executing query`, {
+    groupFilter,
+    contentTypeFilter: contentTypeFilter.substring(0, 50),
+  });
+
   const rows = db.prepare(query).all() as FileBrowserMediaRow[];
+
+  logger.info(`getOrbitalFileBrowserMedia: query returned ${rows.length} rows`);
 
   // Check if there are more items (we fetched limit+1)
   const hasMore = rows.length > limit;

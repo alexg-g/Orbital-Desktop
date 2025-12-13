@@ -45,6 +45,13 @@ export type OrbitalMediaAttachment = {
   threadId: string;
 
   /**
+   * Group ID (orbit) this media belongs to
+   * Direct reference for efficient filtering in File Library Browser
+   * Optional for backwards compatibility with existing media
+   */
+  groupId?: string;
+
+  /**
    * Signal Protocol attachment keys (64 bytes) as base64 string
    * Split into: 32 bytes AES-256 + 32 bytes HMAC-SHA256
    *

@@ -53,12 +53,13 @@ const MEDIA_TYPE_OPTIONS: Array<{
 
 export function OrbitalFileBrowser({
   groups,
-  selectedGroupId,
+  selectedGroupId: initialGroupId,
   onSelectOrbit,
   onItemClick,
   getAbsoluteAttachmentPath,
 }: OrbitalFileBrowserProps): JSX.Element {
-  // Filter state
+  // Filter state - manage orbit selection internally
+  const [selectedOrbitId, setSelectedOrbitId] = useState<string | null>(initialGroupId ?? null);
   const [mediaType, setMediaType] = useState<OrbitalFileBrowserMediaType>('all');
   const [sortOrder, setSortOrder] = useState<OrbitalFileBrowserSortOrder>('newest');
 
@@ -83,7 +84,7 @@ export function OrbitalFileBrowser({
 
       try {
         const result = await getFileBrowserMedia({
-          groupId: selectedGroupId ?? undefined,
+          groupId: selectedOrbitId ?? undefined,
           mediaType,
           sortOrder,
           limit: FILE_BROWSER_PAGE_SIZE,
@@ -101,7 +102,7 @@ export function OrbitalFileBrowser({
     }
 
     loadInitialData();
-  }, [selectedGroupId, mediaType, sortOrder]);
+  }, [selectedOrbitId, mediaType, sortOrder]);
 
   // Load more data when scrolling
   const loadMore = useCallback(async () => {
@@ -111,7 +112,7 @@ export function OrbitalFileBrowser({
 
     try {
       const result = await getFileBrowserMedia({
-        groupId: selectedGroupId ?? undefined,
+        groupId: selectedOrbitId ?? undefined,
         mediaType,
         sortOrder,
         cursor,
@@ -127,7 +128,7 @@ export function OrbitalFileBrowser({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, hasMore, cursor, selectedGroupId, mediaType, sortOrder]);
+  }, [isLoading, hasMore, cursor, selectedOrbitId, mediaType, sortOrder]);
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -148,15 +149,16 @@ export function OrbitalFileBrowser({
     return () => observer.disconnect();
   }, [hasMore, isLoading, loadMore]);
 
-  // Handle orbit change
+  // Handle orbit change - only update local filter, don't navigate
   const handleOrbitChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newGroupId = e.target.value;
-      if (onSelectOrbit && newGroupId) {
-        onSelectOrbit(newGroupId);
-      }
+      const newGroupId = e.target.value || null;
+      setSelectedOrbitId(newGroupId);
+      // Note: We intentionally don't call onSelectOrbit here because
+      // the File Browser's orbit filter should be independent from
+      // the main app's orbit navigation.
     },
-    [onSelectOrbit]
+    []
   );
 
   // Handle item click
@@ -181,7 +183,7 @@ export function OrbitalFileBrowser({
           <label className="OrbitalFileBrowser__filter-label">Orbit</label>
           <select
             className="OrbitalFileBrowser__select"
-            value={selectedGroupId ?? ''}
+            value={selectedOrbitId ?? ''}
             onChange={handleOrbitChange}
           >
             <option value="">All Orbits</option>
@@ -260,7 +262,7 @@ export function OrbitalFileBrowser({
             No media files found
           </p>
           <p className="OrbitalFileBrowser__empty-hint">
-            {selectedGroupId
+            {selectedOrbitId
               ? 'Try selecting a different orbit or changing the filters'
               : 'Media you receive will appear here'}
           </p>

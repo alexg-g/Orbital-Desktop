@@ -3,6 +3,9 @@
 
 // OrbitalFileBrowser - File Library Browser styles
 
+@use '../mixins';
+@use '../orbital-variables' as *;
+
 .OrbitalFileBrowser {
   display: flex;
   flex-direction: column;
@@ -16,7 +19,11 @@
     gap: 16px;
     align-items: flex-end;
     padding-bottom: 12px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-bottom: 1px solid $orbital-border-subtle;
+
+    @include mixins.dark-theme {
+      border-bottom-color: $orbital-dark-border-subtle;
+    }
   }
 
   &__filter-group {
@@ -29,27 +36,45 @@
     font-size: 11px;
     font-weight: 500;
     text-transform: uppercase;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     letter-spacing: 0.5px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__select {
     padding: 8px 12px;
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border: 1px solid $orbital-border-subtle;
     border-radius: 6px;
-    background: var(--background-secondary, #1c1c1e);
-    color: var(--text-primary, #fff);
+    background: $orbital-surface;
+    color: $orbital-text-primary;
     font-size: 14px;
     cursor: pointer;
     min-width: 140px;
 
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-subtle;
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+    }
+
     &:hover {
-      background: var(--background-hover, #2c2c2e);
+      background: $orbital-surface-elevated;
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface-elevated;
+      }
     }
 
     &:focus {
       outline: none;
-      border-color: var(--accent-color, #0a84ff);
+      border-color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        border-color: $orbital-dark-blue;
+      }
     }
   }
 
@@ -57,9 +82,13 @@
   &__tabs {
     display: flex;
     gap: 2px;
-    background: var(--background-secondary, #1c1c1e);
+    background: $orbital-surface;
     border-radius: 8px;
     padding: 2px;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+    }
   }
 
   &__tab {
@@ -67,23 +96,40 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
 
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
+
     &:hover {
-      background: var(--background-hover, rgba(255, 255, 255, 0.1));
-      color: var(--text-primary, #fff);
+      background: rgba($orbital-text-secondary, 0.1);
+      color: $orbital-text-primary;
+
+      @include mixins.dark-theme {
+        background: rgba($orbital-dark-text-secondary, 0.1);
+        color: $orbital-dark-text-primary;
+      }
     }
 
     &--active {
-      background: var(--accent-color, #0a84ff);
+      background: $orbital-blue;
       color: #fff;
 
+      @include mixins.dark-theme {
+        background: $orbital-dark-blue;
+      }
+
       &:hover {
-        background: var(--accent-color-hover, #0077ed);
+        background: $orbital-blue-hover;
         color: #fff;
+
+        @include mixins.dark-theme {
+          background: $orbital-dark-blue;
+        }
       }
     }
   }
@@ -94,15 +140,25 @@
     align-items: center;
     gap: 6px;
     padding: 8px 12px;
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border: 1px solid $orbital-border-subtle;
     border-radius: 6px;
-    background: var(--background-secondary, #1c1c1e);
-    color: var(--text-primary, #fff);
+    background: $orbital-surface;
+    color: $orbital-text-primary;
     font-size: 13px;
     cursor: pointer;
 
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-subtle;
+      background: $orbital-dark-surface;
+      color: $orbital-dark-text-primary;
+    }
+
     &:hover {
-      background: var(--background-hover, #2c2c2e);
+      background: $orbital-surface-elevated;
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-surface-elevated;
+      }
     }
   }
 
@@ -119,7 +175,11 @@
     gap: 12px;
     padding: 24px;
     text-align: center;
-    color: var(--error-color, #ff453a);
+    color: $orbital-error;
+
+    @include mixins.dark-theme {
+      color: $orbital-error;
+    }
 
     p {
       margin: 0;
@@ -129,12 +189,20 @@
       padding: 8px 16px;
       border: none;
       border-radius: 6px;
-      background: var(--accent-color, #0a84ff);
+      background: $orbital-blue;
       color: #fff;
       cursor: pointer;
 
+      @include mixins.dark-theme {
+        background: $orbital-dark-blue;
+      }
+
       &:hover {
-        background: var(--accent-color-hover, #0077ed);
+        background: $orbital-blue-hover;
+
+        @include mixins.dark-theme {
+          background: $orbital-dark-blue;
+        }
       }
     }
   }
@@ -151,21 +219,33 @@
   }
 
   &__empty-icon {
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     opacity: 0.5;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__empty-text {
     margin: 0;
     font-size: 16px;
     font-weight: 500;
-    color: var(--text-primary, #fff);
+    color: $orbital-text-primary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &__empty-hint {
     margin: 0;
     font-size: 14px;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   // Content area with date groups
@@ -185,9 +265,13 @@
     margin: 0;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   // Media grid
@@ -209,17 +293,26 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     font-size: 14px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__spinner {
     width: 20px;
     height: 20px;
-    border: 2px solid var(--border-color, rgba(255, 255, 255, 0.1));
-    border-top-color: var(--accent-color, #0a84ff);
+    border: 2px solid $orbital-border-subtle;
+    border-top-color: $orbital-blue;
     border-radius: 50%;
     animation: orbital-file-browser-spin 0.8s linear infinite;
+
+    @include mixins.dark-theme {
+      border-color: $orbital-dark-border-subtle;
+      border-top-color: $orbital-dark-blue;
+    }
   }
 }
 
@@ -237,26 +330,42 @@
   flex-direction: column;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--background-secondary, #1c1c1e);
+  background: $orbital-surface-elevated;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 
+  @include mixins.dark-theme {
+    background: $orbital-dark-surface-elevated;
+  }
+
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+    @include mixins.dark-theme {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
   }
 
   &:focus {
     outline: none;
-    box-shadow: 0 0 0 2px var(--accent-color, #0a84ff);
+    box-shadow: 0 0 0 2px $orbital-blue;
+
+    @include mixins.dark-theme {
+      box-shadow: 0 0 0 2px $orbital-dark-blue;
+    }
   }
 
   // Thumbnail container
   &__thumbnail {
     position: relative;
     aspect-ratio: 1;
-    background: var(--background-tertiary, #2c2c2e);
+    background: $orbital-surface;
     overflow: hidden;
+
+    @include mixins.dark-theme {
+      background: $orbital-dark-surface;
+    }
   }
 
   &__image {
@@ -280,7 +389,11 @@
   &__icon {
     width: 32px;
     height: 32px;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
 
     svg {
       width: 100%;
@@ -288,36 +401,48 @@
     }
 
     &--pdf {
-      color: #ff453a;
+      color: $orbital-error;
     }
 
     &--document {
-      color: #30d158;
+      color: $orbital-success;
     }
 
     &--spreadsheet {
-      color: #34c759;
+      color: $orbital-success;
     }
 
     &--audio {
-      color: #bf5af2;
+      color: $orbital-purple;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-purple;
+      }
     }
 
     &--image {
-      color: #ff9f0a;
+      color: $orbital-warning;
     }
 
     &--video {
-      color: #0a84ff;
+      color: $orbital-blue;
+
+      @include mixins.dark-theme {
+        color: $orbital-dark-blue;
+      }
     }
   }
 
   &__extension {
     font-size: 10px;
     font-weight: 600;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   // Video duration overlay
@@ -349,7 +474,11 @@
     color: #fff;
 
     &--orbital {
-      background: var(--accent-color, #0a84ff);
+      background: $orbital-blue;
+
+      @include mixins.dark-theme {
+        background: $orbital-dark-blue;
+      }
     }
 
     &--signal {
@@ -368,17 +497,25 @@
   &__name {
     font-size: 12px;
     font-weight: 500;
-    color: var(--text-primary, #fff);
+    color: $orbital-text-primary;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-primary;
+    }
   }
 
   &__meta {
     display: flex;
     gap: 8px;
     font-size: 11px;
-    color: var(--text-secondary, #8e8e93);
+    color: $orbital-text-secondary;
+
+    @include mixins.dark-theme {
+      color: $orbital-dark-text-secondary;
+    }
   }
 
   &__size {
