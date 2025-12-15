@@ -15,7 +15,7 @@ import {
   isVideo,
   formatFileSize,
   getFileExtension,
-} from '../../services/orbitalFileBrowser.preload';
+} from '../../util/orbitalFileBrowserUtils.std';
 
 export type OrbitalFileBrowserItemProps = {
   item: FileBrowserItemType;

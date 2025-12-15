@@ -7,7 +7,11 @@ import { OrbitalMediaRecovery } from './OrbitalMediaRecovery';
 import { OrbitalFileBrowser } from './OrbitalFileBrowser';
 import type { GroupInfo } from '../../services/orbitalGroups.preload';
 import type { MediaSyncRequest, MediaSyncTimeRange } from '../../types/OrbitalMediaSync.std';
-import type { OrbitalFileBrowserItem } from '../../types/OrbitalFileBrowser.std';
+import type {
+  OrbitalFileBrowserItem,
+  GetOrbitalFileBrowserMediaOptions,
+  GetOrbitalFileBrowserMediaResult,
+} from '../../types/OrbitalFileBrowser.std';
 
 export type OrbitalSettingsFilesProps = {
   /** List of all groups user is a member of */
@@ -34,6 +38,10 @@ export type OrbitalSettingsFilesProps = {
   onFileBrowserItemClick?: (item: OrbitalFileBrowserItem) => void;
   /** Function to convert relative paths to absolute paths */
   getAbsoluteAttachmentPath?: (relativePath: string) => string;
+  /** Function to fetch media items for the file browser */
+  getFileBrowserMedia: (
+    options: GetOrbitalFileBrowserMediaOptions
+  ) => Promise<GetOrbitalFileBrowserMediaResult>;
 };
 
 export function OrbitalSettingsFiles({
@@ -47,6 +55,7 @@ export function OrbitalSettingsFiles({
   formatBytes,
   onFileBrowserItemClick,
   getAbsoluteAttachmentPath,
+  getFileBrowserMedia,
 }: OrbitalSettingsFilesProps): JSX.Element {
   return (
     <div className="OrbitalSettingsFiles">
@@ -70,6 +79,7 @@ export function OrbitalSettingsFiles({
           onSelectOrbit={onSelectOrbit}
           onItemClick={onFileBrowserItemClick}
           getAbsoluteAttachmentPath={getAbsoluteAttachmentPath}
+          getFileBrowserMedia={getFileBrowserMedia}
         />
       </OrbitalSettingsSection>
     </div>

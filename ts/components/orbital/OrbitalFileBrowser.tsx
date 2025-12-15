@@ -20,13 +20,18 @@ import type {
   OrbitalFileBrowserMediaType,
   OrbitalFileBrowserSortOrder,
   OrbitalFileBrowserCursor,
+  GetOrbitalFileBrowserMediaOptions,
+  GetOrbitalFileBrowserMediaResult,
 } from '../../types/OrbitalFileBrowser.std';
 import { FILE_BROWSER_PAGE_SIZE } from '../../types/OrbitalFileBrowser.std';
-import {
-  getFileBrowserMedia,
-  groupMediaItemsByDate,
-} from '../../services/orbitalFileBrowser.preload';
+import { groupMediaItemsByDate } from '../../util/orbitalFileBrowserUtils.std';
 import { OrbitalFileBrowserItem } from './OrbitalFileBrowserItem';
+import { OrbitalMediaLightbox } from './OrbitalMediaLightbox';
+
+// Default fetcher that throws - should be overridden in real usage
+const defaultGetFileBrowserMedia = async (): Promise<GetOrbitalFileBrowserMediaResult> => {
+  throw new Error('getFileBrowserMedia prop must be provided');
+};
 
 export type OrbitalFileBrowserProps = {
   /** List of all groups user is a member of */
@@ -39,6 +44,10 @@ export type OrbitalFileBrowserProps = {
   onItemClick?: (item: FileBrowserItemType) => void;
   /** Function to convert relative paths to absolute paths */
   getAbsoluteAttachmentPath?: (relativePath: string) => string;
+  /** Optional custom media fetcher (for testing/storybook) */
+  getFileBrowserMedia?: (
+    options: GetOrbitalFileBrowserMediaOptions
+  ) => Promise<GetOrbitalFileBrowserMediaResult>;
 };
 
 const MEDIA_TYPE_OPTIONS: Array<{
@@ -57,6 +66,7 @@ export function OrbitalFileBrowser({
   onSelectOrbit,
   onItemClick,
   getAbsoluteAttachmentPath,
+  getFileBrowserMedia = defaultGetFileBrowserMedia,
 }: OrbitalFileBrowserProps): JSX.Element {
   // Filter state - manage orbit selection internally
   const [selectedOrbitId, setSelectedOrbitId] = useState<string | null>(initialGroupId ?? null);
@@ -69,6 +79,10 @@ export function OrbitalFileBrowser({
   const [hasMore, setHasMore] = useState(true);
   const [cursor, setCursor] = useState<OrbitalFileBrowserCursor | undefined>();
   const [error, setError] = useState<string | null>(null);
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Ref for intersection observer
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -102,7 +116,7 @@ export function OrbitalFileBrowser({
     }
 
     loadInitialData();
-  }, [selectedOrbitId, mediaType, sortOrder]);
+  }, [selectedOrbitId, mediaType, sortOrder, getFileBrowserMedia]);
 
   // Load more data when scrolling
   const loadMore = useCallback(async () => {
@@ -128,7 +142,7 @@ export function OrbitalFileBrowser({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, hasMore, cursor, selectedOrbitId, mediaType, sortOrder]);
+  }, [isLoading, hasMore, cursor, selectedOrbitId, mediaType, sortOrder, getFileBrowserMedia]);
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -161,15 +175,33 @@ export function OrbitalFileBrowser({
     []
   );
 
-  // Handle item click
+  // Handle item click - open lightbox
   const handleItemClick = useCallback(
     (item: FileBrowserItemType) => {
+      // Find the index of the clicked item
+      const index = items.findIndex(i => i.id === item.id);
+      if (index !== -1) {
+        setLightboxIndex(index);
+        setLightboxOpen(true);
+      }
+
+      // Also call the external callback if provided
       if (onItemClick) {
         onItemClick(item);
       }
     },
-    [onItemClick]
+    [items, onItemClick]
   );
+
+  // Handle lightbox close
+  const handleLightboxClose = useCallback(() => {
+    setLightboxOpen(false);
+  }, []);
+
+  // Handle lightbox navigation
+  const handleLightboxNavigate = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
 
   // Group items by date for display
   const groupedItems = groupMediaItemsByDate(items);
@@ -299,6 +331,17 @@ export function OrbitalFileBrowser({
           </div>
         )}
       </div>
+
+      {/* Lightbox for viewing full-size media */}
+      {lightboxOpen && items.length > 0 && (
+        <OrbitalMediaLightbox
+          items={items}
+          currentIndex={lightboxIndex}
+          onClose={handleLightboxClose}
+          onNavigate={handleLightboxNavigate}
+          getAbsolutePath={getAbsoluteAttachmentPath}
+        />
+      )}
     </div>
   );
 }
