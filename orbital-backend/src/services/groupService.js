@@ -412,7 +412,7 @@ async function getGroupMembers(groupId, userId) {
   }
 
   const result = await db.query(
-    `SELECT u.id, u.username, u.public_key, u.avatar_url, m.joined_at
+    `SELECT u.id, u.username, u.public_key, u.avatar_url, u.display_name, m.joined_at
      FROM members m
      INNER JOIN users u ON u.id = m.user_id
      WHERE m.group_id = $1
@@ -425,6 +425,7 @@ async function getGroupMembers(groupId, userId) {
     username: row.username,
     public_key: row.public_key,
     avatar_url: row.avatar_url,
+    display_name: row.display_name || row.username,
     joined_at: row.joined_at
   }));
 }

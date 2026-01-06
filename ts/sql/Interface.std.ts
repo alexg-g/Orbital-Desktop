@@ -1347,6 +1347,10 @@ type WritableInterface = {
     replyCount: number,
     lastReplyAt?: number
   ) => void;
+  updateOrbitalThreadsAuthorUsername: (
+    authorId: string,
+    newUsername: string
+  ) => number;
   deleteOrbitalThread: (threadId: string) => void;
   deleteOrbitalThreadsByGroupId: (groupId: string) => void;
   removeAllOrbitalThreads: () => number;

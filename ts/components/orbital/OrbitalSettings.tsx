@@ -27,6 +27,8 @@ export type OrbitalSettingsProps = {
   onJoinOrbit?: () => void;
   // Logout handler (for General page)
   onLogout?: () => void;
+  // Display name change handler (for General page)
+  onDisplayNameChange?: (newName: string) => void;
   // Media sync handlers (for Files page)
   onCreateSyncRequest?: (params: {
     groupId: string;
@@ -67,6 +69,7 @@ export function OrbitalSettings({
   onCreateOrbit = () => {},
   onJoinOrbit = () => {},
   onLogout,
+  onDisplayNameChange,
   onCreateSyncRequest = defaultNoOp,
   onGetActiveSyncRequests = async () => [],
   onCancelSyncRequest = defaultNoOp,
@@ -78,7 +81,7 @@ export function OrbitalSettings({
   const renderPage = (): JSX.Element => {
     switch (page) {
       case OrbitalSettingsPage.General:
-        return <OrbitalSettingsGeneral onLogout={onLogout} />;
+        return <OrbitalSettingsGeneral onLogout={onLogout} onDisplayNameChange={onDisplayNameChange} />;
       case OrbitalSettingsPage.Appearance:
         return <OrbitalSettingsAppearance />;
       case OrbitalSettingsPage.Notifications:
@@ -121,7 +124,7 @@ export function OrbitalSettings({
           />
         );
       default:
-        return <OrbitalSettingsGeneral onLogout={onLogout} />;
+        return <OrbitalSettingsGeneral onLogout={onLogout} onDisplayNameChange={onDisplayNameChange} />;
     }
   };
 

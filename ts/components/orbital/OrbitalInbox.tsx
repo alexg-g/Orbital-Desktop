@@ -34,9 +34,9 @@ import type {
   CreateThreadResult,
   CreateReplyResult,
 } from '../../services/orbitalThreads.preload.js';
-import { incrementThreadReplyCount, sendMediaSyncMessages } from '../../services/orbitalThreads.preload.js';
+import { incrementThreadReplyCount, sendMediaSyncMessages, updateThreadsAuthorUsername } from '../../services/orbitalThreads.preload.js';
 // Legacy localThreadStorage removed - threads now come only from server API
-import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache, getSetting } from './settingsStorage';
+import { getCurrentUserProfile, migrateUserSettings, clearUserIdCache, setUserIdCache, getSetting, setMemberDisplayName } from './settingsStorage';
 import {
   orbitalNotifications,
   type OrbitalNotificationSettings,
@@ -173,7 +173,7 @@ export type DownloadAllPendingMediaFunction = (options: {
 export type WebSocketConnectFunction = () => Promise<boolean>;
 export type WebSocketDisconnectFunction = () => void;
 export type WebSocketSubscribeFunction = (
-  eventType: 'new_thread' | 'new_reply' | 'media_uploaded' | 'new_message' | 'member_left' | 'key_rotated' | 'media_sync_request' | 'media_sync_item_ready' | 'media_sync_all_ready' | 'all',
+  eventType: 'new_thread' | 'new_reply' | 'media_uploaded' | 'new_message' | 'member_left' | 'key_rotated' | 'media_sync_request' | 'media_sync_item_ready' | 'media_sync_all_ready' | 'display_name_changed' | 'all',
   callback: (event: any) => void
 ) => () => void;
 export type WebSocketIsConnectedFunction = () => boolean;
@@ -1110,6 +1110,53 @@ export function OrbitalInbox({
       }
     });
 
+    // Handle display name changes from other users
+    const unsubDisplayNameChanged = wsSubscribe('display_name_changed', async (event) => {
+      console.log('[OrbitalInbox] Received display_name_changed event:', event);
+      const { user_id, display_name } = event.data;
+
+      // Cache the new display name
+      setMemberDisplayName(user_id, display_name);
+
+      // Update local SQLCipher threads for persistent storage
+      try {
+        const updatedCount = await updateThreadsAuthorUsername(user_id, display_name);
+        console.log(`[OrbitalInbox] Updated ${updatedCount} threads in SQLCipher for user:`, user_id);
+      } catch (err) {
+        console.error('[OrbitalInbox] Failed to update threads in SQLCipher:', err);
+      }
+
+      // Update threads to reflect new author name (React state for immediate UI update)
+      setThreads(prevThreads => prevThreads.map(thread =>
+        thread.authorId === user_id
+          ? { ...thread, author: display_name }
+          : thread
+      ));
+
+      // Update messages in current thread view
+      setMessages(prevMessages => prevMessages.map(msg =>
+        msg.authorId === user_id
+          ? { ...msg, author: display_name }
+          : msg
+      ));
+
+      // Update chat messages if viewing DMs
+      setChatMessages(prevMessages => prevMessages.map(msg =>
+        msg.authorId === user_id
+          ? { ...msg, author: display_name }
+          : msg
+      ));
+
+      // Update chat list names
+      setChats(prevChats => prevChats.map(chat =>
+        chat.recipientId === user_id
+          ? { ...chat, name: display_name }
+          : chat
+      ));
+
+      console.log('[OrbitalInbox] Updated display name for user:', user_id, '->', display_name);
+    });
+
     // Cleanup on unmount or when deps change
     return () => {
       console.log('[OrbitalInbox] Unsubscribing from WebSocket events');
@@ -1120,6 +1167,7 @@ export function OrbitalInbox({
       unsubMediaSyncRequest();
       unsubMediaSyncItemReady();
       unsubMediaSyncAllReady();
+      unsubDisplayNameChanged();
     };
   }, [isLoggedIn, selectedGroupId, activeThreadId, activeChatId, chats, currentUserId, availableContacts, wsConnect, wsDisconnect, wsSubscribe, decodeChatEnvelope, groups]);
 
@@ -1347,6 +1395,45 @@ export function OrbitalInbox({
   const handleSettingsPageChange = useCallback((page: OrbitalSettingsPage) => {
     setSettingsPage(page);
   }, []);
+
+  // Handle display name change from Settings - update all UI showing current user's name
+  const handleDisplayNameChange = useCallback((newName: string) => {
+    console.log('[OrbitalInbox] Display name changed to:', newName);
+
+    // Update threads in sidebar where current user is author
+    setThreads(prevThreads => prevThreads.map(thread =>
+      thread.authorId === currentUserId
+        ? { ...thread, author: newName }
+        : thread
+    ));
+
+    // Update messages in current thread view
+    setMessages(prevMessages => prevMessages.map(msg =>
+      msg.authorId === currentUserId
+        ? { ...msg, author: newName }
+        : msg
+    ));
+
+    // Update cached thread messages
+    setThreadMessagesCache(prevCache => {
+      const newCache: Record<string, OrbitalMessageType[]> = {};
+      for (const [threadId, msgs] of Object.entries(prevCache)) {
+        newCache[threadId] = msgs.map(msg =>
+          msg.authorId === currentUserId
+            ? { ...msg, author: newName }
+            : msg
+        );
+      }
+      return newCache;
+    });
+
+    // Update chat messages if viewing DMs
+    setChatMessages(prevMessages => prevMessages.map(msg =>
+      msg.authorId === currentUserId
+        ? { ...msg, author: newName }
+        : msg
+    ));
+  }, [currentUserId]);
 
   const handleSubmitNewThread = useCallback(async (title: string, body: string, mediaIds: string[]) => {
     console.log('[OrbitalInbox] handleSubmitNewThread called, selectedGroupId:', selectedGroupId);
@@ -1977,6 +2064,7 @@ export function OrbitalInbox({
               onCreateOrbit={handleCreateOrbit}
               onJoinOrbit={handleJoinOrbit}
               onLogout={handleLogout}
+              onDisplayNameChange={handleDisplayNameChange}
               onCreateSyncRequest={createSyncRequest}
               onGetActiveSyncRequests={getActiveSyncRequests}
               onCancelSyncRequest={cancelSyncRequest}

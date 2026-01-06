@@ -250,6 +250,7 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
        t.id, t.group_id, t.author_id, t.encrypted_title, t.encrypted_body,
        t.title_iv, t.body_iv, t.created_at,
        u.username as author_username,
+       u.display_name as author_display_name,
        COUNT(DISTINCT r.id) as reply_count,
        COUNT(DISTINCT m.id) as media_count
      FROM threads t
@@ -257,7 +258,7 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
      LEFT JOIN replies r ON r.thread_id = t.id
      LEFT JOIN media m ON m.thread_id = t.id AND m.expires_at > NOW()
      WHERE t.group_id = $1
-     GROUP BY t.id, u.username
+     GROUP BY t.id, u.username, u.display_name
      ORDER BY t.created_at ${sortOrder}
      LIMIT $2 OFFSET $3`,
     [groupId, pageLimit, pageOffset]
@@ -274,6 +275,7 @@ router.get('/groups/:groupId/threads', authenticate, asyncHandler(async (req, re
     group_id: row.group_id,
     author_id: row.author_id,
     author_username: row.author_username,
+    author_display_name: row.author_display_name || row.author_username,
     encrypted_title: row.encrypted_title,
     encrypted_body: row.encrypted_body,
     title_iv: row.title_iv,
@@ -303,7 +305,8 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
   // Fetch thread
   const result = await db.query(
     `SELECT t.id, t.group_id, t.author_id, t.encrypted_title, t.encrypted_body,
-            t.title_iv, t.body_iv, t.created_at, u.username as author_username
+            t.title_iv, t.body_iv, t.created_at, u.username as author_username,
+            u.display_name as author_display_name
      FROM threads t
      LEFT JOIN users u ON u.id = t.author_id
      WHERE t.id = $1`,
@@ -348,6 +351,7 @@ router.get('/:threadId', authenticate, asyncHandler(async (req, res) => {
     group_id: thread.group_id,
     author_id: thread.author_id,
     author_username: thread.author_username,
+    author_display_name: thread.author_display_name || thread.author_username,
     encrypted_title: thread.encrypted_title,
     encrypted_body: thread.encrypted_body,
     title_iv: thread.title_iv,
@@ -418,7 +422,8 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
      )
      SELECT rt.id, rt.thread_id, rt.author_id, rt.encrypted_body, rt.body_iv,
             rt.created_at, rt.parent_reply_id, rt.level,
-            u.username as author_username
+            u.username as author_username,
+            u.display_name as author_display_name
      FROM reply_tree rt
      LEFT JOIN users u ON u.id = rt.author_id
      ORDER BY rt.tree_path ASC
@@ -462,6 +467,7 @@ router.get('/:threadId/replies', authenticate, asyncHandler(async (req, res) => 
     thread_id: row.thread_id,
     author_id: row.author_id,
     author_username: row.author_username,
+    author_display_name: row.author_display_name || row.author_username,
     encrypted_body: row.encrypted_body,
     body_iv: row.body_iv,
     created_at: row.created_at,

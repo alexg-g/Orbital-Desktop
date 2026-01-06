@@ -487,7 +487,7 @@ export async function getThread(threadId: string): Promise<ThreadDetail> {
       threadId: data.thread_id,
       groupId: data.group_id,
       authorId: data.author_id,
-      authorUsername: data.author_username,
+      authorUsername: data.author_display_name || data.author_username,
       encryptedTitle: data.encrypted_title,
       encryptedBody: data.encrypted_body,
       replyCount: data.reply_count || 0,
@@ -696,7 +696,7 @@ export async function getReplies(
           replyId: r.reply_id,
           threadId: r.thread_id,
           authorId: r.author_id,
-          authorUsername: r.author_username,
+          authorUsername: r.author_display_name || r.author_username,
           encryptedBody: decryptedBody, // Now contains decrypted plaintext
           createdAt: r.created_at,
           parentReplyId: r.parent_reply_id || null,
@@ -1157,7 +1157,7 @@ async function syncThreadsFromServer(groupId: string): Promise<void> {
           id: serverThread.thread_id,
           groupId: serverThread.group_id,
           authorId: serverThread.author_id,
-          authorUsername: serverThread.author_username || '',
+          authorUsername: serverThread.author_display_name || serverThread.author_username || '',
           encryptedTitle: serverThread.encrypted_title || '',
           encryptedBody: serverThread.encrypted_body || '',
           titleIv: serverThread.title_iv || '',
@@ -1281,7 +1281,7 @@ export async function syncOrbitHistory(
             id: serverThread.thread_id,
             groupId: serverThread.group_id,
             authorId: serverThread.author_id,
-            authorUsername: serverThread.author_username || '',
+            authorUsername: serverThread.author_display_name || serverThread.author_username || '',
             encryptedTitle: serverThread.encrypted_title || '',
             encryptedBody: serverThread.encrypted_body || '',
             titleIv: serverThread.title_iv || '',
@@ -1456,6 +1456,21 @@ export async function incrementThreadReplyCount(
   } else {
     log.warn(`${logId}: Thread not found in SQLCipher, skipping reply count update`);
   }
+}
+
+/**
+ * Update author username for all threads by a given author in SQLCipher
+ * Called when receiving WebSocket display_name_changed events from other users
+ */
+export async function updateThreadsAuthorUsername(
+  authorId: string,
+  newUsername: string
+): Promise<number> {
+  const logId = `updateThreadsAuthorUsername(${authorId})`;
+
+  const updatedCount = DataWriter.updateOrbitalThreadsAuthorUsername(authorId, newUsername);
+  log.info(`${logId}: Updated ${updatedCount} threads with new username: ${newUsername}`);
+  return updatedCount;
 }
 
 /**

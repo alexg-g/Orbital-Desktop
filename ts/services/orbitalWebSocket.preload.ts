@@ -80,7 +80,8 @@ export type WebSocketEventType =
   | 'key_rotated'
   | 'media_sync_request'
   | 'media_sync_item_ready'
-  | 'media_sync_all_ready';
+  | 'media_sync_all_ready'
+  | 'display_name_changed';
 
 /**
  * WebSocket event structure

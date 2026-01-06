@@ -238,11 +238,12 @@ router.get('/:userId/avatar', authenticate, asyncHandler(async (req, res) => {
  * - id: string (UUID)
  * - username: string
  * - avatarUrl: string | null
+ * - displayName: string (falls back to username if not set)
  * - createdAt: string (ISO timestamp)
  */
 router.get('/me', authenticate, asyncHandler(async (req, res) => {
   const result = await db.query(
-    'SELECT id, username, avatar_url, created_at FROM users WHERE id = $1',
+    'SELECT id, username, avatar_url, display_name, created_at FROM users WHERE id = $1',
     [req.user.userId]
   );
 
@@ -256,6 +257,7 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
     id: user.id,
     username: user.username,
     avatarUrl: user.avatar_url,
+    displayName: user.display_name || user.username,
     createdAt: user.created_at
   });
 }));
@@ -269,6 +271,7 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
  * - id: string (UUID)
  * - username: string
  * - avatarUrl: string | null
+ * - displayName: string (falls back to username if not set)
  */
 router.get('/:userId', authenticate, asyncHandler(async (req, res) => {
   const { userId } = req.params;
@@ -290,7 +293,7 @@ router.get('/:userId', authenticate, asyncHandler(async (req, res) => {
 
   // Fetch user profile
   const result = await db.query(
-    'SELECT id, username, avatar_url FROM users WHERE id = $1',
+    'SELECT id, username, avatar_url, display_name FROM users WHERE id = $1',
     [userId]
   );
 
@@ -303,8 +306,99 @@ router.get('/:userId', authenticate, asyncHandler(async (req, res) => {
   res.status(200).json({
     id: user.id,
     username: user.username,
-    avatarUrl: user.avatar_url
+    avatarUrl: user.avatar_url,
+    displayName: user.display_name || user.username
   });
 }));
+
+/**
+ * PUT /api/users/display-name
+ * Update user's display name and broadcast to orbit members
+ *
+ * Request body:
+ * - display_name: string (1-15 characters, alphanumeric + spaces + underscores)
+ *
+ * Response:
+ * - displayName: string
+ * - message: string
+ */
+router.put('/display-name', authenticate, asyncHandler(async (req, res) => {
+  const { display_name } = req.body;
+
+  // Validate display name
+  if (!display_name || display_name.trim().length === 0) {
+    throw validationError('Display name is required');
+  }
+
+  if (display_name.length > 15) {
+    throw validationError('Display name must be 15 characters or less');
+  }
+
+  // Validate characters (alphanumeric, spaces, underscores only)
+  const validPattern = /^[a-zA-Z0-9_ ]+$/;
+  if (!validPattern.test(display_name)) {
+    throw validationError('Display name can only contain letters, numbers, spaces, and underscores');
+  }
+
+  // Update in database
+  await db.query(
+    'UPDATE users SET display_name = $1 WHERE id = $2',
+    [display_name.trim(), req.user.userId]
+  );
+
+  logger.info('Display name updated', {
+    userId: req.user.userId,
+    displayName: display_name.trim()
+  });
+
+  res.status(200).json({
+    displayName: display_name.trim(),
+    message: 'Display name updated successfully'
+  });
+
+  // Broadcast to all orbit members (fire and forget)
+  broadcastDisplayNameChange(req.user.userId, display_name.trim());
+}));
+
+/**
+ * Broadcast display name change to all orbits the user is in
+ * Runs asynchronously after response is sent to client
+ * @param {string} userId - User ID who changed their name
+ * @param {string} displayName - New display name
+ */
+async function broadcastDisplayNameChange(userId, displayName) {
+  try {
+    const { getUserGroups, getGroupMemberIds } = require('../services/groupService');
+    const { broadcastToConversation } = require('../websocket/signalWebSocket');
+
+    // Get all groups (orbits) user is a member of
+    const groups = await getUserGroups(userId);
+
+    for (const group of groups) {
+      const memberIds = await getGroupMemberIds(group.group_id);
+      // Filter out the user who changed their name
+      const recipients = memberIds.filter(id => id !== userId);
+
+      if (recipients.length > 0) {
+        broadcastToConversation(group.group_id, recipients, {
+          type: 'display_name_changed',
+          user_id: userId,
+          display_name: displayName,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    logger.info('Display name change broadcasted', {
+      userId,
+      groupCount: groups.length
+    });
+  } catch (error) {
+    logger.error('Failed to broadcast display name change', {
+      userId,
+      error: error.message
+    });
+  }
+}
 
 module.exports = router;

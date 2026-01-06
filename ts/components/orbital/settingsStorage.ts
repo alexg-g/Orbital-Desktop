@@ -280,3 +280,49 @@ export function getCurrentUserProfile(): UserProfile {
     avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : null,
   };
 }
+
+// =============================================================================
+// MEMBER DISPLAY NAME CACHE
+// =============================================================================
+
+const MEMBER_DISPLAY_NAME_PREFIX = 'orbital.member.displayName';
+
+/**
+ * Get cached display name for a user
+ */
+export function getMemberDisplayName(userId: string): string | undefined {
+  const key = `${MEMBER_DISPLAY_NAME_PREFIX}.${userId}`;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(key) ?? undefined;
+    }
+  } catch (error) {
+    console.warn(`Failed to get display name for ${userId}:`, error);
+  }
+  return undefined;
+}
+
+/**
+ * Cache display name for a user
+ */
+export function setMemberDisplayName(userId: string, displayName: string): void {
+  const key = `${MEMBER_DISPLAY_NAME_PREFIX}.${userId}`;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, displayName);
+    }
+  } catch (error) {
+    console.error(`Failed to cache display name for ${userId}:`, error);
+  }
+}
+
+/**
+ * Cache multiple member display names at once
+ */
+export function cacheMemberDisplayNames(
+  members: Array<{ userId: string; displayName: string }>
+): void {
+  for (const member of members) {
+    setMemberDisplayName(member.userId, member.displayName);
+  }
+}

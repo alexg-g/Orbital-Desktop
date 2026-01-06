@@ -754,6 +754,7 @@ export const DataWriter: ServerWritableInterface = {
   saveOrbitalThread,
   updateOrbitalThreadSyncStatus,
   updateOrbitalThreadReplyCount,
+  updateOrbitalThreadsAuthorUsername,
   deleteOrbitalThread,
   deleteOrbitalThreadsByGroupId,
   removeAllOrbitalThreads,
@@ -9968,6 +9969,28 @@ function updateOrbitalThreadReplyCount(
     replyCount,
     lastReplyAt: lastReplyAt ?? null,
   });
+}
+
+/**
+ * Update author_username for all threads by a given author
+ * Used when a user changes their display name
+ */
+function updateOrbitalThreadsAuthorUsername(
+  db: WritableDB,
+  authorId: string,
+  newUsername: string
+): number {
+  const result = db.prepare(
+    `
+    UPDATE orbital_threads
+    SET author_username = $newUsername
+    WHERE author_id = $authorId
+  `
+  ).run({
+    authorId,
+    newUsername,
+  });
+  return result.changes;
 }
 
 /**

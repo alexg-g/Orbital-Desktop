@@ -628,3 +628,79 @@ export async function removeAvatar(): Promise<void> {
     request.end();
   });
 }
+
+/**
+ * Update display name on server
+ * Broadcasts change to all orbit members via WebSocket
+ */
+export async function updateDisplayName(displayName: string): Promise<string> {
+  const token = await getJWT();
+  if (!token) {
+    throw new Error('Not authenticated. Please log in first.');
+  }
+
+  if (!displayName || displayName.trim().length === 0) {
+    throw new Error('Display name is required');
+  }
+
+  if (displayName.length > 15) {
+    throw new Error('Display name must be 15 characters or less');
+  }
+
+  const apiUrl = `${ORBITAL_API_URL}/api/users/display-name`;
+  const parsedUrl = new URL(apiUrl);
+  const httpModule = parsedUrl.protocol === 'https:' ? https : http;
+  const body = JSON.stringify({ display_name: displayName.trim() });
+
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+
+    const requestOptions: https.RequestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+      path: parsedUrl.pathname,
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    };
+
+    const request = httpModule.request(requestOptions, response => {
+      response.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          const errorText = Buffer.concat(chunks).toString();
+          log.error('Display name update failed', {
+            status: response.statusCode,
+            error: errorText,
+          });
+          reject(new Error(`Display name update failed: ${response.statusCode} ${errorText}`));
+          return;
+        }
+
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          log.info('Display name updated successfully', { displayName: data.displayName });
+          resolve(data.displayName);
+        } catch (parseError) {
+          reject(new Error('Failed to parse response'));
+        }
+      });
+    });
+
+    request.on('error', error => {
+      log.error('Display name update request failed', {
+        error: Errors.toLogFormat(error),
+      });
+      reject(error);
+    });
+
+    request.write(body);
+    request.end();
+  });
+}

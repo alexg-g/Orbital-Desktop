@@ -110,6 +110,7 @@ export type GroupInfo = {
 export type GroupMember = {
   memberId: string;
   username: string;
+  displayName: string;
   joinedAt: string;
   isOwner: boolean;
   avatarUrl?: string;
@@ -501,12 +502,21 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
         return {
           memberId: m.user_id,
           username: m.username,
+          displayName: m.display_name || m.username,
           joinedAt: m.joined_at,
           isOwner: m.is_owner || false,
           avatarUrl: avatarDataUrl,
         };
       })
     );
+
+    // Cache display names for all members
+    const { cacheMemberDisplayNames } = await import('../components/orbital/settingsStorage.js');
+    const displayNameCache = members.map(m => ({
+      userId: m.memberId,
+      displayName: m.displayName,
+    }));
+    cacheMemberDisplayNames(displayNameCache);
 
     log.info(`${logId}: Retrieved ${members.length} members`);
 

@@ -9,14 +9,17 @@ import {
   OrbitalSettingsButton,
 } from './OrbitalSettingsControl';
 import { getSetting, setSetting, validateDisplayName, sanitizeDisplayName } from './settingsStorage';
-import { logout, getUsername, uploadAvatar, removeAvatar } from '../../services/orbitalAuth.preload.js';
+import { logout, getUsername, uploadAvatar, removeAvatar, getUserId } from '../../services/orbitalAuth.preload.js';
+import { updateThreadsAuthorUsername } from '../../services/orbitalThreads.preload.js';
 
 export type OrbitalSettingsGeneralProps = {
   onLogout?: () => void;
+  onDisplayNameChange?: (newName: string) => void;
 };
 
 export function OrbitalSettingsGeneral({
   onLogout,
+  onDisplayNameChange,
 }: OrbitalSettingsGeneralProps): JSX.Element {
   // Local state for settings
   const [startMinimized, setStartMinimized] = useState(false);
@@ -222,11 +225,34 @@ export function OrbitalSettingsGeneral({
 
     setNameError(null);
     try {
+      // Save locally first for immediate UI update
       await setSetting('orbital.settings.general.displayName', name);
+
+      // Update local SQLCipher threads with new display name
+      const userId = await getUserId();
+      if (userId) {
+        const updatedCount = await updateThreadsAuthorUsername(userId, name);
+        console.log(`Updated ${updatedCount} local threads with new display name`);
+      }
+
+      // Sync to server (which broadcasts to orbit members)
+      const { updateDisplayName: updateDisplayNameAPI } = await import('../../services/orbitalAuth.preload.js');
+      await updateDisplayNameAPI(name);
+      console.log('Display name synced to server');
+
+      // Notify parent to update UI (thread list, headers, etc.)
+      if (onDisplayNameChange) {
+        onDisplayNameChange(name);
+      }
     } catch (error) {
-      console.error('Failed to save display name:', error);
+      console.error('Failed to sync display name:', error);
+      // Local save succeeded, server sync failed - acceptable fallback
+      // Still notify parent to update UI with locally saved name
+      if (onDisplayNameChange) {
+        onDisplayNameChange(name);
+      }
     }
-  }, []);
+  }, [onDisplayNameChange]);
 
   const handleNameBlur = useCallback(async () => {
     setIsEditingName(false);

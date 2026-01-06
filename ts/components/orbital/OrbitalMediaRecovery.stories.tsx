@@ -19,20 +19,26 @@ const mockGroups: GroupInfo[] = [
   {
     groupId: 'group-1',
     name: 'Smith Family',
+    encryptedName: 'encrypted-smith-family',
     memberCount: 5,
-    createdAt: Date.now() - 365 * 24 * 60 * 60 * 1000,
+    createdAt: String(Date.now() - 365 * 24 * 60 * 60 * 1000),
+    isOwner: true,
   },
   {
     groupId: 'group-2',
     name: 'College Friends',
+    encryptedName: 'encrypted-college-friends',
     memberCount: 8,
-    createdAt: Date.now() - 180 * 24 * 60 * 60 * 1000,
+    createdAt: String(Date.now() - 180 * 24 * 60 * 60 * 1000),
+    isOwner: false,
   },
   {
     groupId: 'group-3',
     name: 'Work Team',
+    encryptedName: 'encrypted-work-team',
     memberCount: 12,
-    createdAt: Date.now() - 90 * 24 * 60 * 60 * 1000,
+    createdAt: String(Date.now() - 90 * 24 * 60 * 60 * 1000),
+    isOwner: false,
   },
 ];
 
